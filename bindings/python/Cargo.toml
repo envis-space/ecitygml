@@ -1,0 +1,15 @@
+[package]
+name = "ecitygml-python"
+version = "0.0.1-alpha.13"
+edition = "2021"
+rust-version = "0.0.1-alpha.13"
+
+[lib]
+name = "ecitygml"
+crate-type = ["cdylib"]
+
+[dependencies]
+ecitygml-rs = { package = "ecitygml", version = "0.0.1-alpha.13", path = "../../crates/ecitygml" }
+pyo3 = { version = "0.0.1-alpha.13", features = ["abi3-py38"] }
+
+[workspace]
