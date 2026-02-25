@@ -18,6 +18,13 @@ pub enum Commands {
         file_path: PathBuf,
     },
 
+    /// List all objects with their metadata
+    ListObjects {
+        /// Input file
+        #[clap(short, long, value_hint = ValueHint::FilePath)]
+        file_path: PathBuf,
+    },
+
     /// Validate the dataset
     Validate {
         /// Input directory

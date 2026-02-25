@@ -1,5 +1,5 @@
 use crate::error::Error;
-use ecitygml::io::CitygmlReader;
+use ecitygml::io::GmlReader;
 use std::fs;
 use std::path::Path;
 use tracing::info;
@@ -10,7 +10,7 @@ pub fn run(
 ) -> Result<(), Error> {
     info!("Start validation");
 
-    let reader = CitygmlReader::from_path(file_path)?;
+    let reader = GmlReader::from_path(file_path)?;
     let report = reader.validate()?;
 
     fs::create_dir_all(&output_directory_path)?;

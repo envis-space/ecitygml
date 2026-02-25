@@ -15,6 +15,9 @@ fn main() -> Result<()> {
         Commands::Statistics { file_path } => {
             commands::statistics::run(file_path.canonicalize()?)?;
         }
+        Commands::ListObjects { file_path } => {
+            commands::list_objects::run(file_path.canonicalize()?)?;
+        }
         Commands::Validate {
             file_path,
             output_directory_path,

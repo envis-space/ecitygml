@@ -1,31 +1,17 @@
-mod geometry_collector;
-mod traits;
+mod geometry_index;
 mod visitor;
 
 #[doc(inline)]
 pub use visitor::Interpreter;
 
 #[doc(inline)]
-pub use visitor::CityObjectVisitor;
+pub use visitor::Visitor;
 
 #[doc(inline)]
 pub use visitor::Visitable;
 
 #[doc(inline)]
-pub use traits::FeatureWithGeometry;
+pub use geometry_index::CityModelGeometryIndex;
 
 #[doc(inline)]
-pub use geometry_collector::GeometryCollector;
-
-#[doc(inline)]
-pub use geometry_collector::CityObjectGeometryCollection;
-
-/*#[doc(inline)]
-pub use traits::SpaceFeature;
-
-#[doc(inline)]
-pub use traits::GeometryId;
-
-#[doc(inline)]
-pub use traits::GeometryCollection;
-*/
+pub use geometry_index::CityObjectGeometry;

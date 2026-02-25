@@ -16,3 +16,4 @@ rayon = { workspace = true }
 # parry3d-f64 = { workspace = true, features = ["f64"] }
 strum = { workspace = true }
 strum_macros = { workspace = true }
+chrono = { workspace = true }

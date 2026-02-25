@@ -8,26 +8,23 @@
 //!
 //! ```no_run
 //! use std::path::PathBuf;
-//! use ecitygml_io::CitygmlReader;
+//! use ecitygml_io::GmlReader;
+//! use crate::ecitygml::model::core::AsAbstractFeature;
 //!
 //! // read the CityGML dataset
 //! let file_path = PathBuf::from("example/city_model.gml");
-//! let citygml_model = CitygmlReader::from_path(file_path)
+//! let city_model = GmlReader::from_path(file_path)
 //!     .expect("file extension should be correct")
 //!     .finish()
 //!     .expect("parsing should work");
 //!
 //! // iterate over all buildings
-//! for current_building in citygml_model.building {
-//!     println!(
-//!         "GML ID of the current building: {}",
-//!         current_building.occupied_space.space.city_object.abstract_gml.id
-//!     );
+//! for current_building in city_model.buildings() {
+//!     println!("GML ID of the current building: {}", current_building.id());
 //! }
 //! ```
 //!
 
-pub use ecitygml_core::model::common;
 pub use ecitygml_core::{Error, model, operations};
 pub use ecitygml_io as io;
 

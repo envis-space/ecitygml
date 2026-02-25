@@ -9,4 +9,6 @@ pub enum Error {
     ContainsNoMembers(String),
     #[error("the data for key `{0}` is not available")]
     ElementNotFound(String),
+    #[error("the data for key `{0}` is not available")]
+    InvalidLodName(String),
 }

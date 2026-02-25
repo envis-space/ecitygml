@@ -1,15 +1,25 @@
+mod auto;
 mod error;
-mod parser;
-mod read;
-mod read_impl;
-pub mod validate;
-mod validate_impl;
+mod format;
+pub mod gml;
 
 #[doc(inline)]
-pub use crate::read::CitygmlReader;
+pub use crate::gml::read::GmlReader;
 
 #[doc(inline)]
 pub use crate::error::Error;
 
-pub const FILE_EXTENSION_CITYGML_GML_FORMAT: &str = "gml";
-pub const FILE_EXTENSION_CITYGML_XML_FORMAT: &str = "xml";
+#[doc(inline)]
+pub use crate::format::CitygmlFormat;
+
+#[doc(inline)]
+pub use crate::gml::FILE_EXTENSION_GML_FORMAT;
+
+#[doc(inline)]
+pub use crate::gml::FILE_EXTENSION_XML_FORMAT;
+
+#[doc(inline)]
+pub use crate::gml::FILE_EXTENSION_GML_ZST_FORMAT;
+
+#[doc(inline)]
+pub use crate::gml::FILE_EXTENSION_GML_GZ_FORMAT;
