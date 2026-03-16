@@ -1,4 +1,3 @@
-mod auto;
 mod error;
 mod format;
 pub mod gml;

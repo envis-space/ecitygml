@@ -8,8 +8,9 @@ use egml::model::basic::Code;
 #[derive(Debug, Clone, PartialEq)]
 pub struct TrafficArea {
     pub(crate) abstract_thematic_surface: AbstractThematicSurface,
-    pub(crate) function: Vec<Code>,
-    pub(crate) usage: Vec<Code>,
+    pub(crate) class: Option<Code>,
+    pub(crate) functions: Vec<Code>,
+    pub(crate) usages: Vec<Code>,
     pub(crate) surface_material: Option<Code>,
 }
 
@@ -17,8 +18,9 @@ impl TrafficArea {
     pub fn new(abstract_thematic_surface: AbstractThematicSurface) -> Self {
         Self {
             abstract_thematic_surface,
-            function: Vec::new(),
-            usage: Vec::new(),
+            class: None,
+            functions: Vec::new(),
+            usages: Vec::new(),
             surface_material: None,
         }
     }
@@ -27,20 +29,28 @@ impl TrafficArea {
         std::iter::once(CityObjectRef::TrafficArea(self))
     }
 
-    pub fn function(&self) -> &Vec<Code> {
-        &self.function
+    pub fn class(&self) -> &Option<Code> {
+        &self.class
     }
 
-    pub fn set_function(&mut self, function: Vec<Code>) {
-        self.function = function;
+    pub fn set_class(&mut self, class: Option<Code>) {
+        self.class = class;
     }
 
-    pub fn usage(&self) -> &Vec<Code> {
-        &self.usage
+    pub fn functions(&self) -> &Vec<Code> {
+        &self.functions
     }
 
-    pub fn set_usage(&mut self, usage: Vec<Code>) {
-        self.usage = usage;
+    pub fn set_functions(&mut self, functions: Vec<Code>) {
+        self.functions = functions;
+    }
+
+    pub fn usages(&self) -> &Vec<Code> {
+        &self.usages
+    }
+
+    pub fn set_usages(&mut self, usages: Vec<Code>) {
+        self.usages = usages;
     }
 
     pub fn surface_material(&self) -> Option<&Code> {

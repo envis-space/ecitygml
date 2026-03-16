@@ -1,22 +1,22 @@
 use crate::model::core::{
     AbstractOccupiedSpace, AsAbstractOccupiedSpace, AsAbstractOccupiedSpaceMut, AsAbstractSpaceMut,
 };
-use chrono::{DateTime, FixedOffset};
+use chrono::NaiveDate;
 use nalgebra::Isometry3;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbstractConstruction {
     pub abstract_occupied_space: AbstractOccupiedSpace,
-    creation_date: Option<DateTime<FixedOffset>>,
-    demolition_date: Option<DateTime<FixedOffset>>,
+    date_of_construction: Option<NaiveDate>,
+    date_of_demolition: Option<NaiveDate>,
 }
 
 impl AbstractConstruction {
     pub fn new(abstract_occupied_space: AbstractOccupiedSpace) -> Self {
         Self {
             abstract_occupied_space,
-            creation_date: None,
-            demolition_date: None,
+            date_of_construction: None,
+            date_of_demolition: None,
         }
     }
 }
@@ -24,24 +24,24 @@ impl AbstractConstruction {
 pub trait AsAbstractConstruction: AsAbstractOccupiedSpace {
     fn abstract_construction(&self) -> &AbstractConstruction;
 
-    fn creation_date(&self) -> Option<&DateTime<FixedOffset>> {
-        self.abstract_construction().creation_date.as_ref()
+    fn date_of_construction(&self) -> Option<&NaiveDate> {
+        self.abstract_construction().date_of_construction.as_ref()
     }
 
-    fn demolition_date(&self) -> Option<&DateTime<FixedOffset>> {
-        self.abstract_construction().demolition_date.as_ref()
+    fn date_of_demolition(&self) -> Option<&NaiveDate> {
+        self.abstract_construction().date_of_demolition.as_ref()
     }
 }
 
 pub trait AsAbstractConstructionMut: AsAbstractOccupiedSpaceMut + AsAbstractConstruction {
     fn abstract_construction_mut(&mut self) -> &mut AbstractConstruction;
 
-    fn set_creation_date(&mut self, creation_date: Option<DateTime<FixedOffset>>) {
-        self.abstract_construction_mut().creation_date = creation_date;
+    fn set_date_of_construction(&mut self, date_of_construction: Option<NaiveDate>) {
+        self.abstract_construction_mut().date_of_construction = date_of_construction;
     }
 
-    fn set_demolition_date(&mut self, demolition_date: Option<DateTime<FixedOffset>>) {
-        self.abstract_construction_mut().demolition_date = demolition_date;
+    fn set_date_of_demolition(&mut self, date_of_demolition: Option<NaiveDate>) {
+        self.abstract_construction_mut().date_of_demolition = date_of_demolition;
     }
 
     fn apply_transform(&mut self, m: &Isometry3<f64>) {

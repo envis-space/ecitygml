@@ -1,13 +1,13 @@
 use crate::Error;
 use crate::gml::parser::city_object_reader::read_city_objects;
-use crate::gml::parser::core::parse_abstract_space;
+use crate::gml::parser::core::deserialize_abstract_space;
 use ecitygml_core::model::common::CityObjectClass;
 use ecitygml_core::model::core::CityObjectKind;
 use ecitygml_core::model::transportation::Road;
 use std::collections::HashSet;
 
-pub fn parse_road(xml_document: &[u8]) -> Result<Road, Error> {
-    let space = parse_abstract_space(xml_document)?;
+pub fn deserialize_road(xml_document: &[u8]) -> Result<Road, Error> {
+    let space = deserialize_abstract_space(xml_document)?;
     let mut road = Road::new(space);
 
     let parsed_city_objects = read_city_objects(
@@ -23,7 +23,7 @@ pub fn parse_road(xml_document: &[u8]) -> Result<Road, Error> {
                 road.section.push(x);
             }
             _ => {
-                panic!("Unexpected city object kind: {:?}", city_object);
+                return Err(Error::UnknownElementNode(format!("{:?}", city_object)));
             }
         }
     }
@@ -38,7 +38,7 @@ mod tests {
     use egml::model::base::Id;
 
     #[test]
-    fn test_parse_basic_road() {
+    fn test_deserialize_basic_road() {
         let xml_document = b"
     <tran:Road gml:id=\"UUID_8a13804c-cbd7-3a2f-9d46-e4d528a4bb4f\">
       <genericAttribute>
@@ -53,7 +53,7 @@ mod tests {
       </tran:section>
     </tran:Road>";
 
-        let road = parse_road(xml_document).expect("should work");
+        let road = deserialize_road(xml_document).expect("should work");
 
         assert_eq!(
             road.id(),

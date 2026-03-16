@@ -1,4 +1,4 @@
-use ecitygml_core::model::core::{AsAbstractFeature, AsAbstractSpace};
+use ecitygml_core::model::core::{AsAbstractFeature, AsAbstractSpace, RelativeToTerrain};
 use ecitygml_io::GmlReader;
 
 #[test]
@@ -40,7 +40,6 @@ fn test_lod2_building_model_fzk() {
         "UUID_d281adfc-4901-0f52-540b-4cc1a9325f82"
     );
 
-    // assert!(building.lod2_solid().is_some());
     assert_eq!(building.wall_surface.len(), 4);
     assert_eq!(building.roof_surface.len(), 2);
     assert_eq!(building.ground_surface.len(), 1);
@@ -62,6 +61,10 @@ fn test_lod3_building_model_fzk() {
     assert_eq!(
         building.id().to_string(),
         "UUID_d281adfc-4901-0f52-540b-4cc1a9325f82"
+    );
+    assert_eq!(
+        *building.relative_to_terrain().expect("should work"),
+        RelativeToTerrain::EntirelyAboveTerrain
     );
 
     assert_eq!(building.wall_surface.len(), 4);

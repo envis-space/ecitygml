@@ -1,137 +1,66 @@
-use ecitygml_rs;
-use ecitygml_rs::model::core::AsAbstractFeature;
 use pyo3::prelude::*;
-use pyo3::types::PyDict;
-use pyo3::wrap_pymodule;
+use pyo3_stub_gen::define_stub_info_gatherer;
 
-#[pyclass]
-struct GmlReader {
-    inner: Option<ecitygml_rs::io::GmlReader<std::fs::File>>,
-}
+mod city_objects;
+mod enums;
+mod geometry;
+mod model;
 
-#[pymethods]
-impl GmlReader {
-    #[new]
-    pub fn from_path(path: &str) -> PyResult<Self> {
-        Ok(Self {
-            inner: Some(ecitygml_rs::io::GmlReader::from_path(path).map_err(|e| {
-                pyo3::exceptions::PyIOError::new_err(format!("Failed to read GML file: {}", e))
-            })?),
-        })
-    }
+use city_objects::{
+    PyAuxiliaryTrafficArea, PyAuxiliaryTrafficSpace, PyBuilding, PyCityFurniture, PyDoorSurface,
+    PyGroundSurface, PyIntersection, PyReliefFeature, PyRoad, PyRoofSurface, PySection,
+    PySolitaryVegetationObject, PyTinRelief, PyTrafficArea, PyTrafficSpace, PyWallSurface,
+    PyWindowSurface,
+};
+use enums::{PyCityObjectClass, PyLevelOfDetail};
+use geometry::{
+    PyDirectPosition, PyEnvelope, PyLinearRing, PyMultiCurve, PyMultiSurface, PyPolygon, PySolid,
+    PyTriangle, PyTriangulatedSurface,
+};
+use model::{PyCityModel, PyGmlReader};
 
-    pub fn finish(&mut self) -> Result<CityModel, PyErr> {
-        let reader = self.inner.take().ok_or_else(|| {
-            pyo3::exceptions::PyRuntimeError::new_err("GmlReader already consumed by finish()")
-        })?;
-
-        let city_model_inner: ecitygml_rs::model::core::CityModel =
-            reader.finish().map_err(|e| {
-                pyo3::exceptions::PyIOError::new_err(format!("Failed to finish GML parsing: {}", e))
-            })?;
-
-        let city_model = CityModel {
-            inner: city_model_inner,
-        };
-
-        Ok(city_model)
-    }
-}
-
-#[pyclass]
-struct CityModel {
-    inner: ecitygml_rs::model::core::CityModel,
-}
-
-#[pymethods]
-impl CityModel {
-    pub fn city_objects_len(&self) -> usize {
-        self.inner.city_objects_len()
-    }
-
-    pub fn city_objects(&self) -> Vec<CityObjectKind> {
-        self.inner
-            .city_objects()
-            .iter()
-            .map(|x| CityObjectKind { inner: x.clone() })
-            .collect()
-    }
-
-    pub fn refresh_bounded_by_recursive(&mut self) {
-        self.inner.refresh_bounded_by_recursive()
-    }
-}
-
-#[pyclass]
-struct CityObjectKind {
-    inner: ecitygml_rs::model::core::CityObjectKind,
-}
-
-#[pymethods]
-impl CityObjectKind {
-    pub fn id(&self) -> String {
-        self.inner.id().to_string()
-    }
-
-    pub fn city_object_class(&self) -> String {
-        self.inner.city_object_class().to_string()
-    }
-
-    pub fn bounded_by(&self) -> Option<Envelope> {
-        self.inner.bounded_by().map(|e| Envelope {
-            lower_corner: vec![
-                e.lower_corner().x(),
-                e.lower_corner().y(),
-                e.lower_corner().z(),
-            ],
-            upper_corner: vec![
-                e.upper_corner().x(),
-                e.upper_corner().y(),
-                e.upper_corner().z(),
-            ],
-        })
-    }
-}
-
-#[pyclass]
-struct Envelope {
-    lower_corner: Vec<f64>,
-    upper_corner: Vec<f64>,
-}
-
-#[pymethods]
-impl Envelope {
-    #[getter]
-    fn lower_corner(&self) -> (f64, f64, f64) {
-        (
-            self.lower_corner[0],
-            self.lower_corner[1],
-            self.lower_corner[2],
-        )
-    }
-
-    #[getter]
-    fn upper_corner(&self) -> (f64, f64, f64) {
-        (
-            self.upper_corner[0],
-            self.upper_corner[1],
-            self.upper_corner[2],
-        )
-    }
-}
-
-/// An example module implemented in Rust using PyO3.
 #[pymodule]
-fn ecitygml(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_class::<GmlReader>()?;
-    m.add_class::<CityModel>()?;
-    m.add_class::<CityObjectKind>()?;
-    m.add_class::<Envelope>()?;
-    // m.add_wrapped(wrap_pymodule!(submodule::submodule))?;
+#[pyo3(name = "_ecitygml")]
+fn ecitygml(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    // Geometry
+    m.add_class::<PyDirectPosition>()?;
+    m.add_class::<PyEnvelope>()?;
+    m.add_class::<PyLinearRing>()?;
+    m.add_class::<PyPolygon>()?;
+    m.add_class::<PyTriangle>()?;
+    m.add_class::<PyTriangulatedSurface>()?;
+    m.add_class::<PySolid>()?;
+    m.add_class::<PyMultiSurface>()?;
+    m.add_class::<PyMultiCurve>()?;
 
-    let sys = PyModule::import(py, "sys")?;
-    let sys_modules: Bound<'_, PyDict> = sys.getattr("modules")?.cast_into()?;
-    // sys_modules.set_item("ecitygml.submodule", m.getattr("submodule")?)?;
+    // Enums
+    m.add_class::<PyLevelOfDetail>()?;
+    m.add_class::<PyCityObjectClass>()?;
+
+    // Model
+    m.add_class::<PyGmlReader>()?;
+    m.add_class::<PyCityModel>()?;
+
+    // City objects
+    m.add_class::<PyBuilding>()?;
+    m.add_class::<PyWallSurface>()?;
+    m.add_class::<PyRoofSurface>()?;
+    m.add_class::<PyGroundSurface>()?;
+    m.add_class::<PyDoorSurface>()?;
+    m.add_class::<PyWindowSurface>()?;
+    m.add_class::<PyRoad>()?;
+    m.add_class::<PySection>()?;
+    m.add_class::<PyIntersection>()?;
+    m.add_class::<PyTrafficSpace>()?;
+    m.add_class::<PyTrafficArea>()?;
+    m.add_class::<PyAuxiliaryTrafficSpace>()?;
+    m.add_class::<PyAuxiliaryTrafficArea>()?;
+    m.add_class::<PySolitaryVegetationObject>()?;
+    m.add_class::<PyCityFurniture>()?;
+    m.add_class::<PyReliefFeature>()?;
+    m.add_class::<PyTinRelief>()?;
 
     Ok(())
 }
+
+define_stub_info_gatherer!(stub_info);

@@ -2,9 +2,6 @@ mod geometry_index;
 mod visitor;
 
 #[doc(inline)]
-pub use visitor::Interpreter;
-
-#[doc(inline)]
 pub use visitor::Visitor;
 
 #[doc(inline)]

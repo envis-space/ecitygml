@@ -1,12 +1,15 @@
-use crate::model::building::{Building, BuildingConstructiveElement};
+use crate::model::building::{
+    Building, BuildingConstructiveElement, BuildingInstallation, BuildingRoom, Storey,
+};
 use crate::model::city_furniture::CityFurniture;
 use crate::model::common::CityObjectClass;
 use crate::model::construction::{
     DoorSurface, GroundSurface, RoofSurface, WallSurface, WindowSurface,
 };
 use crate::model::core::{
-    AbstractFeature, AsAbstractFeature, AsAbstractFeatureMut, AsAbstractOccupiedSpaceMut,
-    AsAbstractThematicSurfaceMut,
+    AbstractFeature, AbstractFeatureWithLifespan, AsAbstractFeature, AsAbstractFeatureMut,
+    AsAbstractFeatureWithLifespan, AsAbstractFeatureWithLifespanMut, AsAbstractOccupiedSpaceMut,
+    AsAbstractThematicSurfaceMut, ExternalReference,
 };
 use crate::model::generics::GenericAttributeKind;
 use crate::model::relief::{ReliefFeature, TinRelief};
@@ -19,32 +22,43 @@ use nalgebra::Isometry3;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbstractCityObject {
-    pub(crate) abstract_feature: AbstractFeature,
+    pub(crate) abstract_feature_with_lifespan: AbstractFeatureWithLifespan,
+    pub external_references: Vec<ExternalReference>,
     pub generic_attributes: Vec<GenericAttributeKind>,
 }
 
 impl AbstractCityObject {
-    pub fn new(
-        abstract_feature: AbstractFeature,
-        generic_attributes: Vec<GenericAttributeKind>,
-    ) -> Self {
+    pub fn new(abstract_feature_with_lifespan: AbstractFeatureWithLifespan) -> Self {
         Self {
-            abstract_feature,
-            generic_attributes,
+            abstract_feature_with_lifespan,
+            external_references: vec![],
+            generic_attributes: vec![],
         }
     }
 }
 
-pub trait AsAbstractCityObject: AsAbstractFeature {
+pub trait AsAbstractCityObject: AsAbstractFeatureWithLifespan {
     fn abstract_city_object(&self) -> &AbstractCityObject;
 
     fn generic_attributes(&self) -> &[GenericAttributeKind] {
         &self.abstract_city_object().generic_attributes
     }
+
+    fn external_references(&self) -> &[ExternalReference] {
+        &self.abstract_city_object().external_references
+    }
 }
 
-pub trait AsAbstractCityObjectMut: AsAbstractFeatureMut + AsAbstractCityObject {
+pub trait AsAbstractCityObjectMut: AsAbstractFeatureWithLifespanMut + AsAbstractCityObject {
     fn abstract_city_object_mut(&mut self) -> &mut AbstractCityObject;
+
+    fn set_generic_attributes(&mut self, generic_attributes: Vec<GenericAttributeKind>) {
+        self.abstract_city_object_mut().generic_attributes = generic_attributes;
+    }
+
+    fn set_external_references(&mut self, external_references: Vec<ExternalReference>) {
+        self.abstract_city_object_mut().external_references = external_references;
+    }
 }
 
 impl AsAbstractCityObject for AbstractCityObject {
@@ -62,17 +76,25 @@ impl AsAbstractCityObjectMut for AbstractCityObject {
 #[macro_export]
 macro_rules! impl_abstract_city_object_traits {
     ($type:ty) => {
-        impl $crate::model::core::AsAbstractFeature for $type {
-            fn abstract_feature(&self) -> &$crate::model::core::AbstractFeature {
+        $crate::impl_abstract_feature_with_lifespan_traits!($type);
+
+        impl $crate::model::core::AsAbstractFeatureWithLifespan for $type {
+            fn abstract_feature_with_lifespan(
+                &self,
+            ) -> &$crate::model::core::AbstractFeatureWithLifespan {
                 use $crate::model::core::AsAbstractCityObject;
-                &self.abstract_city_object().abstract_feature
+                &self.abstract_city_object().abstract_feature_with_lifespan
             }
         }
 
-        impl $crate::model::core::AsAbstractFeatureMut for $type {
-            fn abstract_feature_mut(&mut self) -> &mut $crate::model::core::AbstractFeature {
+        impl $crate::model::core::AsAbstractFeatureWithLifespanMut for $type {
+            fn abstract_feature_with_lifespan_mut(
+                &mut self,
+            ) -> &mut $crate::model::core::AbstractFeatureWithLifespan {
                 use $crate::model::core::AsAbstractCityObjectMut;
-                &mut self.abstract_city_object_mut().abstract_feature
+                &mut self
+                    .abstract_city_object_mut()
+                    .abstract_feature_with_lifespan
             }
         }
     };
@@ -89,7 +111,8 @@ mod tests {
     #[test]
     fn trait_implementation_macro_test() {
         let abstract_feature = AbstractFeature::new(egml::model::base::Id::generate_uuid_v4());
-        let abstract_city_object = AbstractCityObject::new(abstract_feature, vec![]);
+        let abstract_feature_with_lifespan = AbstractFeatureWithLifespan::new(abstract_feature);
+        let abstract_city_object = AbstractCityObject::new(abstract_feature_with_lifespan);
         abstract_city_object.id();
     }
 }
@@ -100,6 +123,8 @@ pub enum CityObjectKind {
     AuxiliaryTrafficSpace(AuxiliaryTrafficSpace),
     Building(Building),
     BuildingConstructiveElement(BuildingConstructiveElement),
+    BuildingRoom(BuildingRoom),
+    BuildingInstallation(BuildingInstallation),
     CityFurniture(CityFurniture),
     DoorSurface(DoorSurface),
     GroundSurface(GroundSurface),
@@ -109,6 +134,7 @@ pub enum CityObjectKind {
     RoofSurface(RoofSurface),
     Section(Section),
     SolitaryVegetationObject(SolitaryVegetationObject),
+    Storey(Storey),
     TinRelief(TinRelief),
     TrafficArea(TrafficArea),
     TrafficSpace(TrafficSpace),
@@ -123,6 +149,8 @@ impl AsAbstractCityObject for CityObjectKind {
             Self::AuxiliaryTrafficSpace(x) => x.abstract_city_object(),
             Self::Building(x) => x.abstract_city_object(),
             Self::BuildingConstructiveElement(x) => x.abstract_city_object(),
+            Self::BuildingInstallation(x) => x.abstract_city_object(),
+            Self::BuildingRoom(x) => x.abstract_city_object(),
             Self::CityFurniture(x) => x.abstract_city_object(),
             Self::DoorSurface(x) => x.abstract_city_object(),
             Self::GroundSurface(x) => x.abstract_city_object(),
@@ -132,6 +160,7 @@ impl AsAbstractCityObject for CityObjectKind {
             Self::RoofSurface(x) => x.abstract_city_object(),
             Self::Section(x) => x.abstract_city_object(),
             Self::SolitaryVegetationObject(x) => x.abstract_city_object(),
+            Self::Storey(x) => x.abstract_city_object(),
             Self::TinRelief(x) => x.abstract_city_object(),
             Self::TrafficArea(x) => x.abstract_city_object(),
             Self::TrafficSpace(x) => x.abstract_city_object(),
@@ -148,6 +177,8 @@ impl AsAbstractCityObjectMut for CityObjectKind {
             Self::AuxiliaryTrafficSpace(x) => x.abstract_city_object_mut(),
             Self::Building(x) => x.abstract_city_object_mut(),
             Self::BuildingConstructiveElement(x) => x.abstract_city_object_mut(),
+            Self::BuildingInstallation(x) => x.abstract_city_object_mut(),
+            Self::BuildingRoom(x) => x.abstract_city_object_mut(),
             Self::CityFurniture(x) => x.abstract_city_object_mut(),
             Self::DoorSurface(x) => x.abstract_city_object_mut(),
             Self::GroundSurface(x) => x.abstract_city_object_mut(),
@@ -157,6 +188,7 @@ impl AsAbstractCityObjectMut for CityObjectKind {
             Self::RoofSurface(x) => x.abstract_city_object_mut(),
             Self::Section(x) => x.abstract_city_object_mut(),
             Self::SolitaryVegetationObject(x) => x.abstract_city_object_mut(),
+            Self::Storey(x) => x.abstract_city_object_mut(),
             Self::TinRelief(x) => x.abstract_city_object_mut(),
             Self::TrafficArea(x) => x.abstract_city_object_mut(),
             Self::TrafficSpace(x) => x.abstract_city_object_mut(),
@@ -175,6 +207,8 @@ impl CityObjectKind {
             Self::AuxiliaryTrafficSpace(x) => Box::new(x.iter_city_object()),
             Self::Building(x) => Box::new(x.iter_city_object()),
             Self::BuildingConstructiveElement(x) => Box::new(x.iter_city_object()),
+            Self::BuildingInstallation(x) => Box::new(x.iter_city_object()),
+            Self::BuildingRoom(x) => Box::new(x.iter_city_object()),
             Self::CityFurniture(x) => Box::new(x.iter_city_object()),
             Self::DoorSurface(x) => Box::new(x.iter_city_object()),
             Self::GroundSurface(x) => Box::new(x.iter_city_object()),
@@ -184,6 +218,7 @@ impl CityObjectKind {
             Self::RoofSurface(x) => Box::new(x.iter_city_object()),
             Self::Section(x) => Box::new(x.iter_city_object()),
             Self::SolitaryVegetationObject(x) => Box::new(x.iter_city_object()),
+            Self::Storey(x) => Box::new(x.iter_city_object()),
             Self::TinRelief(x) => Box::new(x.iter_city_object()),
             Self::TrafficArea(x) => Box::new(x.iter_city_object()),
             Self::TrafficSpace(x) => Box::new(x.iter_city_object()),
@@ -198,6 +233,8 @@ impl CityObjectKind {
             Self::AuxiliaryTrafficSpace(_) => CityObjectClass::AuxiliaryTrafficSpace,
             Self::Building(_) => CityObjectClass::Building,
             Self::BuildingConstructiveElement(_) => CityObjectClass::BuildingConstructiveElement,
+            Self::BuildingInstallation(_) => CityObjectClass::BuildingInstallation,
+            Self::BuildingRoom(_) => CityObjectClass::BuildingRoom,
             Self::CityFurniture(_) => CityObjectClass::CityFurniture,
             Self::DoorSurface(_) => CityObjectClass::DoorSurface,
             Self::GroundSurface(_) => CityObjectClass::GroundSurface,
@@ -207,6 +244,7 @@ impl CityObjectKind {
             Self::RoofSurface(_) => CityObjectClass::RoofSurface,
             Self::Section(_) => CityObjectClass::Section,
             Self::SolitaryVegetationObject(_) => CityObjectClass::SolitaryVegetationObject,
+            Self::Storey(_) => CityObjectClass::Storey,
             Self::TinRelief(_) => CityObjectClass::TinRelief,
             Self::TrafficArea(_) => CityObjectClass::TrafficArea,
             Self::TrafficSpace(_) => CityObjectClass::TrafficSpace,
@@ -223,6 +261,8 @@ impl CityObjectKind {
             Self::BuildingConstructiveElement(x) => {
                 AsAbstractOccupiedSpaceMut::refresh_bounded_by(x)
             }
+            Self::BuildingInstallation(x) => AsAbstractOccupiedSpaceMut::refresh_bounded_by(x),
+            Self::BuildingRoom(x) => x.refresh_bounded_by_recursive(),
             Self::CityFurniture(x) => AsAbstractOccupiedSpaceMut::refresh_bounded_by(x),
             Self::DoorSurface(x) => x.refresh_bounded_by(),
             Self::GroundSurface(x) => x.refresh_bounded_by(),
@@ -232,9 +272,8 @@ impl CityObjectKind {
             Self::RoofSurface(x) => x.refresh_bounded_by(),
             Self::Section(x) => x.refresh_bounded_by_recursive(),
             Self::SolitaryVegetationObject(x) => x.refresh_bounded_by(),
-            Self::TinRelief(_x) => {
-                todo!("needs to be implemented for TinRelief")
-            }
+            Self::Storey(x) => x.refresh_bounded_by(),
+            Self::TinRelief(x) => x.refresh_bounded_by_recursive(),
             Self::TrafficArea(x) => x.refresh_bounded_by(),
             Self::TrafficSpace(x) => x.refresh_bounded_by_recursive(),
             Self::WallSurface(x) => x.refresh_bounded_by_recursive(),
@@ -250,20 +289,19 @@ impl CityObjectKind {
             Self::BuildingConstructiveElement(x) => {
                 AsAbstractOccupiedSpaceMut::apply_transform(x, m)
             }
+            Self::BuildingInstallation(x) => AsAbstractOccupiedSpaceMut::apply_transform(x, m),
+            Self::BuildingRoom(x) => x.apply_transform_recursive(m),
             Self::CityFurniture(x) => AsAbstractOccupiedSpaceMut::apply_transform(x, m),
             Self::DoorSurface(x) => x.apply_transform(m),
             Self::GroundSurface(x) => x.apply_transform(m),
             Self::Intersection(x) => x.apply_transform_recursive(m),
-            Self::ReliefFeature(_x) => {
-                todo!("needs to be implemented for ReliefFeature")
-            }
+            Self::ReliefFeature(x) => x.apply_transform_recursive(m),
             Self::Road(x) => x.apply_transform_recursive(m),
             Self::RoofSurface(x) => x.apply_transform(m),
             Self::Section(x) => x.apply_transform_recursive(m),
             Self::SolitaryVegetationObject(x) => AsAbstractOccupiedSpaceMut::apply_transform(x, m),
-            Self::TinRelief(_x) => {
-                todo!("needs to be implemented for TinRelief")
-            }
+            Self::Storey(x) => x.apply_transform_recursive(m),
+            Self::TinRelief(x) => x.apply_transform(m),
             Self::TrafficArea(x) => x.apply_transform(m),
             Self::TrafficSpace(x) => x.apply_transform_recursive(m),
             Self::WallSurface(x) => x.apply_transform_recursive(m),
@@ -278,6 +316,8 @@ pub enum CityObjectRef<'a> {
     AuxiliaryTrafficSpace(&'a AuxiliaryTrafficSpace),
     Building(&'a Building),
     BuildingConstructiveElement(&'a BuildingConstructiveElement),
+    BuildingInstallation(&'a BuildingInstallation),
+    BuildingRoom(&'a BuildingRoom),
     CityFurniture(&'a CityFurniture),
     DoorSurface(&'a DoorSurface),
     GroundSurface(&'a GroundSurface),
@@ -287,6 +327,7 @@ pub enum CityObjectRef<'a> {
     RoofSurface(&'a RoofSurface),
     Section(&'a Section),
     SolitaryVegetationObject(&'a SolitaryVegetationObject),
+    Storey(&'a Storey),
     TinRelief(&'a TinRelief),
     TrafficArea(&'a TrafficArea),
     TrafficSpace(&'a TrafficSpace),
@@ -301,6 +342,8 @@ impl<'a> AsAbstractCityObject for CityObjectRef<'a> {
             Self::AuxiliaryTrafficSpace(x) => x.abstract_city_object(),
             Self::Building(x) => x.abstract_city_object(),
             Self::BuildingConstructiveElement(x) => x.abstract_city_object(),
+            Self::BuildingInstallation(x) => x.abstract_city_object(),
+            Self::BuildingRoom(x) => x.abstract_city_object(),
             Self::CityFurniture(x) => x.abstract_city_object(),
             Self::DoorSurface(x) => x.abstract_city_object(),
             Self::GroundSurface(x) => x.abstract_city_object(),
@@ -310,11 +353,40 @@ impl<'a> AsAbstractCityObject for CityObjectRef<'a> {
             Self::RoofSurface(x) => x.abstract_city_object(),
             Self::Section(x) => x.abstract_city_object(),
             Self::SolitaryVegetationObject(x) => x.abstract_city_object(),
+            Self::Storey(x) => x.abstract_city_object(),
             Self::TinRelief(x) => x.abstract_city_object(),
             Self::TrafficArea(x) => x.abstract_city_object(),
             Self::TrafficSpace(x) => x.abstract_city_object(),
             Self::WallSurface(x) => x.abstract_city_object(),
             Self::WindowSurface(x) => x.abstract_city_object(),
+        }
+    }
+}
+
+impl<'a> AsAbstractFeatureWithLifespan for CityObjectRef<'a> {
+    fn abstract_feature_with_lifespan(&self) -> &AbstractFeatureWithLifespan {
+        match self {
+            Self::AuxiliaryTrafficArea(x) => x.abstract_feature_with_lifespan(),
+            Self::AuxiliaryTrafficSpace(x) => x.abstract_feature_with_lifespan(),
+            Self::Building(x) => x.abstract_feature_with_lifespan(),
+            Self::BuildingConstructiveElement(x) => x.abstract_feature_with_lifespan(),
+            Self::BuildingInstallation(x) => x.abstract_feature_with_lifespan(),
+            Self::BuildingRoom(x) => x.abstract_feature_with_lifespan(),
+            Self::CityFurniture(x) => x.abstract_feature_with_lifespan(),
+            Self::DoorSurface(x) => x.abstract_feature_with_lifespan(),
+            Self::GroundSurface(x) => x.abstract_feature_with_lifespan(),
+            Self::Intersection(x) => x.abstract_feature_with_lifespan(),
+            Self::ReliefFeature(x) => x.abstract_feature_with_lifespan(),
+            Self::Road(x) => x.abstract_feature_with_lifespan(),
+            Self::RoofSurface(x) => x.abstract_feature_with_lifespan(),
+            Self::Section(x) => x.abstract_feature_with_lifespan(),
+            Self::SolitaryVegetationObject(x) => x.abstract_feature_with_lifespan(),
+            Self::Storey(x) => x.abstract_feature_with_lifespan(),
+            Self::TinRelief(x) => x.abstract_feature_with_lifespan(),
+            Self::TrafficArea(x) => x.abstract_feature_with_lifespan(),
+            Self::TrafficSpace(x) => x.abstract_feature_with_lifespan(),
+            Self::WallSurface(x) => x.abstract_feature_with_lifespan(),
+            Self::WindowSurface(x) => x.abstract_feature_with_lifespan(),
         }
     }
 }
@@ -326,6 +398,8 @@ impl<'a> AsAbstractFeature for CityObjectRef<'a> {
             Self::AuxiliaryTrafficSpace(x) => x.abstract_feature(),
             Self::Building(x) => x.abstract_feature(),
             Self::BuildingConstructiveElement(x) => x.abstract_feature(),
+            Self::BuildingInstallation(x) => x.abstract_feature(),
+            Self::BuildingRoom(x) => x.abstract_feature(),
             Self::CityFurniture(x) => x.abstract_feature(),
             Self::DoorSurface(x) => x.abstract_feature(),
             Self::GroundSurface(x) => x.abstract_feature(),
@@ -335,6 +409,7 @@ impl<'a> AsAbstractFeature for CityObjectRef<'a> {
             Self::RoofSurface(x) => x.abstract_feature(),
             Self::Section(x) => x.abstract_feature(),
             Self::SolitaryVegetationObject(x) => x.abstract_feature(),
+            Self::Storey(x) => x.abstract_feature(),
             Self::TinRelief(x) => x.abstract_feature(),
             Self::TrafficArea(x) => x.abstract_feature(),
             Self::TrafficSpace(x) => x.abstract_feature(),
@@ -351,6 +426,8 @@ impl<'a> CityObjectRef<'a> {
             Self::AuxiliaryTrafficSpace(_) => CityObjectClass::AuxiliaryTrafficSpace,
             Self::Building(_) => CityObjectClass::Building,
             Self::BuildingConstructiveElement(_) => CityObjectClass::BuildingConstructiveElement,
+            Self::BuildingInstallation(_) => CityObjectClass::BuildingInstallation,
+            Self::BuildingRoom(_) => CityObjectClass::BuildingRoom,
             Self::CityFurniture(_) => CityObjectClass::CityFurniture,
             Self::DoorSurface(_) => CityObjectClass::DoorSurface,
             Self::GroundSurface(_) => CityObjectClass::GroundSurface,
@@ -360,6 +437,7 @@ impl<'a> CityObjectRef<'a> {
             Self::RoofSurface(_) => CityObjectClass::RoofSurface,
             Self::Section(_) => CityObjectClass::Section,
             Self::SolitaryVegetationObject(_) => CityObjectClass::SolitaryVegetationObject,
+            Self::Storey(_) => CityObjectClass::Storey,
             Self::TinRelief(_) => CityObjectClass::TinRelief,
             Self::TrafficArea(_) => CityObjectClass::TrafficArea,
             Self::TrafficSpace(_) => CityObjectClass::TrafficSpace,
@@ -379,10 +457,12 @@ pub enum CityObjectRefMut<'a> {
     DoorSurface(&'a mut DoorSurface),
     GroundSurface(&'a mut GroundSurface),
     Intersection(&'a mut Intersection),
+    ReliefFeature(&'a mut ReliefFeature),
     Road(&'a mut Road),
     RoofSurface(&'a mut RoofSurface),
     Section(&'a mut Section),
     SolitaryVegetationObject(&'a mut SolitaryVegetationObject),
+    Storey(&'a mut Storey),
     TinRelief(&'a mut TinRelief),
     TrafficArea(&'a mut TrafficArea),
     TrafficSpace(&'a mut TrafficSpace),
@@ -401,10 +481,12 @@ impl<'a> AsAbstractFeature for CityObjectRefMut<'a> {
             Self::DoorSurface(x) => x.abstract_feature(),
             Self::GroundSurface(x) => x.abstract_feature(),
             Self::Intersection(x) => x.abstract_feature(),
+            Self::ReliefFeature(x) => x.abstract_feature(),
             Self::Road(x) => x.abstract_feature(),
             Self::RoofSurface(x) => x.abstract_feature(),
             Self::Section(x) => x.abstract_feature(),
             Self::SolitaryVegetationObject(x) => x.abstract_feature(),
+            Self::Storey(x) => x.abstract_feature(),
             Self::TinRelief(x) => x.abstract_feature(),
             Self::TrafficArea(x) => x.abstract_feature(),
             Self::TrafficSpace(x) => x.abstract_feature(),
@@ -425,10 +507,12 @@ impl<'a> AsAbstractFeatureMut for CityObjectRefMut<'a> {
             Self::DoorSurface(x) => x.abstract_feature_mut(),
             Self::GroundSurface(x) => x.abstract_feature_mut(),
             Self::Intersection(x) => x.abstract_feature_mut(),
+            Self::ReliefFeature(x) => x.abstract_feature_mut(),
             Self::Road(x) => x.abstract_feature_mut(),
             Self::RoofSurface(x) => x.abstract_feature_mut(),
             Self::Section(x) => x.abstract_feature_mut(),
             Self::SolitaryVegetationObject(x) => x.abstract_feature_mut(),
+            Self::Storey(x) => x.abstract_feature_mut(),
             Self::TinRelief(x) => x.abstract_feature_mut(),
             Self::TrafficArea(x) => x.abstract_feature_mut(),
             Self::TrafficSpace(x) => x.abstract_feature_mut(),

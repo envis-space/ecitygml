@@ -13,7 +13,7 @@ use rayon::prelude::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CityModel {
-    pub abstract_feature: AbstractFeature,
+    pub(crate) abstract_feature: AbstractFeature,
     pub city_objects: Vec<CityObjectKind>,
 }
 
@@ -57,10 +57,11 @@ impl CityModel {
             .par_iter_mut()
             .for_each(|x| x.refresh_bounded_by_recursive());
 
-        let envelopes: Vec<&Envelope> = self
+        let envelopes: Vec<Envelope> = self
             .city_objects
             .iter()
             .filter_map(|x| x.bounded_by())
+            .cloned()
             .collect();
 
         self.set_bounded_by(Envelope::from_envelopes(&envelopes));
@@ -144,6 +145,12 @@ impl Visitable for CityModel {
                 CityObjectKind::BuildingConstructiveElement(x) => {
                     x.accept(visitor);
                 }
+                CityObjectKind::BuildingInstallation(x) => {
+                    x.accept(visitor);
+                }
+                CityObjectKind::BuildingRoom(x) => {
+                    x.accept(visitor);
+                }
                 CityObjectKind::CityFurniture(x) => {
                     x.accept(visitor);
                 }
@@ -154,6 +161,9 @@ impl Visitable for CityModel {
                     x.accept(visitor);
                 }
                 CityObjectKind::SolitaryVegetationObject(x) => {
+                    x.accept(visitor);
+                }
+                CityObjectKind::Storey(x) => {
                     x.accept(visitor);
                 }
                 CityObjectKind::TinRelief(x) => {

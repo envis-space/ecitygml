@@ -1,23 +1,24 @@
 use crate::Error;
-use crate::gml::parser::core::parse_abstract_thematic_surface;
+use crate::gml::parser::core::deserialize_abstract_thematic_surface;
 use ecitygml_core::model::transportation::TrafficArea;
 use egml::io::GmlCode;
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
-pub fn parse_traffic_area(xml_document: &[u8]) -> Result<TrafficArea, Error> {
-    let abstract_thematic_surface = parse_abstract_thematic_surface(xml_document)?;
+pub fn deserialize_traffic_area(xml_document: &[u8]) -> Result<TrafficArea, Error> {
+    let abstract_thematic_surface = deserialize_abstract_thematic_surface(xml_document)?;
     let mut traffic_area = TrafficArea::new(abstract_thematic_surface);
     let parsed_result: GmlTrafficArea = de::from_reader(xml_document)?;
 
-    traffic_area.set_function(
+    traffic_area.set_class(parsed_result.class.map(|x| x.into()));
+    traffic_area.set_functions(
         parsed_result
-            .function
+            .functions
             .into_iter()
             .map(|x| x.into())
             .collect(),
     );
-    traffic_area.set_usage(parsed_result.usage.into_iter().map(|x| x.into()).collect());
+    traffic_area.set_usages(parsed_result.usages.into_iter().map(|x| x.into()).collect());
     traffic_area.set_surface_material(parsed_result.surface_material.map(|x| x.into()));
 
     Ok(traffic_area)
@@ -25,11 +26,14 @@ pub fn parse_traffic_area(xml_document: &[u8]) -> Result<TrafficArea, Error> {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct GmlTrafficArea {
+    #[serde(rename = "class", default)]
+    pub class: Option<GmlCode>,
+
     #[serde(rename = "function", default)]
-    pub function: Vec<GmlCode>,
+    pub functions: Vec<GmlCode>,
 
     #[serde(rename = "usage", default)]
-    pub usage: Vec<GmlCode>,
+    pub usages: Vec<GmlCode>,
 
     #[serde(rename = "surfaceMaterial")]
     pub surface_material: Option<GmlCode>,
@@ -44,7 +48,7 @@ mod tests {
     use egml::model::base::Id;
 
     #[test]
-    fn test_parse_basic_traffic_area() {
+    fn test_deserialize_basic_traffic_area() {
         let xml_document =
             b"<tran:TrafficArea gml:id=\"UUID_482ae9d8-0d5f-3a97-9d9e-e5362caa2a57\">
                   <gml:name>Lane</gml:name>
@@ -59,7 +63,7 @@ mod tests {
                   <tran:surfaceMaterial>1</tran:surfaceMaterial>
                 </tran:TrafficArea>";
 
-        let traffic_area = parse_traffic_area(xml_document).expect("should work");
+        let traffic_area = deserialize_traffic_area(xml_document).expect("should work");
 
         assert_eq!(
             traffic_area.id(),
@@ -67,8 +71,8 @@ mod tests {
         );
         assert!(traffic_area.lod2_multi_surface().is_none());
         assert_eq!(traffic_area.generic_attributes().len(), 1);
-        assert_eq!(traffic_area.function().first().unwrap().value, "2");
-        assert_eq!(traffic_area.usage().first().unwrap().value, "1");
+        assert_eq!(traffic_area.functions().first().unwrap().value, "2");
+        assert_eq!(traffic_area.usages().first().unwrap().value, "1");
         assert_eq!(traffic_area.surface_material().unwrap().value, "1");
     }
 }

@@ -1,7 +1,7 @@
 use crate::model::common::LevelOfDetail;
 use crate::model::core::{
-    AbstractSpace, AsAbstractCityObject, AsAbstractFeature, AsAbstractSpace, AsAbstractSpaceMut,
-    ImplicitGeometry,
+    AbstractPhysicalSpace, AsAbstractCityObject, AsAbstractFeature, AsAbstractSpace,
+    AsAbstractSpaceMut, ImplicitGeometry,
 };
 use egml::model::geometry::Envelope;
 use nalgebra::Isometry3;
@@ -9,16 +9,16 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbstractOccupiedSpace {
-    pub(crate) abstract_space: AbstractSpace,
-    pub lod1_implicit_representation: Option<ImplicitGeometry>,
-    pub lod2_implicit_representation: Option<ImplicitGeometry>,
-    pub lod3_implicit_representation: Option<ImplicitGeometry>,
+    pub(crate) abstract_physical_space: AbstractPhysicalSpace,
+    pub(crate) lod1_implicit_representation: Option<ImplicitGeometry>,
+    pub(crate) lod2_implicit_representation: Option<ImplicitGeometry>,
+    pub(crate) lod3_implicit_representation: Option<ImplicitGeometry>,
 }
 
 impl AbstractOccupiedSpace {
-    pub fn new(abstract_space: AbstractSpace) -> Self {
+    pub fn new(abstract_physical_space: AbstractPhysicalSpace) -> Self {
         Self {
-            abstract_space,
+            abstract_physical_space,
             lod1_implicit_representation: None,
             lod2_implicit_representation: None,
             lod3_implicit_representation: None,
@@ -50,13 +50,13 @@ pub trait AsAbstractOccupiedSpace: AsAbstractSpace {
     fn implicit_representations_by_lod(&self) -> HashMap<LevelOfDetail, &ImplicitGeometry> {
         let mut map = HashMap::new();
         if let Some(x) = self.lod1_implicit_representation() {
-            map.insert(LevelOfDetail::Zero, x);
-        }
-        if let Some(x) = self.lod2_implicit_representation() {
             map.insert(LevelOfDetail::One, x);
         }
-        if let Some(x) = self.lod3_implicit_representation() {
+        if let Some(x) = self.lod2_implicit_representation() {
             map.insert(LevelOfDetail::Two, x);
+        }
+        if let Some(x) = self.lod3_implicit_representation() {
+            map.insert(LevelOfDetail::Three, x);
         }
         map
     }
@@ -75,13 +75,27 @@ pub trait AsAbstractOccupiedSpace: AsAbstractSpace {
         .flatten()
         .collect();
 
-        let refs: Vec<&Envelope> = envelopes.iter().collect();
-        Envelope::from_envelopes(&refs)
+        Envelope::from_envelopes(&envelopes)
     }
 }
 
 pub trait AsAbstractOccupiedSpaceMut: AsAbstractSpaceMut + AsAbstractOccupiedSpace {
     fn abstract_occupied_space_mut(&mut self) -> &mut AbstractOccupiedSpace;
+
+    fn set_lod1_implicit_representation(&mut self, value: Option<ImplicitGeometry>) {
+        self.abstract_occupied_space_mut()
+            .lod1_implicit_representation = value;
+    }
+
+    fn set_lod2_implicit_representation(&mut self, value: Option<ImplicitGeometry>) {
+        self.abstract_occupied_space_mut()
+            .lod2_implicit_representation = value;
+    }
+
+    fn set_lod3_implicit_representation(&mut self, value: Option<ImplicitGeometry>) {
+        self.abstract_occupied_space_mut()
+            .lod3_implicit_representation = value;
+    }
 
     fn refresh_bounded_by(&mut self) {
         let envelope = AsAbstractOccupiedSpace::compute_envelope(self);
@@ -127,19 +141,21 @@ impl AsAbstractOccupiedSpaceMut for AbstractOccupiedSpace {
 #[macro_export]
 macro_rules! impl_abstract_occupied_space_traits {
     ($type:ty) => {
-        $crate::impl_abstract_space_traits!($type);
+        $crate::impl_abstract_physical_space_traits!($type);
 
-        impl $crate::model::core::AsAbstractSpace for $type {
-            fn abstract_space(&self) -> &$crate::model::core::AbstractSpace {
+        impl $crate::model::core::AsAbstractPhysicalSpace for $type {
+            fn abstract_physical_space(&self) -> &$crate::model::core::AbstractPhysicalSpace {
                 use $crate::model::core::AsAbstractOccupiedSpace;
-                &self.abstract_occupied_space().abstract_space
+                &self.abstract_occupied_space().abstract_physical_space
             }
         }
 
-        impl $crate::model::core::AsAbstractSpaceMut for $type {
-            fn abstract_space_mut(&mut self) -> &mut $crate::model::core::AbstractSpace {
+        impl $crate::model::core::AsAbstractPhysicalSpaceMut for $type {
+            fn abstract_physical_space_mut(
+                &mut self,
+            ) -> &mut $crate::model::core::AbstractPhysicalSpace {
                 use $crate::model::core::AsAbstractOccupiedSpaceMut;
-                &mut self.abstract_occupied_space_mut().abstract_space
+                &mut self.abstract_occupied_space_mut().abstract_physical_space
             }
         }
     };

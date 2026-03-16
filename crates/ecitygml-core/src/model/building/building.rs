@@ -1,4 +1,3 @@
-use crate::model::building::building_constructive_element::BuildingConstructiveElement;
 use crate::model::building::{AbstractBuilding, AsAbstractBuilding, AsAbstractBuildingMut};
 use crate::model::construction::{GroundSurface, RoofSurface, WallSurface};
 use crate::model::core::{
@@ -15,7 +14,6 @@ pub struct Building {
     pub wall_surface: Vec<WallSurface>,
     pub roof_surface: Vec<RoofSurface>,
     pub ground_surface: Vec<GroundSurface>,
-    pub building_constructive_element: Vec<BuildingConstructiveElement>,
 }
 
 impl Building {
@@ -25,21 +23,16 @@ impl Building {
             wall_surface: Vec::new(),
             roof_surface: Vec::new(),
             ground_surface: Vec::new(),
-            building_constructive_element: Vec::new(),
         }
     }
 
     pub fn iter_city_object<'a>(&'a self) -> impl Iterator<Item = CityObjectRef<'a>> + 'a {
         std::iter::once(CityObjectRef::Building(self))
+            .chain(self.abstract_building.iter_city_object())
             .chain(self.wall_surface.iter().flat_map(|x| x.iter_city_object()))
             .chain(self.roof_surface.iter().flat_map(|x| x.iter_city_object()))
             .chain(
                 self.ground_surface
-                    .iter()
-                    .flat_map(|x| x.iter_city_object()),
-            )
-            .chain(
-                self.building_constructive_element
                     .iter()
                     .flat_map(|x| x.iter_city_object()),
             )
@@ -55,22 +48,15 @@ impl Building {
         self.ground_surface
             .iter_mut()
             .for_each(|x| x.refresh_bounded_by());
-        self.building_constructive_element
-            .iter_mut()
-            .for_each(AsAbstractOccupiedSpaceMut::refresh_bounded_by);
 
         let own_envelope = self.compute_envelope();
-        let envelopes: Vec<&Envelope> = own_envelope
+        let envelopes: Vec<Envelope> = own_envelope
             .as_ref()
             .into_iter()
             .chain(self.wall_surface.iter().filter_map(|x| x.bounded_by()))
             .chain(self.roof_surface.iter().filter_map(|x| x.bounded_by()))
             .chain(self.ground_surface.iter().filter_map(|x| x.bounded_by()))
-            .chain(
-                self.building_constructive_element
-                    .iter()
-                    .filter_map(|x| x.bounded_by()),
-            )
+            .cloned()
             .collect();
 
         self.set_bounded_by(Envelope::from_envelopes(&envelopes));
@@ -88,9 +74,6 @@ impl Building {
         self.ground_surface
             .iter_mut()
             .for_each(|x| x.apply_transform(m));
-        self.building_constructive_element
-            .iter_mut()
-            .for_each(|x| AsAbstractOccupiedSpaceMut::apply_transform(x, m));
     }
 }
 
@@ -120,8 +103,5 @@ impl Visitable for Building {
         self.wall_surface.iter().for_each(|x| x.accept(visitor));
         self.roof_surface.iter().for_each(|x| x.accept(visitor));
         self.ground_surface.iter().for_each(|x| x.accept(visitor));
-        self.building_constructive_element
-            .iter()
-            .for_each(|x| x.accept(visitor));
     }
 }

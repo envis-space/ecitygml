@@ -1,5 +1,8 @@
 use crate::model::common::LevelOfDetail;
-use crate::model::core::{AbstractCityObject, AsAbstractCityObject};
+use crate::model::core::{
+    AbstractSpaceBoundary, AsAbstractCityObject, AsAbstractSpaceBoundary,
+    AsAbstractSpaceBoundaryMut,
+};
 use crate::model::core::{AsAbstractCityObjectMut, AsAbstractFeature};
 use egml::model::geometry::Envelope;
 use egml::model::geometry::aggregates::MultiSurface;
@@ -8,17 +11,17 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbstractThematicSurface {
-    pub(crate) abstract_city_object: AbstractCityObject,
-    pub lod0_multi_surface: Option<MultiSurface>,
-    pub lod1_multi_surface: Option<MultiSurface>,
-    pub lod2_multi_surface: Option<MultiSurface>,
-    pub lod3_multi_surface: Option<MultiSurface>,
+    pub(crate) abstract_space_boundary: AbstractSpaceBoundary,
+    pub(crate) lod0_multi_surface: Option<MultiSurface>,
+    pub(crate) lod1_multi_surface: Option<MultiSurface>,
+    pub(crate) lod2_multi_surface: Option<MultiSurface>,
+    pub(crate) lod3_multi_surface: Option<MultiSurface>,
 }
 
 impl AbstractThematicSurface {
-    pub fn new(abstract_city_object: AbstractCityObject) -> Self {
+    pub fn new(abstract_space_boundary: AbstractSpaceBoundary) -> Self {
         Self {
-            abstract_city_object,
+            abstract_space_boundary,
             lod0_multi_surface: None,
             lod1_multi_surface: None,
             lod2_multi_surface: None,
@@ -27,7 +30,7 @@ impl AbstractThematicSurface {
     }
 }
 
-pub trait AsAbstractThematicSurface: AsAbstractCityObject {
+pub trait AsAbstractThematicSurface: AsAbstractSpaceBoundary {
     fn abstract_thematic_surface(&self) -> &AbstractThematicSurface;
 
     fn lod0_multi_surface(&self) -> Option<&MultiSurface> {
@@ -74,15 +77,30 @@ pub trait AsAbstractThematicSurface: AsAbstractCityObject {
         .flatten()
         .collect();
 
-        let refs: Vec<&Envelope> = envelopes.iter().collect();
-        Envelope::from_envelopes(&refs)
+        Envelope::from_envelopes(&envelopes)
     }
 }
 
 pub trait AsAbstractThematicSurfaceMut:
-    AsAbstractCityObjectMut + AsAbstractThematicSurface
+    AsAbstractSpaceBoundaryMut + AsAbstractThematicSurface
 {
     fn abstract_thematic_surface_mut(&mut self) -> &mut AbstractThematicSurface;
+
+    fn set_lod0_multi_surface(&mut self, value: Option<MultiSurface>) {
+        self.abstract_thematic_surface_mut().lod0_multi_surface = value;
+    }
+
+    fn set_lod1_multi_surface(&mut self, value: Option<MultiSurface>) {
+        self.abstract_thematic_surface_mut().lod1_multi_surface = value;
+    }
+
+    fn set_lod2_multi_surface(&mut self, value: Option<MultiSurface>) {
+        self.abstract_thematic_surface_mut().lod2_multi_surface = value;
+    }
+
+    fn set_lod3_multi_surface(&mut self, value: Option<MultiSurface>) {
+        self.abstract_thematic_surface_mut().lod3_multi_surface = value;
+    }
 
     fn refresh_bounded_by(&mut self) {
         let envelope = self.compute_envelope();
@@ -120,19 +138,21 @@ impl AsAbstractThematicSurfaceMut for AbstractThematicSurface {
 #[macro_export]
 macro_rules! impl_abstract_thematic_surface_traits {
     ($type:ty) => {
-        $crate::impl_abstract_city_object_traits!($type);
+        $crate::impl_abstract_space_boundary_traits!($type);
 
-        impl $crate::model::core::AsAbstractCityObject for $type {
-            fn abstract_city_object(&self) -> &$crate::model::core::AbstractCityObject {
+        impl $crate::model::core::AsAbstractSpaceBoundary for $type {
+            fn abstract_space_boundary(&self) -> &$crate::model::core::AbstractSpaceBoundary {
                 use $crate::model::core::AsAbstractThematicSurface;
-                &self.abstract_thematic_surface().abstract_city_object
+                &self.abstract_thematic_surface().abstract_space_boundary
             }
         }
 
-        impl $crate::model::core::AsAbstractCityObjectMut for $type {
-            fn abstract_city_object_mut(&mut self) -> &mut $crate::model::core::AbstractCityObject {
+        impl $crate::model::core::AsAbstractSpaceBoundaryMut for $type {
+            fn abstract_space_boundary_mut(
+                &mut self,
+            ) -> &mut $crate::model::core::AbstractSpaceBoundary {
                 use $crate::model::core::AsAbstractThematicSurfaceMut;
-                &mut self.abstract_thematic_surface_mut().abstract_city_object
+                &mut self.abstract_thematic_surface_mut().abstract_space_boundary
             }
         }
     };

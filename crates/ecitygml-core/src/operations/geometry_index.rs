@@ -82,6 +82,12 @@ impl CityObjectGeometry {
             CityObjectRef::BuildingConstructiveElement(x) => {
                 Self::from_abstract_occupied_space(city_object_class, x.abstract_occupied_space())
             }
+            CityObjectRef::BuildingInstallation(x) => {
+                Self::from_abstract_occupied_space(city_object_class, x.abstract_occupied_space())
+            }
+            CityObjectRef::BuildingRoom(x) => {
+                Self::from_abstract_space(city_object_class, x.abstract_space())
+            }
             CityObjectRef::CityFurniture(x) => {
                 Self::from_abstract_occupied_space(city_object_class, x.abstract_occupied_space())
             }
@@ -111,6 +117,9 @@ impl CityObjectGeometry {
             }
             CityObjectRef::SolitaryVegetationObject(x) => {
                 Self::from_abstract_occupied_space(city_object_class, x.abstract_occupied_space())
+            }
+            CityObjectRef::Storey(x) => {
+                Self::from_abstract_space(city_object_class, x.abstract_space())
             }
             CityObjectRef::TinRelief(x) => {
                 CityObjectGeometry::new(x.abstract_city_object().clone(), city_object_class)
@@ -166,8 +175,10 @@ impl CityObjectGeometry {
         class: CityObjectClass,
         occupied_space: &AbstractOccupiedSpace,
     ) -> Self {
-        let mut city_object_geometry =
-            CityObjectGeometry::from_abstract_space(class, &occupied_space.abstract_space);
+        let mut city_object_geometry = CityObjectGeometry::from_abstract_space(
+            class,
+            &occupied_space.abstract_physical_space.abstract_space,
+        );
 
         let implicit_representations: HashMap<LevelOfDetail, ImplicitGeometry> = occupied_space
             .implicit_representations_by_lod()

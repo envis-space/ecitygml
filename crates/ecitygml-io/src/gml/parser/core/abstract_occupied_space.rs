@@ -1,14 +1,18 @@
 use crate::Error;
+use crate::gml::parser::core::abstract_physical_space::deserialize_abstract_physical_space;
 use crate::gml::parser::core::implicit_geometry_property::GmlImplicitGeometryProperty;
-use crate::gml::parser::core::parse_abstract_space;
-use ecitygml_core::model::core::{AbstractOccupiedSpace, AsAbstractFeature, ImplicitGeometry};
+use ecitygml_core::model::core::{
+    AbstractOccupiedSpace, AsAbstractFeature, AsAbstractOccupiedSpaceMut, ImplicitGeometry,
+};
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
-pub fn parse_abstract_occupied_space(xml_document: &[u8]) -> Result<AbstractOccupiedSpace, Error> {
-    let abstract_space = parse_abstract_space(xml_document)?;
-    let mut abstract_occupied_space = AbstractOccupiedSpace::new(abstract_space);
+pub fn deserialize_abstract_occupied_space(
+    xml_document: &[u8],
+) -> Result<AbstractOccupiedSpace, Error> {
+    let abstract_physical_space = deserialize_abstract_physical_space(xml_document)?;
+    let mut abstract_occupied_space = AbstractOccupiedSpace::new(abstract_physical_space);
     let parsed_result: GmlAbstractOccupiedSpace = de::from_reader(xml_document)?;
 
     if let Some(gml_implicit_geometry_property) = parsed_result.lod1_implicit_representation {
@@ -17,7 +21,7 @@ pub fn parse_abstract_occupied_space(xml_document: &[u8]) -> Result<AbstractOccu
 
         match multi_surface_result {
             Ok(x) => {
-                abstract_occupied_space.lod1_implicit_representation = Some(x);
+                abstract_occupied_space.set_lod1_implicit_representation(Some(x));
             }
             Err(e) => {
                 debug!(
@@ -35,7 +39,7 @@ pub fn parse_abstract_occupied_space(xml_document: &[u8]) -> Result<AbstractOccu
 
         match multi_surface_result {
             Ok(x) => {
-                abstract_occupied_space.lod2_implicit_representation = Some(x);
+                abstract_occupied_space.set_lod2_implicit_representation(Some(x));
             }
             Err(e) => {
                 debug!(
@@ -53,7 +57,7 @@ pub fn parse_abstract_occupied_space(xml_document: &[u8]) -> Result<AbstractOccu
 
         match multi_surface_result {
             Ok(x) => {
-                abstract_occupied_space.lod3_implicit_representation = Some(x);
+                abstract_occupied_space.set_lod3_implicit_representation(Some(x));
             }
             Err(e) => {
                 debug!(
@@ -86,7 +90,7 @@ mod tests {
     use ecitygml_core::model::core::AsAbstractOccupiedSpace;
 
     #[test]
-    fn test_parse_abstract_occupied_space() {
+    fn test_deserialize_abstract_occupied_space() {
         let xml_document = b"<frn:CityFurniture gml:id=\"UUID_35904d1c-ecd3-30d8-b8a5-02710feebc2d\">
       <gml:name>Private_Parking</gml:name>
       <genericAttribute>
@@ -121,7 +125,7 @@ mod tests {
     </frn:CityFurniture>";
 
         let abstract_occupied_space =
-            parse_abstract_occupied_space(xml_document).expect("should work");
+            deserialize_abstract_occupied_space(xml_document).expect("should work");
 
         assert!(
             abstract_occupied_space

@@ -1,6 +1,7 @@
 use crate::model::core::{
-    AbstractSpace, AsAbstractFeature, AsAbstractFeatureMut, AsAbstractSpace, AsAbstractSpaceMut,
-    AsAbstractThematicSurfaceMut, CityObjectKind, CityObjectRef,
+    AbstractUnoccupiedSpace, AsAbstractFeature, AsAbstractFeatureMut, AsAbstractSpace,
+    AsAbstractSpaceMut, AsAbstractThematicSurfaceMut, AsAbstractUnoccupiedSpace,
+    AsAbstractUnoccupiedSpaceMut, CityObjectKind, CityObjectRef,
 };
 use crate::model::transportation::{AuxiliaryTrafficArea, GranularityValue};
 use crate::operations::{Visitable, Visitor};
@@ -10,20 +11,25 @@ use nalgebra::Isometry3;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AuxiliaryTrafficSpace {
-    pub(crate) abstract_space: AbstractSpace,
+    pub(crate) abstract_unoccupied_space: AbstractUnoccupiedSpace,
     pub auxiliary_traffic_area: Vec<AuxiliaryTrafficArea>, // this should be located in boundaries the space struct
-    pub(crate) function: Vec<Code>,
-    pub(crate) usage: Vec<Code>,
+    pub(crate) class: Option<Code>,
+    pub(crate) functions: Vec<Code>,
+    pub(crate) usages: Vec<Code>,
     pub(crate) granularity: GranularityValue,
 }
 
 impl AuxiliaryTrafficSpace {
-    pub fn new(abstract_space: AbstractSpace, granularity: GranularityValue) -> Self {
+    pub fn new(
+        abstract_unoccupied_space: AbstractUnoccupiedSpace,
+        granularity: GranularityValue,
+    ) -> Self {
         Self {
-            abstract_space,
+            abstract_unoccupied_space,
             auxiliary_traffic_area: Vec::new(),
-            function: Vec::new(),
-            usage: Vec::new(),
+            class: None,
+            functions: Vec::new(),
+            usages: Vec::new(),
             granularity,
         }
     }
@@ -42,7 +48,7 @@ impl AuxiliaryTrafficSpace {
             .for_each(|x| x.refresh_bounded_by());
 
         let own_envelope = self.compute_envelope();
-        let envelopes: Vec<&Envelope> = own_envelope
+        let envelopes: Vec<Envelope> = own_envelope
             .as_ref()
             .into_iter()
             .chain(
@@ -50,33 +56,42 @@ impl AuxiliaryTrafficSpace {
                     .iter()
                     .filter_map(|x| x.bounded_by()),
             )
+            .cloned()
             .collect();
 
         self.set_bounded_by(Envelope::from_envelopes(&envelopes));
     }
 
     pub fn apply_transform_recursive(&mut self, m: &Isometry3<f64>) {
-        self.abstract_space.apply_transform(m);
+        self.abstract_unoccupied_space.apply_transform(m);
 
         self.auxiliary_traffic_area
             .iter_mut()
             .for_each(|x| x.apply_transform(m));
     }
 
-    pub fn function(&self) -> &Vec<Code> {
-        &self.function
+    pub fn class(&self) -> &Option<Code> {
+        &self.class
     }
 
-    pub fn set_function(&mut self, function: Vec<Code>) {
-        self.function = function;
+    pub fn set_class(&mut self, class: Option<Code>) {
+        self.class = class;
     }
 
-    pub fn usage(&self) -> &Vec<Code> {
-        &self.usage
+    pub fn functions(&self) -> &Vec<Code> {
+        &self.functions
     }
 
-    pub fn set_usage(&mut self, usage: Vec<Code>) {
-        self.usage = usage;
+    pub fn set_functions(&mut self, functions: Vec<Code>) {
+        self.functions = functions;
+    }
+
+    pub fn usages(&self) -> &Vec<Code> {
+        &self.usages
+    }
+
+    pub fn set_usages(&mut self, usages: Vec<Code>) {
+        self.usages = usages;
     }
 
     pub fn granularity(&self) -> &GranularityValue {
@@ -88,19 +103,19 @@ impl AuxiliaryTrafficSpace {
     }
 }
 
-impl AsAbstractSpace for AuxiliaryTrafficSpace {
-    fn abstract_space(&self) -> &AbstractSpace {
-        &self.abstract_space
+impl AsAbstractUnoccupiedSpace for AuxiliaryTrafficSpace {
+    fn abstract_unoccupied_space(&self) -> &AbstractUnoccupiedSpace {
+        &self.abstract_unoccupied_space
     }
 }
 
-impl AsAbstractSpaceMut for AuxiliaryTrafficSpace {
-    fn abstract_space_mut(&mut self) -> &mut AbstractSpace {
-        &mut self.abstract_space
+impl AsAbstractUnoccupiedSpaceMut for AuxiliaryTrafficSpace {
+    fn abstract_unoccupied_space_mut(&mut self) -> &mut AbstractUnoccupiedSpace {
+        &mut self.abstract_unoccupied_space
     }
 }
 
-crate::impl_abstract_space_traits!(AuxiliaryTrafficSpace);
+crate::impl_abstract_unoccupied_space_traits!(AuxiliaryTrafficSpace);
 
 impl From<AuxiliaryTrafficSpace> for CityObjectKind {
     fn from(item: AuxiliaryTrafficSpace) -> Self {

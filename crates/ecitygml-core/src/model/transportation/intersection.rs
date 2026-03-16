@@ -42,7 +42,7 @@ impl Intersection {
             .for_each(|x| x.refresh_bounded_by_recursive());
 
         let own_envelope = self.compute_envelope();
-        let envelopes: Vec<&Envelope> = own_envelope
+        let envelopes: Vec<Envelope> = own_envelope
             .as_ref()
             .into_iter()
             .chain(self.traffic_space.iter().filter_map(|x| x.bounded_by()))
@@ -51,6 +51,7 @@ impl Intersection {
                     .iter()
                     .filter_map(|x| x.bounded_by()),
             )
+            .cloned()
             .collect();
 
         self.set_bounded_by(Envelope::from_envelopes(&envelopes));

@@ -18,6 +18,8 @@ pub enum Error {
     EgmlError(#[from] egml::Error),
     #[error(transparent)]
     EgmlIoError(#[from] egml::io::Error),
+    #[error(transparent)]
+    SerdeYaml(#[from] serde_yaml::Error),
 
     #[error("file extension is invalid")]
     NoFileExtension(),

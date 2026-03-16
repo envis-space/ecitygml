@@ -20,23 +20,19 @@ pub fn validate_from_reader(file_content: Vec<u8>) -> Result<Report, Error> {
     let mut buf = Vec::new();
     loop {
         match xml_reader.read_event_into(&mut buf) {
-            Err(e) => panic!(
-                "Error at position {}: {:?}",
-                xml_reader.buffer_position(),
-                e
-            ),
+            Err(e) => return Err(Error::from(e)),
             Ok(Event::Eof) => break,
             Ok(Event::Start(e)) => {
                 let element_name = e.name();
                 let element_name: String = xml_reader
                     .decoder()
                     .decode(element_name.as_ref())
-                    .unwrap()
+                    .map_err(quick_xml::Error::from)?
                     .to_string();
 
                 let id_attribute: Option<Attribute> = e
                     .attributes()
-                    .map(|a| a.unwrap())
+                    .filter_map(|a| a.ok())
                     .find(|a| a.key.local_name().as_ref() == "id".as_bytes());
 
                 extracted_information
@@ -54,8 +50,8 @@ pub fn validate_from_reader(file_content: Vec<u8>) -> Result<Report, Error> {
                 };
 
                 if e.name().as_ref() == b"relatedTo" {
-                    let read_text: &str = &xml_reader.read_text(e.name()).unwrap();
-                    let city_object_relation: CityObjectRelation = de::from_str(read_text).unwrap();
+                    let read_text = xml_reader.read_text(e.name())?;
+                    let city_object_relation: CityObjectRelation = de::from_str(&read_text)?;
 
                     extracted_information
                         .city_object_relations
@@ -67,13 +63,12 @@ pub fn validate_from_reader(file_content: Vec<u8>) -> Result<Report, Error> {
 
                 let href_attribute: Option<String> = e
                     .attributes()
-                    .map(|a| a.unwrap())
+                    .filter_map(|a| a.ok())
                     .find(|a| a.key.local_name().as_ref() == "href".as_bytes())
-                    .map(|a| {
+                    .and_then(|a| {
                         a.decode_and_unescape_value(xml_reader.decoder())
-                            .unwrap()
-                            .deref()
-                            .to_string()
+                            .ok()
+                            .map(|v| v.deref().to_string())
                     });
 
                 match e.name().as_ref() {
@@ -106,14 +101,14 @@ pub fn validate_from_reader(file_content: Vec<u8>) -> Result<Report, Error> {
     Ok(report)
 }
 
-fn parse_city_object_relation(source_text: &str) -> Result<CityObjectRelation, Error> {
+fn deserialize_city_object_relation(source_text: &str) -> Result<CityObjectRelation, Error> {
     let c: CityObjectRelation = de::from_str(source_text)?;
     Ok(c)
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::gml::validate_impl::parse_city_object_relation;
+    use crate::gml::validate_impl::deserialize_city_object_relation;
 
     #[test]
     fn parsing_city_object_relation() {
@@ -121,7 +116,7 @@ mod tests {
                  <relatedTo xlink:href=\"#UUID_c930adc7-9e6c-3eea-a377-b31d9d5b6239\"/>";
         let source_text = "<CityObjectRelation><relationType>belongsTo</relationType><relatedTo xlink:href=\"#UUID_c930adc7-9e6c-3eea-a377-b31d9d5b6239\"/></CityObjectRelation>";
 
-        let city_object_relation = parse_city_object_relation(source_text).unwrap();
+        let city_object_relation = deserialize_city_object_relation(source_text).unwrap();
 
         assert_eq!(city_object_relation.related_type.value, "belongsTo");
         assert_eq!(

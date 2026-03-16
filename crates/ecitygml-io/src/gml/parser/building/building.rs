@@ -1,19 +1,18 @@
 use crate::Error;
-use crate::gml::parser::building::parse_abstract_building;
+use crate::gml::parser::building::deserialize_abstract_building;
 use crate::gml::parser::city_object_reader::read_city_objects;
 use ecitygml_core::model::building::Building;
 use ecitygml_core::model::common::CityObjectClass;
 use ecitygml_core::model::core::CityObjectKind;
 use std::collections::HashSet;
 
-pub fn parse_building(xml_document: &[u8]) -> Result<Building, Error> {
-    let abstract_building = parse_abstract_building(xml_document)?;
+pub fn deserialize_building(xml_document: &[u8]) -> Result<Building, Error> {
+    let abstract_building = deserialize_abstract_building(xml_document)?;
     let mut building = Building::new(abstract_building);
 
     let parsed_city_objects = read_city_objects(
         xml_document,
         HashSet::from([
-            CityObjectClass::BuildingConstructiveElement,
             CityObjectClass::GroundSurface,
             CityObjectClass::RoofSurface,
             CityObjectClass::WallSurface,
@@ -22,9 +21,6 @@ pub fn parse_building(xml_document: &[u8]) -> Result<Building, Error> {
 
     for city_object in parsed_city_objects {
         match city_object {
-            CityObjectKind::BuildingConstructiveElement(x) => {
-                building.building_constructive_element.push(x);
-            }
             CityObjectKind::GroundSurface(x) => {
                 building.ground_surface.push(x);
             }
@@ -35,7 +31,7 @@ pub fn parse_building(xml_document: &[u8]) -> Result<Building, Error> {
                 building.wall_surface.push(x);
             }
             _ => {
-                panic!("Unexpected city object kind: {:?}", city_object);
+                return Err(Error::UnknownElementNode(format!("{:?}", city_object)));
             }
         }
     }
@@ -46,7 +42,7 @@ pub fn parse_building(xml_document: &[u8]) -> Result<Building, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gml::parser::core::parse_abstract_thematic_surface;
+    use crate::gml::parser::core::deserialize_abstract_thematic_surface;
     use ecitygml_core::model::core::{
         AsAbstractCityObject, AsAbstractFeature, AsAbstractThematicSurface,
     };
@@ -54,7 +50,7 @@ mod tests {
     use quick_xml::{DeError, de};
 
     #[test]
-    fn test_parse_basic_building() {
+    fn test_deserialize_basic_building() {
         let xml_document = b"
     <bldg:Building gml:id=\"UUID_d281adfc-4901-0f52-540b-4cc1a9325f82\">
       <gml:name>AC14-FZK-Haus</gml:name>
@@ -125,7 +121,7 @@ mod tests {
       </boundary>
     </bldg:Building>";
 
-        let building = parse_building(xml_document).expect("should work");
+        let building = deserialize_building(xml_document).expect("should work");
 
         assert_eq!(
             building.id(),
@@ -146,7 +142,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_basic_building_2() {
+    fn test_deserialize_basic_building_2() {
         let xml_document = b"
     <bldg:Building gml:id=\"DEBY_LOD2_4959457\">
       <creationDate>2025-01-02T00:00:00+01:00</creationDate>
@@ -192,6 +188,6 @@ mod tests {
       </bldg:address>
     </bldg:Building>";
 
-        let building = parse_building(xml_document).expect("should work");
+        let building = deserialize_building(xml_document).expect("should work");
     }
 }

@@ -1,6 +1,7 @@
 mod abstract_generic_attribute;
 mod double_attribute;
 mod generic_attribute_property;
+mod generic_attribute_set;
 mod int_attribute;
 mod measure_attribute;
 mod string_attribute;

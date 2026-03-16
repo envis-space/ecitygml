@@ -1,5 +1,7 @@
 use crate::Error;
-use crate::gml::parser::util::{CityObjectSpan, city_object_class_from_bytes, parse_city_object};
+use crate::gml::parser::util::{
+    CityObjectSpan, city_object_class_from_bytes, deserialize_city_object,
+};
 use ecitygml_core::model::common::CityObjectClass;
 use ecitygml_core::model::core::CityObjectKind;
 use quick_xml::Reader;
@@ -34,72 +36,45 @@ pub fn read_city_objects(
                 };
                 element_stack.push(context);
 
-                /*print!("for current stack (added last): ");
-                for c in element_stack.iter() {
-                    print!(
-                        "(start {}, name {})",
-                        c.start_index,
-                        String::from_utf8_lossy(&c.name)
-                    )
-                }
-                println!();*/
-
                 let city_object_class = city_object_class_from_bytes(e.local_name().as_ref()).ok();
                 match city_object_class {
                     None => {}
                     Some(x) => {
                         if relevant.contains(&x) {
-                            let parent_element_context = element_stack.iter().rev().nth(1).unwrap();
+                            let parent_element_context = match element_stack.iter().rev().nth(1) {
+                                Some(ctx) => ctx,
+                                None => {
+                                    return Err(Error::UnknownElementNode(
+                                        "missing parent element".to_string(),
+                                    ));
+                                }
+                            };
                             let span = reader.read_to_end(QName(&parent_element_context.name))?;
                             let parent_span = Span {
                                 start: parent_element_context.start_index,
                                 end: span.end,
                             };
 
-                            let city_object_span = CityObjectSpan::new(
-                                city_object_class.expect("should be set"),
-                                parent_span,
-                            );
+                            let city_object_span = CityObjectSpan::new(x, parent_span);
                             city_object_spans.push(city_object_span);
                             element_stack.pop();
-                        } else {
-                            // reader.read_to_end(e.name())?;
                         }
                     }
                 }
             }
             Ok(Event::End(_e)) => {
-                /*print!("for current stack (will remove last): ");
-                for c in element_stack.iter() {
-                    print!(
-                        "(start {}, name {})",
-                        c.start_index,
-                        String::from_utf8_lossy(&c.name)
-                    )
-                }
-                println!();*/
                 element_stack.pop();
             }
             Ok(Event::Eof) => break,
-            Err(e) => panic!("Error at position {}: {:?}", reader.buffer_position(), e),
+            Err(e) => return Err(Error::from(e)),
             Ok(Event::Text(_e)) => {}
             _ => (),
         }
     }
 
-    /* print!("at the end: ");
-    for c in element_stack.iter() {
-        print!(
-            "(start {}, name {})",
-            c.start_index,
-            String::from_utf8_lossy(&c.name)
-        )
-    }
-    println!();*/
-
     let parsed_city_objects = city_object_spans
         .into_par_iter()
-        .map(|location| parse_city_object(xml_document, location))
+        .map(|location| deserialize_city_object(xml_document, location))
         .collect::<Result<Vec<CityObjectKind>, Error>>()?;
 
     Ok(parsed_city_objects)

@@ -18,7 +18,7 @@ pub fn run(
         .as_ref()
         .to_owned()
         .join("report.yaml");
-    report.write(path);
+    report.write(path)?;
 
     /*if report.contains_gml_id_duplicates() {
         warn!("GML ID duplicates identified: ");

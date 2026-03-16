@@ -5,7 +5,6 @@ use egml::model::base::Id;
 use egml::model::geometry::Envelope;
 use std::fs::File;
 use std::io::Read;
-use std::panic;
 use std::path::PathBuf;
 
 pub struct CCityModel {
@@ -106,7 +105,7 @@ pub unsafe extern "C" fn city_model_geometry_index_get_object_ids(
             // Allocate array of C string pointers
             let mut c_strings: Vec<*mut libc::c_char> = ids
                 .into_iter()
-                .map(|s| std::ffi::CString::new(s).unwrap().into_raw())
+                .filter_map(|s| std::ffi::CString::new(s).ok().map(|cs| cs.into_raw()))
                 .collect();
 
             c_strings.shrink_to_fit();
@@ -157,8 +156,14 @@ pub unsafe extern "C" fn city_model_geometry_index_get(
         }
 
         let city_model_geometry_index = unsafe { &*handle };
-        let id_str = unsafe { std::ffi::CStr::from_ptr(id).to_str() }.unwrap();
-        let id: Id = Id::try_from(id_str).unwrap();
+        let id_str = match unsafe { std::ffi::CStr::from_ptr(id).to_str() } {
+            Ok(s) => s,
+            Err(_) => return CErrorCode::INTERNAL_ERROR,
+        };
+        let id: Id = match Id::try_from(id_str) {
+            Ok(id) => id,
+            Err(_) => return CErrorCode::INTERNAL_ERROR,
+        };
 
         match &city_model_geometry_index.inner {
             Some(city_model_geometry_index) => {
@@ -247,12 +252,11 @@ pub unsafe extern "C" fn gml_reader_create(
             return CErrorCode::NULL_POINTER;
         }
 
-        let result = panic::catch_unwind(|| {
-            let path = unsafe { std::ffi::CStr::from_ptr(file_path).to_str() }.unwrap();
-            io::GmlReader::from_path(PathBuf::from(path)).unwrap()
-        });
-
-        match result {
+        let path = match std::ffi::CStr::from_ptr(file_path).to_str() {
+            Ok(s) => s,
+            Err(_) => return CErrorCode::INTERNAL_ERROR,
+        };
+        match io::GmlReader::from_path(PathBuf::from(path)) {
             Ok(reader) => {
                 *out = Box::into_raw(Box::new(CGmlReader {
                     inner: Some(reader),

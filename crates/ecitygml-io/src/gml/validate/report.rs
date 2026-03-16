@@ -1,3 +1,4 @@
+use crate::error::Error;
 use serde::{Deserialize, Serialize};
 
 use std::fs;
@@ -28,8 +29,9 @@ pub struct ReportElement {
 }
 
 impl Report {
-    pub fn write(&self, path: impl AsRef<Path>) {
-        let yaml = serde_yaml::to_string(&self).unwrap();
-        fs::write(path, yaml).expect("Unable to write file");
+    pub fn write(&self, path: impl AsRef<Path>) -> Result<(), Error> {
+        let yaml = serde_yaml::to_string(&self)?;
+        fs::write(path, yaml)?;
+        Ok(())
     }
 }

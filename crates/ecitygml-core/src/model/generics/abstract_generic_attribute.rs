@@ -1,3 +1,4 @@
+use crate::model::generics::generic_attribute_set::GenericAttributeSet;
 use crate::model::generics::string_attribute::StringAttribute;
 use crate::model::generics::{DoubleAttribute, IntAttribute, MeasureAttribute};
 
@@ -7,15 +8,17 @@ pub enum GenericAttributeKind {
     IntAttribute(IntAttribute),
     DoubleAttribute(DoubleAttribute),
     MeasureAttribute(MeasureAttribute),
+    GenericAttributeSet(GenericAttributeSet),
 }
 
 impl GenericAttributeKind {
     pub fn name(&self) -> &str {
         match self {
-            GenericAttributeKind::StringAttribute(attr) => &attr.name,
-            GenericAttributeKind::IntAttribute(attr) => &attr.name,
-            GenericAttributeKind::DoubleAttribute(attr) => &attr.name,
-            GenericAttributeKind::MeasureAttribute(attr) => &attr.name,
+            GenericAttributeKind::StringAttribute(x) => &x.name,
+            GenericAttributeKind::IntAttribute(x) => &x.name,
+            GenericAttributeKind::DoubleAttribute(x) => &x.name,
+            GenericAttributeKind::MeasureAttribute(x) => &x.name,
+            GenericAttributeKind::GenericAttributeSet(x) => &x.name,
         }
     }
 
@@ -59,5 +62,17 @@ impl From<IntAttribute> for GenericAttributeKind {
 impl From<DoubleAttribute> for GenericAttributeKind {
     fn from(attr: DoubleAttribute) -> Self {
         GenericAttributeKind::DoubleAttribute(attr)
+    }
+}
+
+impl From<MeasureAttribute> for GenericAttributeKind {
+    fn from(attr: MeasureAttribute) -> Self {
+        GenericAttributeKind::MeasureAttribute(attr)
+    }
+}
+
+impl From<GenericAttributeSet> for GenericAttributeKind {
+    fn from(attr: GenericAttributeSet) -> Self {
+        GenericAttributeKind::GenericAttributeSet(attr)
     }
 }

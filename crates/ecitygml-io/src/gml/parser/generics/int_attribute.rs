@@ -5,7 +5,9 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub struct GmlIntAttribute {
+    #[serde(rename(serialize = "gen:name", deserialize = "name"))]
     pub name: String,
+    #[serde(rename(serialize = "gen:value", deserialize = "value"))]
     pub value: i64,
 }
 
@@ -21,5 +23,14 @@ impl TryFrom<GmlIntAttribute> for IntAttribute {
             name: item.name,
             value: item.value,
         })
+    }
+}
+
+impl From<&IntAttribute> for GmlIntAttribute {
+    fn from(attr: &IntAttribute) -> Self {
+        Self {
+            name: attr.name.clone(),
+            value: attr.value,
+        }
     }
 }

@@ -1,7 +1,11 @@
 use crate::error::Error;
-use crate::gml::parser::core::parse_abstract_city_object;
+use crate::gml::parser::core::deserialize_abstract_city_object;
+use crate::gml::parser::core::relative_to_terrain::GmlRelativeToTerrain;
+use crate::gml::parser::core::relative_to_water::GmlRelativeToWater;
 use crate::gml::parser::core::space_type::GmlSpaceType;
-use ecitygml_core::model::core::{AbstractSpace, AsAbstractFeature, AsAbstractSpaceMut};
+use ecitygml_core::model::core::{
+    AbstractSpace, AsAbstractFeature, AsAbstractSpace, AsAbstractSpaceMut,
+};
 use egml::io::aggregates::{GmlMultiCurveProperty, GmlMultiSurfaceProperty};
 use egml::io::primitives::GmlSolidProperty;
 use egml::model::geometry::aggregates::{MultiCurve, MultiSurface};
@@ -10,12 +14,14 @@ use quick_xml::de;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
-pub fn parse_abstract_space(xml_document: &[u8]) -> Result<AbstractSpace, Error> {
-    let abstract_city_object = parse_abstract_city_object(xml_document)?;
+pub fn deserialize_abstract_space(xml_document: &[u8]) -> Result<AbstractSpace, Error> {
+    let abstract_city_object = deserialize_abstract_city_object(xml_document)?;
     let parsed_result: GmlAbstractSpace = de::from_reader(xml_document)?;
 
     let mut abstract_space = AbstractSpace::new(abstract_city_object);
     abstract_space.set_space_type(parsed_result.space_type.map(|x| x.into()));
+    abstract_space.set_relative_to_terrain(parsed_result.relative_to_terrain.map(|x| x.into()));
+    abstract_space.set_relative_to_water(parsed_result.relative_to_water.map(|x| x.into()));
 
     if let Some(gml_solid_property) = parsed_result.lod1_solid {
         let gml_solid_result: Result<Solid, egml::io::Error> =
@@ -23,7 +29,7 @@ pub fn parse_abstract_space(xml_document: &[u8]) -> Result<AbstractSpace, Error>
 
         match gml_solid_result {
             Ok(x) => {
-                abstract_space.lod1_solid = Some(x);
+                abstract_space.set_lod1_solid(Some(x));
             }
             Err(e) => {
                 debug!(
@@ -41,7 +47,7 @@ pub fn parse_abstract_space(xml_document: &[u8]) -> Result<AbstractSpace, Error>
 
         match gml_solid_result {
             Ok(x) => {
-                abstract_space.lod2_solid = Some(x);
+                abstract_space.set_lod2_solid(Some(x));
             }
             Err(e) => {
                 debug!(
@@ -59,7 +65,7 @@ pub fn parse_abstract_space(xml_document: &[u8]) -> Result<AbstractSpace, Error>
 
         match gml_solid_result {
             Ok(x) => {
-                abstract_space.lod3_solid = Some(x);
+                abstract_space.set_lod3_solid(Some(x));
             }
             Err(e) => {
                 debug!(
@@ -77,7 +83,7 @@ pub fn parse_abstract_space(xml_document: &[u8]) -> Result<AbstractSpace, Error>
 
         match multi_surface_result {
             Ok(x) => {
-                abstract_space.lod0_multi_surface = Some(x);
+                abstract_space.set_lod0_multi_surface(Some(x));
             }
             Err(e) => {
                 debug!(
@@ -95,7 +101,7 @@ pub fn parse_abstract_space(xml_document: &[u8]) -> Result<AbstractSpace, Error>
 
         match multi_surface_result {
             Ok(x) => {
-                abstract_space.lod2_multi_surface = Some(x);
+                abstract_space.set_lod2_multi_surface(Some(x));
             }
             Err(e) => {
                 debug!(
@@ -113,7 +119,7 @@ pub fn parse_abstract_space(xml_document: &[u8]) -> Result<AbstractSpace, Error>
 
         match multi_surface_result {
             Ok(x) => {
-                abstract_space.lod3_multi_surface = Some(x);
+                abstract_space.set_lod3_multi_surface(Some(x));
             }
             Err(e) => {
                 debug!(
@@ -131,7 +137,7 @@ pub fn parse_abstract_space(xml_document: &[u8]) -> Result<AbstractSpace, Error>
 
         match multi_curve_result {
             Ok(x) => {
-                abstract_space.lod2_multi_curve = Some(x);
+                abstract_space.set_lod0_multi_curve(Some(x));
             }
             Err(e) => {
                 debug!(
@@ -149,7 +155,7 @@ pub fn parse_abstract_space(xml_document: &[u8]) -> Result<AbstractSpace, Error>
 
         match multi_curve_result {
             Ok(x) => {
-                abstract_space.lod2_multi_curve = Some(x);
+                abstract_space.set_lod2_multi_curve(Some(x));
             }
             Err(e) => {
                 debug!(
@@ -167,7 +173,7 @@ pub fn parse_abstract_space(xml_document: &[u8]) -> Result<AbstractSpace, Error>
 
         match multi_curve_result {
             Ok(x) => {
-                abstract_space.lod3_multi_curve = Some(x);
+                abstract_space.set_lod3_multi_curve(Some(x));
             }
             Err(e) => {
                 debug!(
@@ -186,6 +192,10 @@ pub fn parse_abstract_space(xml_document: &[u8]) -> Result<AbstractSpace, Error>
 pub struct GmlAbstractSpace {
     #[serde(rename = "spaceType")]
     pub space_type: Option<GmlSpaceType>,
+    #[serde(rename = "relativeToTerrain")]
+    pub relative_to_terrain: Option<GmlRelativeToTerrain>,
+    #[serde(rename = "relativeToWater")]
+    pub relative_to_water: Option<GmlRelativeToWater>,
 
     #[serde(rename = "lod1Solid")]
     pub lod1_solid: Option<GmlSolidProperty>,
@@ -220,7 +230,7 @@ mod tests {
     use quick_xml::{DeError, de};
 
     #[test]
-    fn test_parse_abstract_space_with_solid_with_links() {
+    fn test_deserialize_abstract_space_with_solid_with_links() {
         let xml_document = b"\
     <bldg:Building gml:id=\"UUID_d281adfc-4901-0f52-540b-4cc1a9325f82\">
       <lod2Solid>
@@ -241,7 +251,7 @@ mod tests {
     </bldg:Building>
 ";
 
-        let abstract_space = parse_abstract_space(xml_document).expect("should work");
+        let abstract_space = deserialize_abstract_space(xml_document).expect("should work");
 
         assert!(abstract_space.lod1_solid().is_none());
         assert!(abstract_space.lod2_solid().is_none()); // TODO: XLink not yet supported
@@ -249,7 +259,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_basic_abstract_space() {
+    fn test_deserialize_basic_abstract_space() {
         let xml_document = b"\
 <tran:TrafficSpace gml:id=\"UUID_ae81947d-a661-3678-a5ee-eed58b68694f\">
               <genericAttribute>
@@ -342,7 +352,7 @@ mod tests {
               <tran:trafficDirection>backwards</tran:trafficDirection>
             </tran:TrafficSpace>";
 
-        let abstract_space = parse_abstract_space(xml_document).expect("should work");
+        let abstract_space = deserialize_abstract_space(xml_document).expect("should work");
 
         assert!(abstract_space.lod1_solid().is_none());
         assert!(abstract_space.lod2_solid().is_some());

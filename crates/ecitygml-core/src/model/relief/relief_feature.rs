@@ -7,6 +7,7 @@ use crate::model::core::{
 use crate::model::relief::ReliefComponentKind;
 use crate::operations::{Visitable, Visitor};
 use egml::model::geometry::Envelope;
+use nalgebra::Isometry3;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReliefFeature {
@@ -33,10 +34,11 @@ impl ReliefFeature {
             .iter_mut()
             .for_each(|x| x.refresh_bounded_by_recursive());
 
-        let envelopes: Vec<&Envelope> = self
+        let envelopes: Vec<Envelope> = self
             .relief_component
             .iter()
             .filter_map(|x| x.bounded_by())
+            .cloned()
             .collect();
 
         self.set_bounded_by(Envelope::from_envelopes(&envelopes));
@@ -52,6 +54,12 @@ impl ReliefFeature {
 
     pub fn num_relief_components(&self) -> usize {
         self.relief_component.len()
+    }
+
+    pub fn apply_transform_recursive(&mut self, m: &Isometry3<f64>) {
+        self.relief_component
+            .iter_mut()
+            .for_each(|x| x.apply_transform(m));
     }
 
     pub fn lod(&self) -> LevelOfDetail {

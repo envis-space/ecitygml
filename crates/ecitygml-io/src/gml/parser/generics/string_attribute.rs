@@ -5,7 +5,9 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub struct GmlStringAttribute {
+    #[serde(rename(serialize = "gen:name", deserialize = "name"))]
     pub name: String,
+    #[serde(rename(serialize = "gen:value", deserialize = "value"))]
     pub value: String,
 }
 
@@ -21,5 +23,14 @@ impl TryFrom<GmlStringAttribute> for StringAttribute {
             name: item.name,
             value: item.value,
         })
+    }
+}
+
+impl From<&StringAttribute> for GmlStringAttribute {
+    fn from(attr: &StringAttribute) -> Self {
+        Self {
+            name: attr.name.clone(),
+            value: attr.value.clone(),
+        }
     }
 }

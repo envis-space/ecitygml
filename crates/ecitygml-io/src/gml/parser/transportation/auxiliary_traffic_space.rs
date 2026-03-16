@@ -1,6 +1,6 @@
 use crate::Error;
 use crate::gml::parser::city_object_reader::read_city_objects;
-use crate::gml::parser::core::parse_abstract_space;
+use crate::gml::parser::core::deserialize_abstract_unoccupied_space;
 use crate::gml::parser::transportation::granularity_value::GmlGranularityValue;
 use crate::gml::parser::transportation::traffic_direction_value::GmlTrafficDirectionValue;
 use ecitygml_core::model::common::CityObjectClass;
@@ -11,21 +11,24 @@ use quick_xml::de;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
-pub fn parse_auxiliary_traffic_space(xml_document: &[u8]) -> Result<AuxiliaryTrafficSpace, Error> {
-    let abstract_space = parse_abstract_space(xml_document)?;
+pub fn deserialize_auxiliary_traffic_space(
+    xml_document: &[u8],
+) -> Result<AuxiliaryTrafficSpace, Error> {
+    let abstract_unoccupied_space = deserialize_abstract_unoccupied_space(xml_document)?;
     let parsed_result: GmlAuxiliaryTrafficSpace = de::from_reader(xml_document)?;
 
     let mut traffic_space =
-        AuxiliaryTrafficSpace::new(abstract_space, parsed_result.granularity.into());
+        AuxiliaryTrafficSpace::new(abstract_unoccupied_space, parsed_result.granularity.into());
 
-    traffic_space.set_function(
+    traffic_space.set_class(parsed_result.class.map(|x| x.into()));
+    traffic_space.set_functions(
         parsed_result
-            .function
+            .functions
             .into_iter()
             .map(|x| x.into())
             .collect(),
     );
-    traffic_space.set_usage(parsed_result.usage.into_iter().map(|x| x.into()).collect());
+    traffic_space.set_usages(parsed_result.usages.into_iter().map(|x| x.into()).collect());
 
     let parsed_city_objects = read_city_objects(
         xml_document,
@@ -37,7 +40,7 @@ pub fn parse_auxiliary_traffic_space(xml_document: &[u8]) -> Result<AuxiliaryTra
                 traffic_space.auxiliary_traffic_area.push(x);
             }
             _ => {
-                panic!("Unexpected city object kind: {:?}", city_object);
+                return Err(Error::UnknownElementNode(format!("{:?}", city_object)));
             }
         }
     }
@@ -47,11 +50,14 @@ pub fn parse_auxiliary_traffic_space(xml_document: &[u8]) -> Result<AuxiliaryTra
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct GmlAuxiliaryTrafficSpace {
+    #[serde(rename = "class", default)]
+    pub class: Option<GmlCode>,
+
     #[serde(rename = "function", default)]
-    pub function: Vec<GmlCode>,
+    pub functions: Vec<GmlCode>,
 
     #[serde(rename = "usage", default)]
-    pub usage: Vec<GmlCode>,
+    pub usages: Vec<GmlCode>,
 
     #[serde(rename = "granularity", default)]
     pub granularity: GmlGranularityValue,
@@ -68,7 +74,7 @@ mod tests {
     use egml::model::base::Id;
 
     #[test]
-    fn test_parse_basic_traffic_area() {
+    fn test_deserialize_basic_traffic_area() {
         let xml_document =
             b"<tran:AuxiliaryTrafficSpace gml:id=\"UUID_24f88e8d-34c8-3a4f-8889-dff3a82f5121\">
               <genericAttribute>
@@ -108,7 +114,7 @@ mod tests {
             </tran:AuxiliaryTrafficSpace>";
 
         let auxiliary_traffic_space =
-            parse_auxiliary_traffic_space(xml_document).expect("should work");
+            deserialize_auxiliary_traffic_space(xml_document).expect("should work");
 
         assert_eq!(
             auxiliary_traffic_space.id(),

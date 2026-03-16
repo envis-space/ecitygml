@@ -6,14 +6,14 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.0.1-alpha.13"
+version = "0.0.2-alpha.1"
 authors = ["Benedikt Schwab <benedikt.schwab@gmail.com>"]
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/envis-space/ecitygml"
 
 [workspace.dependencies]
-egml = { version = "0.0.1-alpha.13" }
+egml = { version = "0.0.2-alpha.1" }
 
 thiserror = "2.0.18"
 anyhow = "1.0.101"

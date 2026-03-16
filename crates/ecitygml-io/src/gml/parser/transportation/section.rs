@@ -1,13 +1,13 @@
 use crate::Error;
 use crate::gml::parser::city_object_reader::read_city_objects;
-use crate::gml::parser::core::parse_abstract_space;
+use crate::gml::parser::core::deserialize_abstract_space;
 use ecitygml_core::model::common::CityObjectClass;
 use ecitygml_core::model::core::CityObjectKind;
 use ecitygml_core::model::transportation::Section;
 use std::collections::HashSet;
 
-pub fn parse_section(xml_document: &[u8]) -> Result<Section, Error> {
-    let abstract_space = parse_abstract_space(xml_document)?;
+pub fn deserialize_section(xml_document: &[u8]) -> Result<Section, Error> {
+    let abstract_space = deserialize_abstract_space(xml_document)?;
     let mut section = Section::new(abstract_space);
 
     let parsed_city_objects = read_city_objects(
@@ -26,7 +26,7 @@ pub fn parse_section(xml_document: &[u8]) -> Result<Section, Error> {
                 section.traffic_space.push(x);
             }
             _ => {
-                panic!("Unexpected city object kind: {:?}", city_object);
+                return Err(Error::UnknownElementNode(format!("{:?}", city_object)));
             }
         }
     }
@@ -42,7 +42,7 @@ mod tests {
     use egml::model::base::Id;
 
     #[test]
-    fn test_parse_basic_traffic_area() {
+    fn test_deserialize_basic_traffic_area() {
         let xml_document =
             b"<tran:Section gml:id=\"UUID_ef20f165-2564-373a-a5f8-98fd15f1ae69\">
           <genericAttribute>
@@ -79,7 +79,7 @@ mod tests {
           </tran:trafficSpace>
         </tran:Section>";
 
-        let section = parse_section(xml_document).expect("should work");
+        let section = deserialize_section(xml_document).expect("should work");
 
         assert_eq!(
             section.id(),

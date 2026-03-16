@@ -1,17 +1,21 @@
 use crate::Error;
-use crate::gml::parser::core::parse_abstract_city_object;
-use ecitygml_core::model::core::{AbstractThematicSurface, AsAbstractFeature};
+use crate::gml::parser::core::abstract_city_object::GmlAbstractCityObject;
+use crate::gml::parser::core::deserialize_abstract_space_boundary;
+use ecitygml_core::model::core::{
+    AbstractThematicSurface, AsAbstractCityObject, AsAbstractFeature, AsAbstractThematicSurface,
+    AsAbstractThematicSurfaceMut,
+};
 use egml::io::aggregates::GmlMultiSurfaceProperty;
 use egml::model::geometry::aggregates::MultiSurface;
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
-pub fn parse_abstract_thematic_surface(
+pub fn deserialize_abstract_thematic_surface(
     xml_document: &[u8],
 ) -> Result<AbstractThematicSurface, Error> {
-    let abstract_city_object = parse_abstract_city_object(xml_document)?;
-    let mut abstract_thematic_surface = AbstractThematicSurface::new(abstract_city_object);
+    let abstract_space_boundary = deserialize_abstract_space_boundary(xml_document)?;
+    let mut abstract_thematic_surface = AbstractThematicSurface::new(abstract_space_boundary);
     let parsed_result: GmlAbstractThematicSurface = de::from_reader(xml_document)?;
 
     if let Some(gml_multi_surface_property) = parsed_result.lod0_multi_surface {
@@ -20,7 +24,7 @@ pub fn parse_abstract_thematic_surface(
 
         match multi_surface_result {
             Ok(x) => {
-                abstract_thematic_surface.lod0_multi_surface = Some(x);
+                abstract_thematic_surface.set_lod0_multi_surface(Some(x));
             }
             Err(e) => {
                 debug!(
@@ -38,7 +42,7 @@ pub fn parse_abstract_thematic_surface(
 
         match multi_surface_result {
             Ok(x) => {
-                abstract_thematic_surface.lod1_multi_surface = Some(x);
+                abstract_thematic_surface.set_lod1_multi_surface(Some(x));
             }
             Err(e) => {
                 debug!(
@@ -56,7 +60,7 @@ pub fn parse_abstract_thematic_surface(
 
         match multi_surface_result {
             Ok(x) => {
-                abstract_thematic_surface.lod2_multi_surface = Some(x);
+                abstract_thematic_surface.set_lod2_multi_surface(Some(x));
             }
             Err(e) => {
                 debug!(
@@ -74,7 +78,7 @@ pub fn parse_abstract_thematic_surface(
 
         match multi_surface_result {
             Ok(x) => {
-                abstract_thematic_surface.lod3_multi_surface = Some(x);
+                abstract_thematic_surface.set_lod3_multi_surface(Some(x));
             }
             Err(e) => {
                 debug!(
@@ -91,17 +95,32 @@ pub fn parse_abstract_thematic_surface(
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct GmlAbstractThematicSurface {
-    #[serde(rename = "lod0MultiSurface")]
+    #[serde(flatten, skip_deserializing)]
+    pub abstract_city_object: GmlAbstractCityObject,
+
+    #[serde(rename = "lod0MultiSurface", skip_serializing_if = "Option::is_none")]
     pub lod0_multi_surface: Option<GmlMultiSurfaceProperty>,
 
-    #[serde(rename = "lod1MultiSurface")]
+    #[serde(rename = "lod1MultiSurface", skip_serializing_if = "Option::is_none")]
     pub lod1_multi_surface: Option<GmlMultiSurfaceProperty>,
 
-    #[serde(rename = "lod2MultiSurface")]
+    #[serde(rename = "lod2MultiSurface", skip_serializing_if = "Option::is_none")]
     pub lod2_multi_surface: Option<GmlMultiSurfaceProperty>,
 
-    #[serde(rename = "lod3MultiSurface")]
+    #[serde(rename = "lod3MultiSurface", skip_serializing_if = "Option::is_none")]
     pub lod3_multi_surface: Option<GmlMultiSurfaceProperty>,
+}
+
+impl From<&AbstractThematicSurface> for GmlAbstractThematicSurface {
+    fn from(ats: &AbstractThematicSurface) -> Self {
+        Self {
+            abstract_city_object: GmlAbstractCityObject::from(ats.abstract_city_object()),
+            lod0_multi_surface: ats.lod0_multi_surface().map(GmlMultiSurfaceProperty::from),
+            lod1_multi_surface: ats.lod1_multi_surface().map(GmlMultiSurfaceProperty::from),
+            lod2_multi_surface: ats.lod2_multi_surface().map(GmlMultiSurfaceProperty::from),
+            lod3_multi_surface: ats.lod3_multi_surface().map(GmlMultiSurfaceProperty::from),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -114,7 +133,7 @@ mod tests {
     use quick_xml::{DeError, de};
 
     #[test]
-    fn test_parse_basic_abstract_thematic_surface() {
+    fn test_deserialize_with_lod2_multi_surface() {
         let xml_document = b"\
 <con:WallSurface gml:id=\"test-id-123\">
   <gml:name>Outer Wall 1 (West)</gml:name>
@@ -139,7 +158,7 @@ mod tests {
 </con:WallSurface>";
 
         let abstract_thematic_surface =
-            parse_abstract_thematic_surface(xml_document).expect("should work");
+            deserialize_abstract_thematic_surface(xml_document).expect("should work");
 
         assert_eq!(
             abstract_thematic_surface.id(),

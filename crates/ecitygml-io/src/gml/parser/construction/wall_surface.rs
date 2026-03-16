@@ -1,14 +1,14 @@
 use crate::Error;
 use crate::gml::parser::city_object_reader::read_city_objects;
-use crate::gml::parser::core::parse_abstract_thematic_surface;
+use crate::gml::parser::construction::abstract_construction_surface::deserialize_abstract_construction_surface;
 use ecitygml_core::model::common::CityObjectClass;
 use ecitygml_core::model::construction::WallSurface;
 use ecitygml_core::model::core::CityObjectKind;
 use std::collections::HashSet;
 
-pub fn parse_wall_surface(xml_document: &[u8]) -> Result<WallSurface, Error> {
-    let abstract_thematic_surface = parse_abstract_thematic_surface(xml_document)?;
-    let mut wall_surface = WallSurface::new(abstract_thematic_surface);
+pub fn deserialize_wall_surface(xml_document: &[u8]) -> Result<WallSurface, Error> {
+    let abstract_construction_surface = deserialize_abstract_construction_surface(xml_document)?;
+    let mut wall_surface = WallSurface::new(abstract_construction_surface);
 
     let parsed_city_objects = read_city_objects(
         xml_document,
@@ -24,7 +24,7 @@ pub fn parse_wall_surface(xml_document: &[u8]) -> Result<WallSurface, Error> {
                 wall_surface.window_surface.push(x);
             }
             _ => {
-                panic!("Unexpected city object kind: {:?}", city_object);
+                return Err(Error::UnknownElementNode(format!("{:?}", city_object)));
             }
         }
     }
@@ -35,7 +35,7 @@ pub fn parse_wall_surface(xml_document: &[u8]) -> Result<WallSurface, Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gml::parser::core::parse_abstract_thematic_surface;
+    use crate::gml::parser::core::deserialize_abstract_thematic_surface;
     use ecitygml_core::model::core::{
         AsAbstractCityObject, AsAbstractFeature, AsAbstractThematicSurface,
     };
@@ -43,7 +43,7 @@ mod tests {
     use quick_xml::{DeError, de};
 
     #[test]
-    fn test_parse_basic_abstract_thematic_surface() {
+    fn test_deserialize_basic_abstract_thematic_surface() {
         let xml_document = b"
 <con:WallSurface gml:id=\"GML_d38cf762-c29d-4491-88c9-bdc89e141978\">
           <gml:name>Outer Wall 2 (South)</gml:name>
@@ -319,7 +319,7 @@ mod tests {
           </con:fillingSurface>
         </con:WallSurface>";
 
-        let wall_surface = parse_wall_surface(xml_document).expect("should work");
+        let wall_surface = deserialize_wall_surface(xml_document).expect("should work");
 
         assert_eq!(
             wall_surface.id(),

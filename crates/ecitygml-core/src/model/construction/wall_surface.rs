@@ -1,6 +1,9 @@
-use crate::model::construction::{DoorSurface, WindowSurface};
+use crate::model::construction::{
+    AbstractConstructionSurface, AsAbstractConstructionSurface, AsAbstractConstructionSurfaceMut,
+    DoorSurface, WindowSurface,
+};
 use crate::model::core::{
-    AbstractThematicSurface, AsAbstractFeature, AsAbstractFeatureMut, AsAbstractThematicSurface,
+    AsAbstractFeature, AsAbstractFeatureMut, AsAbstractThematicSurface,
     AsAbstractThematicSurfaceMut, CityObjectKind, CityObjectRef,
 };
 use crate::operations::{Visitable, Visitor};
@@ -9,15 +12,15 @@ use nalgebra::Isometry3;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct WallSurface {
-    pub abstract_thematic_surface: AbstractThematicSurface,
+    pub abstract_construction_surface: AbstractConstructionSurface,
     pub door_surface: Vec<DoorSurface>,
     pub window_surface: Vec<WindowSurface>,
 }
 
 impl WallSurface {
-    pub fn new(abstract_thematic_surface: AbstractThematicSurface) -> Self {
+    pub fn new(abstract_construction_surface: AbstractConstructionSurface) -> Self {
         Self {
-            abstract_thematic_surface,
+            abstract_construction_surface,
             door_surface: Vec::new(),
             window_surface: Vec::new(),
         }
@@ -42,18 +45,19 @@ impl WallSurface {
             .for_each(|x| x.refresh_bounded_by());
 
         let own_envelope = self.compute_envelope();
-        let envelopes: Vec<&Envelope> = own_envelope
+        let envelopes: Vec<Envelope> = own_envelope
             .as_ref()
             .into_iter()
             .chain(self.door_surface.iter().filter_map(|x| x.bounded_by()))
             .chain(self.window_surface.iter().filter_map(|x| x.bounded_by()))
+            .cloned()
             .collect();
 
         self.set_bounded_by(Envelope::from_envelopes(&envelopes));
     }
 
     pub fn apply_transform_recursive(&mut self, m: &Isometry3<f64>) {
-        self.abstract_thematic_surface.apply_transform(m);
+        self.abstract_construction_surface.apply_transform(m);
 
         self.door_surface
             .iter_mut()
@@ -64,19 +68,19 @@ impl WallSurface {
     }
 }
 
-impl AsAbstractThematicSurface for WallSurface {
-    fn abstract_thematic_surface(&self) -> &AbstractThematicSurface {
-        &self.abstract_thematic_surface
+impl AsAbstractConstructionSurface for WallSurface {
+    fn abstract_construction_surface(&self) -> &AbstractConstructionSurface {
+        &self.abstract_construction_surface
     }
 }
 
-impl AsAbstractThematicSurfaceMut for WallSurface {
-    fn abstract_thematic_surface_mut(&mut self) -> &mut AbstractThematicSurface {
-        &mut self.abstract_thematic_surface
+impl AsAbstractConstructionSurfaceMut for WallSurface {
+    fn abstract_construction_surface_mut(&mut self) -> &mut AbstractConstructionSurface {
+        &mut self.abstract_construction_surface
     }
 }
 
-crate::impl_abstract_thematic_surface_traits!(WallSurface);
+crate::impl_abstract_construction_surface_traits!(WallSurface);
 
 impl From<WallSurface> for CityObjectKind {
     fn from(item: WallSurface) -> Self {

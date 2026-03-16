@@ -1,6 +1,7 @@
 use crate::model::common::LevelOfDetail;
 use crate::model::core::{
-    AbstractCityObject, AsAbstractCityObjectMut, AsAbstractFeature, SpaceType,
+    AbstractCityObject, AsAbstractCityObjectMut, AsAbstractFeature, RelativeToTerrain,
+    RelativeToWater, SpaceType,
 };
 use crate::model::core::{AsAbstractCityObject, AsAbstractFeatureMut};
 use egml::model::geometry::Envelope;
@@ -13,19 +14,21 @@ use std::collections::HashMap;
 pub struct AbstractSpace {
     pub(crate) abstract_city_object: AbstractCityObject,
 
-    pub space_type: Option<SpaceType>,
+    pub(crate) space_type: Option<SpaceType>,
+    pub(crate) relative_to_terrain: Option<RelativeToTerrain>,
+    pub(crate) relative_to_water: Option<RelativeToWater>,
 
-    pub lod1_solid: Option<Solid>,
-    pub lod2_solid: Option<Solid>,
-    pub lod3_solid: Option<Solid>,
+    pub(crate) lod1_solid: Option<Solid>,
+    pub(crate) lod2_solid: Option<Solid>,
+    pub(crate) lod3_solid: Option<Solid>,
 
-    pub lod0_multi_surface: Option<MultiSurface>,
-    pub lod2_multi_surface: Option<MultiSurface>,
-    pub lod3_multi_surface: Option<MultiSurface>,
+    pub(crate) lod0_multi_surface: Option<MultiSurface>,
+    pub(crate) lod2_multi_surface: Option<MultiSurface>,
+    pub(crate) lod3_multi_surface: Option<MultiSurface>,
 
-    pub lod0_multi_curve: Option<MultiCurve>,
-    pub lod2_multi_curve: Option<MultiCurve>,
-    pub lod3_multi_curve: Option<MultiCurve>,
+    pub(crate) lod0_multi_curve: Option<MultiCurve>,
+    pub(crate) lod2_multi_curve: Option<MultiCurve>,
+    pub(crate) lod3_multi_curve: Option<MultiCurve>,
 }
 
 impl AbstractSpace {
@@ -33,6 +36,8 @@ impl AbstractSpace {
         Self {
             abstract_city_object,
             space_type: None,
+            relative_to_terrain: None,
+            relative_to_water: None,
             lod1_solid: None,
             lod2_solid: None,
             lod3_solid: None,
@@ -51,6 +56,14 @@ pub trait AsAbstractSpace: AsAbstractCityObject {
 
     fn space_type(&self) -> Option<&SpaceType> {
         self.abstract_space().space_type.as_ref()
+    }
+
+    fn relative_to_terrain(&self) -> Option<&RelativeToTerrain> {
+        self.abstract_space().relative_to_terrain.as_ref()
+    }
+
+    fn relative_to_water(&self) -> Option<&RelativeToWater> {
+        self.abstract_space().relative_to_water.as_ref()
     }
 
     fn lod1_solid(&self) -> Option<&Solid> {
@@ -147,16 +160,59 @@ pub trait AsAbstractSpace: AsAbstractCityObject {
         .flatten()
         .collect();
 
-        let refs: Vec<&Envelope> = envelopes.iter().collect();
-        Envelope::from_envelopes(&refs)
+        Envelope::from_envelopes(&envelopes)
     }
 }
 
 pub trait AsAbstractSpaceMut: AsAbstractCityObjectMut + AsAbstractSpace {
     fn abstract_space_mut(&mut self) -> &mut AbstractSpace;
 
-    fn set_space_type(&mut self, space_type: Option<SpaceType>) {
-        self.abstract_space_mut().space_type = space_type;
+    fn set_space_type(&mut self, value: Option<SpaceType>) {
+        self.abstract_space_mut().space_type = value;
+    }
+
+    fn set_relative_to_terrain(&mut self, value: Option<RelativeToTerrain>) {
+        self.abstract_space_mut().relative_to_terrain = value;
+    }
+
+    fn set_relative_to_water(&mut self, value: Option<RelativeToWater>) {
+        self.abstract_space_mut().relative_to_water = value;
+    }
+
+    fn set_lod1_solid(&mut self, value: Option<Solid>) {
+        self.abstract_space_mut().lod1_solid = value;
+    }
+
+    fn set_lod2_solid(&mut self, value: Option<Solid>) {
+        self.abstract_space_mut().lod2_solid = value;
+    }
+
+    fn set_lod3_solid(&mut self, value: Option<Solid>) {
+        self.abstract_space_mut().lod3_solid = value;
+    }
+
+    fn set_lod0_multi_surface(&mut self, value: Option<MultiSurface>) {
+        self.abstract_space_mut().lod0_multi_surface = value;
+    }
+
+    fn set_lod2_multi_surface(&mut self, value: Option<MultiSurface>) {
+        self.abstract_space_mut().lod2_multi_surface = value;
+    }
+
+    fn set_lod3_multi_surface(&mut self, value: Option<MultiSurface>) {
+        self.abstract_space_mut().lod3_multi_surface = value;
+    }
+
+    fn set_lod0_multi_curve(&mut self, value: Option<MultiCurve>) {
+        self.abstract_space_mut().lod0_multi_curve = value;
+    }
+
+    fn set_lod2_multi_curve(&mut self, value: Option<MultiCurve>) {
+        self.abstract_space_mut().lod2_multi_curve = value;
+    }
+
+    fn set_lod3_multi_curve(&mut self, value: Option<MultiCurve>) {
+        self.abstract_space_mut().lod3_multi_curve = value;
     }
 
     fn refresh_bounded_by(&mut self) {
@@ -165,9 +221,6 @@ pub trait AsAbstractSpaceMut: AsAbstractCityObjectMut + AsAbstractSpace {
     }
 
     fn apply_transform(&mut self, m: &Isometry3<f64>) {
-        if let Some(g) = &mut self.abstract_space_mut().lod0_multi_surface {
-            g.apply_transform(m);
-        }
         if let Some(g) = &mut self.abstract_space_mut().lod1_solid {
             g.apply_transform(m);
         }
@@ -238,13 +291,14 @@ impl_abstract_space_traits!(AbstractSpace);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::core::AbstractFeature;
+    use crate::model::core::{AbstractFeature, AbstractFeatureWithLifespan};
     use egml::model::base::Id;
 
     #[test]
     fn trait_implementation_macro_test() {
         let abstract_feature = AbstractFeature::new(Id::generate_uuid_v4());
-        let abstract_city_object = AbstractCityObject::new(abstract_feature, vec![]);
+        let abstract_feature_with_lifespan = AbstractFeatureWithLifespan::new(abstract_feature);
+        let abstract_city_object = AbstractCityObject::new(abstract_feature_with_lifespan);
         let space = AbstractSpace::new(abstract_city_object);
 
         let a = space.bounded_by();

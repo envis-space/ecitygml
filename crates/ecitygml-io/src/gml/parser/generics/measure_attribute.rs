@@ -6,7 +6,9 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct GmlMeasureAttribute {
+    #[serde(rename(serialize = "gen:name", deserialize = "name"))]
     pub name: String,
+    #[serde(rename(serialize = "gen:value", deserialize = "value"))]
     pub value: GmlMeasure,
 }
 
@@ -25,13 +27,25 @@ impl TryFrom<GmlMeasureAttribute> for MeasureAttribute {
     }
 }
 
+impl From<&MeasureAttribute> for GmlMeasureAttribute {
+    fn from(attr: &MeasureAttribute) -> Self {
+        Self {
+            name: attr.name.clone(),
+            value: GmlMeasure {
+                uom: attr.value.uom.clone(),
+                value: attr.value.value,
+            },
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use quick_xml::de;
 
     #[test]
-    fn test_parse_abstract_occupied_space() {
+    fn test_deserialize_measure_attribute() {
         let xml_document = b"
         <gen:MeasureAttribute>
           <gen:name>GrossPlannedArea</gen:name>

@@ -79,6 +79,10 @@ public:
         return envelope;
     }
 
+    [[nodiscard]] bool has_handle() const noexcept {
+        return handle_ != nullptr;
+    }
+
     ~CityObjectGeometry() { cleanup(); }
 
 private:

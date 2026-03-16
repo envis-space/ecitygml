@@ -5,7 +5,7 @@ use egml::io::primitives::GmlPointProperty;
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
-pub fn parse_implicit_geometry(xml_document: &[u8]) -> Result<ImplicitGeometry, Error> {
+pub fn deserialize_implicit_geometry(xml_document: &[u8]) -> Result<ImplicitGeometry, Error> {
     let gml_implicit_geometry: GmlImplicitGeometry = de::from_reader(xml_document)?;
     let implicit_geometry: ImplicitGeometry = gml_implicit_geometry.try_into()?;
 
@@ -36,10 +36,10 @@ impl TryFrom<GmlImplicitGeometry> for ImplicitGeometry {
 
 #[cfg(test)]
 mod tests {
-    use crate::gml::parser::core::implicit_geometry::parse_implicit_geometry;
+    use crate::gml::parser::core::implicit_geometry::deserialize_implicit_geometry;
 
     #[test]
-    fn test_parse_implicit_geometry_basic() {
+    fn test_deserialize_implicit_geometry_basic() {
         let xml_document = b"<ImplicitGeometry>
     <transformationMatrix>-0.5894514707536183 -0.8078037903020735 0.0 0.0 0.8078037903020735 -0.5894514707536183 0.0 0.0 0.0 0.0 1.0 0.0 0.0 0.0 0.0 1.0</transformationMatrix>
     <referencePoint>
@@ -49,7 +49,7 @@ mod tests {
     </referencePoint>
 </ImplicitGeometry>";
 
-        let implicit_geometry = parse_implicit_geometry(xml_document).expect("should work");
+        let implicit_geometry = deserialize_implicit_geometry(xml_document).expect("should work");
 
         assert_eq!(
             implicit_geometry.reference_point.pos().x(),

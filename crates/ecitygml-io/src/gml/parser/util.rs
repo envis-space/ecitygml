@@ -1,17 +1,22 @@
 use crate::Error;
-use crate::gml::parser::building::{parse_building, parse_building_constructive_element};
-use crate::gml::parser::city_furniture::parse_city_furniture;
-use crate::gml::parser::construction::{
-    parse_door_surface, parse_ground_surface, parse_roof_surface, parse_wall_surface,
-    parse_window_surface,
+use crate::gml::parser::building::{
+    deserialize_building, deserialize_building_constructive_element,
+    deserialize_building_installation, deserialize_building_room, deserialize_storey,
 };
-use crate::gml::parser::relief::parse_relief_feature;
-use crate::gml::parser::relief::parse_tin_relief;
-use crate::gml::parser::transportation::parse_auxiliary_traffic_space;
-use crate::gml::parser::transportation::{parse_auxiliary_traffic_area, parse_traffic_space};
-use crate::gml::parser::transportation::{parse_intersection, parse_section};
-use crate::gml::parser::transportation::{parse_road, parse_traffic_area};
-use crate::gml::parser::vegetation::parse_solitary_vegetation_object;
+use crate::gml::parser::city_furniture::deserialize_city_furniture;
+use crate::gml::parser::construction::{
+    deserialize_door_surface, deserialize_ground_surface, deserialize_roof_surface,
+    deserialize_wall_surface, deserialize_window_surface,
+};
+use crate::gml::parser::relief::deserialize_relief_feature;
+use crate::gml::parser::relief::deserialize_tin_relief;
+use crate::gml::parser::transportation::deserialize_auxiliary_traffic_space;
+use crate::gml::parser::transportation::{
+    deserialize_auxiliary_traffic_area, deserialize_traffic_space,
+};
+use crate::gml::parser::transportation::{deserialize_intersection, deserialize_section};
+use crate::gml::parser::transportation::{deserialize_road, deserialize_traffic_area};
+use crate::gml::parser::vegetation::deserialize_solitary_vegetation_object;
 use ecitygml_core::model::common::CityObjectClass;
 use ecitygml_core::model::core::CityObjectKind;
 use quick_xml::reader::Span;
@@ -35,7 +40,7 @@ impl CityObjectSpan {
     }
 }
 
-pub(crate) fn parse_city_object(
+pub(crate) fn deserialize_city_object(
     xml_document: &[u8],
     city_object_span: CityObjectSpan,
 ) -> Result<CityObjectKind, Error> {
@@ -43,83 +48,96 @@ pub(crate) fn parse_city_object(
 
     let city_object: CityObjectKind = match city_object_span.city_object_class {
         CityObjectClass::AuxiliaryTrafficArea => {
-            let auxiliary_traffic_area = parse_auxiliary_traffic_area(xml_document_slice)?;
+            let auxiliary_traffic_area = deserialize_auxiliary_traffic_area(xml_document_slice)?;
             CityObjectKind::AuxiliaryTrafficArea(auxiliary_traffic_area)
         }
         CityObjectClass::AuxiliaryTrafficSpace => {
-            let auxiliary_traffic_space = parse_auxiliary_traffic_space(xml_document_slice)?;
+            let auxiliary_traffic_space = deserialize_auxiliary_traffic_space(xml_document_slice)?;
             CityObjectKind::AuxiliaryTrafficSpace(auxiliary_traffic_space)
         }
         CityObjectClass::Building => {
-            let building = parse_building(xml_document_slice)?;
+            let building = deserialize_building(xml_document_slice)?;
             CityObjectKind::Building(building)
-        }
-        CityObjectClass::CityFurniture => {
-            let city_furniture = parse_city_furniture(xml_document_slice)?;
-            CityObjectKind::CityFurniture(city_furniture)
-        }
-        CityObjectClass::Road => {
-            let road = parse_road(xml_document_slice)?;
-            CityObjectKind::Road(road)
-        }
-        CityObjectClass::SolitaryVegetationObject => {
-            let solitary_vegetation_object = parse_solitary_vegetation_object(xml_document_slice)?;
-            CityObjectKind::SolitaryVegetationObject(solitary_vegetation_object)
-        }
-        CityObjectClass::Section => {
-            let section = parse_section(xml_document_slice)?;
-            CityObjectKind::Section(section)
-        }
-        CityObjectClass::Intersection => {
-            let intersection = parse_intersection(xml_document_slice)?;
-            CityObjectKind::Intersection(intersection)
-        }
-        CityObjectClass::TrafficSpace => {
-            let traffic_space = parse_traffic_space(xml_document_slice)?;
-            CityObjectKind::TrafficSpace(traffic_space)
-        }
-        CityObjectClass::TrafficArea => {
-            let traffic_area = parse_traffic_area(xml_document_slice)?;
-            CityObjectKind::TrafficArea(traffic_area)
-        }
-        CityObjectClass::GroundSurface => {
-            let ground_surface = parse_ground_surface(xml_document_slice)?;
-            CityObjectKind::GroundSurface(ground_surface)
         }
         CityObjectClass::BuildingConstructiveElement => {
             let building_constructive_element =
-                parse_building_constructive_element(xml_document_slice)?;
+                deserialize_building_constructive_element(xml_document_slice)?;
             CityObjectKind::BuildingConstructiveElement(building_constructive_element)
         }
+        CityObjectClass::BuildingInstallation => {
+            let building_installation = deserialize_building_installation(xml_document_slice)?;
+            CityObjectKind::BuildingInstallation(building_installation)
+        }
+        CityObjectClass::BuildingRoom => {
+            let building_room = deserialize_building_room(xml_document_slice)?;
+            CityObjectKind::BuildingRoom(building_room)
+        }
+        CityObjectClass::CityFurniture => {
+            let city_furniture = deserialize_city_furniture(xml_document_slice)?;
+            CityObjectKind::CityFurniture(city_furniture)
+        }
+        CityObjectClass::Road => {
+            let road = deserialize_road(xml_document_slice)?;
+            CityObjectKind::Road(road)
+        }
+        CityObjectClass::Section => {
+            let section = deserialize_section(xml_document_slice)?;
+            CityObjectKind::Section(section)
+        }
+        CityObjectClass::SolitaryVegetationObject => {
+            let solitary_vegetation_object =
+                deserialize_solitary_vegetation_object(xml_document_slice)?;
+            CityObjectKind::SolitaryVegetationObject(solitary_vegetation_object)
+        }
+        CityObjectClass::Storey => {
+            let storey = deserialize_storey(xml_document_slice)?;
+            CityObjectKind::Storey(storey)
+        }
+        CityObjectClass::Intersection => {
+            let intersection = deserialize_intersection(xml_document_slice)?;
+            CityObjectKind::Intersection(intersection)
+        }
+        CityObjectClass::TrafficSpace => {
+            let traffic_space = deserialize_traffic_space(xml_document_slice)?;
+            CityObjectKind::TrafficSpace(traffic_space)
+        }
+        CityObjectClass::TrafficArea => {
+            let traffic_area = deserialize_traffic_area(xml_document_slice)?;
+            CityObjectKind::TrafficArea(traffic_area)
+        }
+        CityObjectClass::GroundSurface => {
+            let ground_surface = deserialize_ground_surface(xml_document_slice)?;
+            CityObjectKind::GroundSurface(ground_surface)
+        }
         CityObjectClass::ReliefFeature => {
-            let relief_feature = parse_relief_feature(xml_document_slice)?;
+            let relief_feature = deserialize_relief_feature(xml_document_slice)?;
             CityObjectKind::ReliefFeature(relief_feature)
         }
         CityObjectClass::TinRelief => {
-            let tin_relief = parse_tin_relief(xml_document_slice)?;
+            let tin_relief = deserialize_tin_relief(xml_document_slice)?;
             CityObjectKind::TinRelief(tin_relief)
         }
         CityObjectClass::RoofSurface => {
-            let roof_surface = parse_roof_surface(xml_document_slice)?;
+            let roof_surface = deserialize_roof_surface(xml_document_slice)?;
             CityObjectKind::RoofSurface(roof_surface)
         }
         CityObjectClass::WallSurface => {
-            let wall_surface = parse_wall_surface(xml_document_slice)?;
+            let wall_surface = deserialize_wall_surface(xml_document_slice)?;
             CityObjectKind::WallSurface(wall_surface)
         }
         CityObjectClass::WindowSurface => {
-            let window_surface = parse_window_surface(xml_document_slice)?;
+            let window_surface = deserialize_window_surface(xml_document_slice)?;
             CityObjectKind::WindowSurface(window_surface)
         }
         CityObjectClass::DoorSurface => {
-            let door_surface = parse_door_surface(xml_document_slice)?;
+            let door_surface = deserialize_door_surface(xml_document_slice)?;
             CityObjectKind::DoorSurface(door_surface)
         }
         _ => {
-            todo!(
-                "Unsupported parsing of CityObjectClass: {:?}",
+            return Err(Error::UnknownElementNode(format!(
+                "{:?}",
                 city_object_span.city_object_class
-            );
+            )));
         }
     };
 
@@ -132,18 +150,21 @@ pub fn city_object_class_from_bytes(local_name: &[u8]) -> Result<CityObjectClass
         b"AuxiliaryTrafficSpace" => Ok(CityObjectClass::AuxiliaryTrafficSpace),
         b"Building" => Ok(CityObjectClass::Building),
         b"BuildingConstructiveElement" => Ok(CityObjectClass::BuildingConstructiveElement),
+        b"BuildingInstallation" => Ok(CityObjectClass::BuildingInstallation),
+        b"BuildingRoom" => Ok(CityObjectClass::BuildingRoom),
         b"CityFurniture" => Ok(CityObjectClass::CityFurniture),
         b"DoorSurface" => Ok(CityObjectClass::DoorSurface),
         b"GroundSurface" => Ok(CityObjectClass::GroundSurface),
-        b"Road" => Ok(CityObjectClass::Road),
-        b"Section" => Ok(CityObjectClass::Section),
         b"Intersection" => Ok(CityObjectClass::Intersection),
+        b"ReliefFeature" => Ok(CityObjectClass::ReliefFeature),
+        b"Road" => Ok(CityObjectClass::Road),
+        b"RoofSurface" => Ok(CityObjectClass::RoofSurface),
+        b"Section" => Ok(CityObjectClass::Section),
         b"SolitaryVegetationObject" => Ok(CityObjectClass::SolitaryVegetationObject),
+        b"Storey" => Ok(CityObjectClass::Storey),
+        b"TINRelief" => Ok(CityObjectClass::TinRelief),
         b"TrafficArea" => Ok(CityObjectClass::TrafficArea),
         b"TrafficSpace" => Ok(CityObjectClass::TrafficSpace),
-        b"TINRelief" => Ok(CityObjectClass::TinRelief),
-        b"RoofSurface" => Ok(CityObjectClass::RoofSurface),
-        b"ReliefFeature" => Ok(CityObjectClass::ReliefFeature),
         b"WallSurface" => Ok(CityObjectClass::WallSurface),
         b"WindowSurface" => Ok(CityObjectClass::WindowSurface),
         _ => Err(Error::UnknownElementNode(

@@ -70,14 +70,15 @@ impl<R: Read> GmlReader<R> {
 
 impl GmlReader<File> {
     pub fn from_path(path: impl AsRef<Path>) -> Result<Self, Error> {
-        let format = CitygmlFormat::from_path(path.as_ref()).ok_or(InvalidFileExtension(
-            path.as_ref()
-                .extension()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .to_string(),
-        ))?;
+        let format = CitygmlFormat::from_path(path.as_ref()).ok_or_else(|| {
+            InvalidFileExtension(
+                path.as_ref()
+                    .extension()
+                    .and_then(|ext| ext.to_str())
+                    .unwrap_or_default()
+                    .to_string(),
+            )
+        })?;
 
         let file = std::fs::File::open(path.as_ref())?;
 

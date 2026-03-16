@@ -1,6 +1,6 @@
 use crate::Error;
 use crate::gml::parser::city_object_reader::read_city_objects;
-use crate::gml::parser::core::parse_abstract_space_boundary;
+use crate::gml::parser::core::deserialize_abstract_space_boundary;
 use ecitygml_core::model::common::CityObjectClass;
 use ecitygml_core::model::core::CityObjectKind;
 use ecitygml_core::model::relief::{ReliefComponentKind, ReliefFeature};
@@ -8,8 +8,8 @@ use quick_xml::de;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
-pub fn parse_relief_feature(xml_document: &[u8]) -> Result<ReliefFeature, Error> {
-    let abstract_space_boundary = parse_abstract_space_boundary(xml_document)?;
+pub fn deserialize_relief_feature(xml_document: &[u8]) -> Result<ReliefFeature, Error> {
+    let abstract_space_boundary = deserialize_abstract_space_boundary(xml_document)?;
     let gml_relief_feature: GmlReliefFeature = de::from_reader(xml_document)?;
     let mut relief_feature =
         ReliefFeature::new(abstract_space_boundary, gml_relief_feature.lod.try_into()?);
@@ -45,7 +45,7 @@ mod tests {
     use egml::model::base::Id;
 
     #[test]
-    fn test_parse_tin_relief() {
+    fn test_deserialize_tin_relief() {
         let xml_document = "
             <dem:ReliefFeature gml:id=\"ID_7a8b707e-f87c-35f3-8e3c-254427e59493\">
               <dem:lod>2</dem:lod>
@@ -69,7 +69,8 @@ mod tests {
               </dem:reliefComponent>
             </dem:ReliefFeature>";
 
-        let relief_feature = parse_relief_feature(xml_document.as_bytes()).expect("should work");
+        let relief_feature =
+            deserialize_relief_feature(xml_document.as_bytes()).expect("should work");
 
         assert_eq!(
             relief_feature.id(),

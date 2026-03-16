@@ -1,9 +1,9 @@
 use crate::Error;
-use crate::gml::parser::core::parse_abstract_occupied_space;
+use crate::gml::parser::core::deserialize_abstract_occupied_space;
 use ecitygml_core::model::city_furniture::CityFurniture;
 
-pub fn parse_city_furniture(xml_document: &[u8]) -> Result<CityFurniture, Error> {
-    let occupied_space = parse_abstract_occupied_space(xml_document)?;
+pub fn deserialize_city_furniture(xml_document: &[u8]) -> Result<CityFurniture, Error> {
+    let occupied_space = deserialize_abstract_occupied_space(xml_document)?;
     let city_furniture = CityFurniture::new(occupied_space);
 
     Ok(city_furniture)
@@ -18,7 +18,7 @@ mod tests {
     use egml::model::base::Id;
 
     #[test]
-    fn test_parse_basic_city_furniture() {
+    fn test_deserialize_basic_city_furniture() {
         let xml_document = b"<frn:CityFurniture gml:id=\"UUID_379c7ee8-b010-33d2-8e55-786e6be6fa46\">
       <gml:name>Vorschriftzeichen</gml:name>
       <genericAttribute>
@@ -52,7 +52,7 @@ mod tests {
       </lod1ImplicitRepresentation>
     </frn:CityFurniture>";
 
-        let city_furniture = parse_city_furniture(xml_document).expect("should work");
+        let city_furniture = deserialize_city_furniture(xml_document).expect("should work");
 
         assert_eq!(
             city_furniture.id(),

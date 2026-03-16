@@ -1,4 +1,6 @@
-use crate::model::building::{Building, BuildingConstructiveElement};
+use crate::model::building::{
+    Building, BuildingConstructiveElement, BuildingInstallation, BuildingRoom, Storey,
+};
 use crate::model::city_furniture::CityFurniture;
 use crate::model::construction::{
     DoorSurface, GroundSurface, RoofSurface, WallSurface, WindowSurface,
@@ -37,6 +39,14 @@ pub trait Visitor {
         Self::Output::default()
     }
 
+    fn visit_building_installation(&mut self, _v: &BuildingInstallation) -> Self::Output {
+        Self::Output::default()
+    }
+
+    fn visit_building_room(&mut self, _v: &BuildingRoom) -> Self::Output {
+        Self::Output::default()
+    }
+
     fn visit_roof_surface(&mut self, _v: &RoofSurface) -> Self::Output {
         Self::Output::default()
     }
@@ -58,6 +68,10 @@ pub trait Visitor {
     }
 
     fn visit_solitary_vegetation_object(&mut self, _v: &SolitaryVegetationObject) -> Self::Output {
+        Self::Output::default()
+    }
+
+    fn visit_storey(&mut self, _v: &Storey) -> Self::Output {
         Self::Output::default()
     }
 
@@ -95,93 +109,5 @@ pub trait Visitor {
 
     fn visit_auxiliary_traffic_area(&mut self, _v: &AuxiliaryTrafficArea) -> Self::Output {
         Self::Output::default()
-    }
-}
-
-pub struct Interpreter;
-
-impl Default for Interpreter {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Interpreter {
-    pub fn new() -> Self {
-        Self {}
-    }
-}
-impl Visitor for Interpreter {
-    type Output = ();
-
-    fn visit_city_model(&mut self, _v: &CityModel) -> Self::Output {
-        println!("hello city_model");
-    }
-
-    fn visit_city_furniture(&mut self, v: &CityFurniture) -> Self::Output {
-        println!("hello city_furniture {}", v.id(),);
-    }
-
-    fn visit_building(&mut self, v: &Building) -> Self::Output {
-        println!("hello building {}", v.id(),);
-    }
-
-    fn visit_building_constructive_element(
-        &mut self,
-        v: &BuildingConstructiveElement,
-    ) -> Self::Output {
-        println!("hello building_constructive_element {}", v.id(),);
-    }
-
-    fn visit_roof_surface(&mut self, v: &RoofSurface) -> Self::Output {
-        println!("hello roof_surface {}", v.id());
-    }
-
-    fn visit_ground_surface(&mut self, v: &GroundSurface) -> Self::Output {
-        println!("hello ground_surface {}", v.id());
-    }
-
-    fn visit_wall_surface(&mut self, v: &WallSurface) -> Self::Output {
-        println!("hello wall_surface {}", v.id());
-    }
-
-    fn visit_window_surface(&mut self, v: &WindowSurface) -> Self::Output {
-        println!("hello window_surface {}", v.id());
-    }
-
-    fn visit_door_surface(&mut self, v: &DoorSurface) -> Self::Output {
-        println!("hello door_surface {}", v.id());
-    }
-
-    fn visit_solitary_vegetation_object(&mut self, v: &SolitaryVegetationObject) -> Self::Output {
-        println!("hello solitary_vegetation_object {}", v.id());
-    }
-
-    fn visit_road(&mut self, v: &Road) -> Self::Output {
-        println!("hello road {}", v.id());
-    }
-
-    fn visit_section(&mut self, v: &Section) -> Self::Output {
-        println!("hello section {}", v.id());
-    }
-
-    fn visit_intersection(&mut self, v: &Intersection) -> Self::Output {
-        println!("hello intersection {}", v.id());
-    }
-
-    fn visit_traffic_space(&mut self, v: &TrafficSpace) -> Self::Output {
-        println!("hello traffic_space {}", v.id());
-    }
-
-    fn visit_auxiliary_traffic_space(&mut self, v: &AuxiliaryTrafficSpace) -> Self::Output {
-        println!("hello auxiliary_traffic_space {}", v.id());
-    }
-
-    fn visit_traffic_area(&mut self, v: &TrafficArea) -> Self::Output {
-        println!("hello traffic_area {}", v.id());
-    }
-
-    fn visit_auxiliary_traffic_area(&mut self, v: &AuxiliaryTrafficArea) -> Self::Output {
-        println!("hello auxiliary_traffic_area {}", v.id());
     }
 }

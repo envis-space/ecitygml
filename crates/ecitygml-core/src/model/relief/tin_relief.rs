@@ -5,6 +5,7 @@ use crate::model::relief::{
 use crate::operations::{Visitable, Visitor};
 use egml::model::geometry::Envelope;
 use egml::model::geometry::primitives::TriangulatedSurface;
+use nalgebra::Isometry3;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TinRelief {
@@ -38,6 +39,10 @@ impl TinRelief {
     pub fn refresh_bounded_by_recursive(&mut self) {
         let envelope = self.compute_envelope();
         self.set_bounded_by(Some(envelope));
+    }
+
+    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
+        self.tin.apply_transform(m);
     }
 }
 

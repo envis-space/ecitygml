@@ -1,13 +1,13 @@
 use crate::Error;
 use crate::gml::parser::city_object_reader::read_city_objects;
-use crate::gml::parser::core::parse_abstract_space;
+use crate::gml::parser::core::deserialize_abstract_space;
 use ecitygml_core::model::common::CityObjectClass;
 use ecitygml_core::model::core::CityObjectKind;
 use ecitygml_core::model::transportation::Intersection;
 use std::collections::HashSet;
 
-pub fn parse_intersection(xml_document: &[u8]) -> Result<Intersection, Error> {
-    let space = parse_abstract_space(xml_document)?;
+pub fn deserialize_intersection(xml_document: &[u8]) -> Result<Intersection, Error> {
+    let space = deserialize_abstract_space(xml_document)?;
     let mut intersection = Intersection::new(space);
 
     let parsed_city_objects = read_city_objects(
@@ -26,7 +26,7 @@ pub fn parse_intersection(xml_document: &[u8]) -> Result<Intersection, Error> {
                 intersection.traffic_space.push(x);
             }
             _ => {
-                panic!("Unexpected city object kind: {:?}", city_object);
+                return Err(Error::UnknownElementNode(format!("{:?}", city_object)));
             }
         }
     }
@@ -42,7 +42,7 @@ mod tests {
     use egml::model::base::Id;
 
     #[test]
-    fn test_parse_basic_intersection() {
+    fn test_deserialize_basic_intersection() {
         let xml_document = b"
         <tran:Intersection gml:id=\"UUID_9a9fc5a0-b252-3d63-ac79-b3141175f152\">
           <genericAttribute>
@@ -69,7 +69,7 @@ mod tests {
           </tran:trafficSpace>
         </tran:Intersection>";
 
-        let intersection = parse_intersection(xml_document).expect("should work");
+        let intersection = deserialize_intersection(xml_document).expect("should work");
 
         assert_eq!(
             intersection.id(),

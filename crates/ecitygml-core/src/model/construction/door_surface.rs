@@ -1,18 +1,18 @@
-use crate::model::core::{
-    AbstractThematicSurface, AsAbstractThematicSurface, AsAbstractThematicSurfaceMut,
-    CityObjectKind, CityObjectRef,
+use crate::model::construction::{
+    AbstractFillingSurface, AsAbstractFillingSurface, AsAbstractFillingSurfaceMut,
 };
+use crate::model::core::{CityObjectKind, CityObjectRef};
 use crate::operations::{Visitable, Visitor};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DoorSurface {
-    pub abstract_thematic_surface: AbstractThematicSurface,
+    pub abstract_filling_surface: AbstractFillingSurface,
 }
 
 impl DoorSurface {
-    pub fn new(abstract_thematic_surface: AbstractThematicSurface) -> Self {
+    pub fn new(abstract_filling_surface: AbstractFillingSurface) -> Self {
         Self {
-            abstract_thematic_surface,
+            abstract_filling_surface,
         }
     }
 
@@ -21,19 +21,19 @@ impl DoorSurface {
     }
 }
 
-impl AsAbstractThematicSurface for DoorSurface {
-    fn abstract_thematic_surface(&self) -> &AbstractThematicSurface {
-        &self.abstract_thematic_surface
+impl AsAbstractFillingSurface for DoorSurface {
+    fn abstract_filling_surface(&self) -> &AbstractFillingSurface {
+        &self.abstract_filling_surface
     }
 }
 
-impl AsAbstractThematicSurfaceMut for DoorSurface {
-    fn abstract_thematic_surface_mut(&mut self) -> &mut AbstractThematicSurface {
-        &mut self.abstract_thematic_surface
+impl AsAbstractFillingSurfaceMut for DoorSurface {
+    fn abstract_filling_surface_mut(&mut self) -> &mut AbstractFillingSurface {
+        &mut self.abstract_filling_surface
     }
 }
 
-crate::impl_abstract_thematic_surface_traits!(DoorSurface);
+crate::impl_abstract_filling_surface_traits!(DoorSurface);
 
 impl From<DoorSurface> for CityObjectKind {
     fn from(item: DoorSurface) -> Self {

@@ -4,6 +4,7 @@ use crate::model::core::{
 };
 use crate::model::relief::TinRelief;
 use egml::model::geometry::Envelope;
+use nalgebra::Isometry3;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbstractReliefComponent {
@@ -86,6 +87,12 @@ impl ReliefComponentKind {
     pub fn refresh_bounded_by_recursive(&mut self) {
         match self {
             ReliefComponentKind::TinRelief(x) => x.refresh_bounded_by_recursive(),
+        }
+    }
+
+    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
+        match self {
+            ReliefComponentKind::TinRelief(x) => x.apply_transform(m),
         }
     }
 

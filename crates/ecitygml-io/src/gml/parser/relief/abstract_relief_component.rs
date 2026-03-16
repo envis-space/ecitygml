@@ -1,13 +1,13 @@
 use crate::Error;
-use crate::gml::parser::core::parse_abstract_space_boundary;
+use crate::gml::parser::core::deserialize_abstract_space_boundary;
 use ecitygml_core::model::relief::AbstractReliefComponent;
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
-pub fn parse_abstract_relief_component(
+pub fn deserialize_abstract_relief_component(
     xml_document: &[u8],
 ) -> Result<AbstractReliefComponent, Error> {
-    let abstract_space_boundary = parse_abstract_space_boundary(xml_document)?;
+    let abstract_space_boundary = deserialize_abstract_space_boundary(xml_document)?;
     let gml_abstract_relief_component: GmlAbstractReliefComponent = de::from_reader(xml_document)?;
 
     let abstract_relief_component = AbstractReliefComponent::new(
@@ -31,14 +31,14 @@ mod tests {
     use egml::model::base::Id;
 
     #[test]
-    fn test_parse_tin_relief() {
+    fn test_deserialize_tin_relief() {
         let xml_document = "
                 <dem:TINRelief gml:id=\"abc\">
                   <dem:lod>2</dem:lod>
                 </dem:TINRelief>";
 
         let abstract_relief_component =
-            parse_abstract_relief_component(xml_document.as_ref()).expect("should work");
+            deserialize_abstract_relief_component(xml_document.as_ref()).expect("should work");
 
         assert_eq!(
             abstract_relief_component.id(),

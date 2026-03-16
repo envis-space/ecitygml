@@ -1,14 +1,14 @@
 use crate::Error;
-use crate::gml::parser::core::parse_abstract_occupied_space;
+use crate::gml::parser::core::deserialize_abstract_occupied_space;
 use ecitygml_core::model::vegetation::SolitaryVegetationObject;
 use egml::io::GmlMeasure;
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
-pub fn parse_solitary_vegetation_object(
+pub fn deserialize_solitary_vegetation_object(
     xml_document: &[u8],
 ) -> Result<SolitaryVegetationObject, Error> {
-    let occupied_space = parse_abstract_occupied_space(xml_document)?;
+    let occupied_space = deserialize_abstract_occupied_space(xml_document)?;
     let mut solitary_vegetation_object = SolitaryVegetationObject::new(occupied_space);
     let parsed_result: GmlSolitaryVegetationObject = de::from_reader(xml_document)?;
 
@@ -41,7 +41,7 @@ mod tests {
     use egml::model::base::Id;
 
     #[test]
-    fn test_parse_basic_solitary_vegetation_object() {
+    fn test_deserialize_basic_solitary_vegetation_object() {
         let xml_document = b"<veg:SolitaryVegetationObject gml:id=\"UUID_cd516eff-0302-379f-a635-791ebe618098\">
       <genericAttribute>
         <gen:StringAttribute>
@@ -64,7 +64,7 @@ mod tests {
     </veg:SolitaryVegetationObject>";
 
         let solitary_vegetation_object =
-            parse_solitary_vegetation_object(xml_document).expect("should work");
+            deserialize_solitary_vegetation_object(xml_document).expect("should work");
 
         assert_eq!(
             solitary_vegetation_object.id(),

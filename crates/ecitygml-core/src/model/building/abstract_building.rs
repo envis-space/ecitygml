@@ -1,41 +1,75 @@
+use crate::model::building::building_room::BuildingRoom;
+use crate::model::building::{
+    BuildingConstructiveElement, BuildingInstallation, BuildingSubdivisionKind,
+};
 use crate::model::construction::{
     AbstractConstruction, AsAbstractConstruction, AsAbstractConstructionMut,
 };
-use crate::model::core::AsAbstractOccupiedSpaceMut;
+use crate::model::core::{AsAbstractOccupiedSpaceMut, CityObjectRef};
 use egml::model::basic::Code;
 use nalgebra::Isometry3;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbstractBuilding {
     pub abstract_construction: AbstractConstruction,
-    pub(crate) function: Vec<Code>,
-    pub(crate) usage: Vec<Code>,
+    pub(crate) class: Option<Code>,
+    pub(crate) functions: Vec<Code>,
+    pub(crate) usages: Vec<Code>,
     pub(crate) roof_type: Option<Code>,
     pub(crate) storeys_above_ground: Option<i64>,
     pub(crate) storeys_below_ground: Option<i64>,
+    pub building_constructive_elements: Vec<BuildingConstructiveElement>,
+    pub building_installations: Vec<BuildingInstallation>,
+    pub building_rooms: Vec<BuildingRoom>,
+    pub building_subdivisions: Vec<BuildingSubdivisionKind>,
 }
 
 impl AbstractBuilding {
     pub fn new(abstract_construction: AbstractConstruction) -> Self {
         Self {
             abstract_construction,
-            function: Vec::new(),
-            usage: Vec::new(),
+            class: None,
+            functions: Vec::new(),
+            usages: Vec::new(),
             roof_type: None,
             storeys_above_ground: None,
             storeys_below_ground: None,
+            building_constructive_elements: Vec::new(),
+            building_installations: Vec::new(),
+            building_rooms: Vec::new(),
+            building_subdivisions: Vec::new(),
         }
+    }
+
+    pub fn iter_city_object<'a>(&'a self) -> impl Iterator<Item = CityObjectRef<'a>> + 'a {
+        self.building_constructive_elements
+            .iter()
+            .flat_map(|x| x.iter_city_object())
+            .chain(
+                self.building_installations
+                    .iter()
+                    .flat_map(|x| x.iter_city_object()),
+            )
+            .chain(
+                self.building_rooms
+                    .iter()
+                    .flat_map(|x| x.iter_city_object()),
+            )
     }
 }
 pub trait AsAbstractBuilding: AsAbstractConstruction {
     fn abstract_building(&self) -> &AbstractBuilding;
 
-    fn function(&self) -> &Vec<Code> {
-        &self.abstract_building().function
+    fn class(&self) -> &Option<Code> {
+        &self.abstract_building().class
     }
 
-    fn usage(&self) -> &Vec<Code> {
-        &self.abstract_building().usage
+    fn functions(&self) -> &Vec<Code> {
+        &self.abstract_building().functions
+    }
+
+    fn usages(&self) -> &Vec<Code> {
+        &self.abstract_building().usages
     }
 
     fn roof_type(&self) -> &Option<Code> {
@@ -54,12 +88,16 @@ pub trait AsAbstractBuilding: AsAbstractConstruction {
 pub trait AsAbstractBuildingMut: AsAbstractConstructionMut + AsAbstractBuilding {
     fn abstract_building_mut(&mut self) -> &mut AbstractBuilding;
 
-    fn set_function(&mut self, function: Vec<Code>) {
-        self.abstract_building_mut().function = function;
+    fn set_class(&mut self, class: Option<Code>) {
+        self.abstract_building_mut().class = class;
     }
 
-    fn set_usage(&mut self, usage: Vec<Code>) {
-        self.abstract_building_mut().usage = usage;
+    fn set_functions(&mut self, functions: Vec<Code>) {
+        self.abstract_building_mut().functions = functions;
+    }
+
+    fn set_usages(&mut self, usages: Vec<Code>) {
+        self.abstract_building_mut().usages = usages;
     }
 
     fn set_roof_type(&mut self, roof_type: Option<Code>) {

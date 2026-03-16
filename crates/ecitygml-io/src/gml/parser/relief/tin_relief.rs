@@ -1,13 +1,13 @@
 use crate::Error;
-use crate::gml::parser::relief::abstract_relief_component::parse_abstract_relief_component;
+use crate::gml::parser::relief::abstract_relief_component::deserialize_abstract_relief_component;
 use ecitygml_core::model::relief::TinRelief;
 use egml::io::primitives::GmlTriangulatedSurfaceProperty;
 use egml::model::geometry::primitives::TriangulatedSurface;
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
-pub fn parse_tin_relief(xml_document: &[u8]) -> Result<TinRelief, Error> {
-    let abstract_relief_component = parse_abstract_relief_component(xml_document)?;
+pub fn deserialize_tin_relief(xml_document: &[u8]) -> Result<TinRelief, Error> {
+    let abstract_relief_component = deserialize_abstract_relief_component(xml_document)?;
     let gml_tin_relief: GmlTinRelief = de::from_reader(xml_document)?;
 
     let tin: TriangulatedSurface = gml_tin_relief.tin.content.try_into()?;
@@ -31,7 +31,7 @@ mod tests {
     use egml::model::geometry::primitives::AsSurface;
 
     #[test]
-    fn test_parse_tin_relief() {
+    fn test_deserialize_tin_relief() {
         let xml_document = "
             <dem:TINRelief gml:id=\"abc\">
                 <dem:lod>3</dem:lod>
@@ -50,7 +50,7 @@ mod tests {
                 </dem:tin>
             </dem:TINRelief>";
 
-        let tin_relief = parse_tin_relief(xml_document.as_bytes()).expect("should work");
+        let tin_relief = deserialize_tin_relief(xml_document.as_bytes()).expect("should work");
 
         assert_eq!(tin_relief.id(), &Id::try_from("abc").unwrap());
         assert_eq!(tin_relief.lod(), LevelOfDetail::Three);
@@ -58,7 +58,7 @@ mod tests {
     }
 
     #[test]
-    pub fn test_parse_tin_relief_basic() {
+    pub fn test_deserialize_tin_relief_basic() {
         let xml_document = "<dem:TINRelief>
           <dem:lod>2</dem:lod>
           <dem:tin>
@@ -83,7 +83,7 @@ mod tests {
           </dem:tin>
         </dem:TINRelief>";
 
-        let tin_relief = parse_tin_relief(xml_document.as_bytes()).expect("should work");
+        let tin_relief = deserialize_tin_relief(xml_document.as_bytes()).expect("should work");
 
         assert_eq!(tin_relief.lod(), LevelOfDetail::Two);
         assert_eq!(tin_relief.tin().patches().patches_len(), 2);

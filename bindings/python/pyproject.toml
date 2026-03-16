@@ -2,7 +2,20 @@
 requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
 
+[project]
+name = "ecitygml"
+version = "0.1.0"
+requires-python = ">=3.13"
+description = "Python bindings for ecitygml — CityGML 3.0 processing"
+
+[tool.maturin]
+python-source = "python"
+module-name = "ecitygml._ecitygml"
+features = ["pyo3/abi3-py313"]
+include = ["python/ecitygml/py.typed"]
+
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",
+    "mypy>=1.0",
 ]

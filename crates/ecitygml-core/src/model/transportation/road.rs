@@ -38,11 +38,12 @@ impl Road {
             .for_each(|x| x.refresh_bounded_by_recursive());
 
         let own_envelope = self.compute_envelope();
-        let envelopes: Vec<&Envelope> = own_envelope
+        let envelopes: Vec<Envelope> = own_envelope
             .as_ref()
             .into_iter()
             .chain(self.section.iter().filter_map(|x| x.bounded_by()))
             .chain(self.intersection.iter().filter_map(|x| x.bounded_by()))
+            .cloned()
             .collect();
 
         self.set_bounded_by(Envelope::from_envelopes(&envelopes));
