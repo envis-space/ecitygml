@@ -1,8 +1,7 @@
-use crate::model::common::LevelOfDetail;
+use crate::model::common::{FeatureRef, FeatureRefMut, LevelOfDetail};
 use crate::model::core::{
-    AbstractSpaceBoundary, AsAbstractFeature, AsAbstractSpaceBoundary, AsAbstractSpaceBoundaryMut,
+    AbstractSpaceBoundary, AsAbstractSpaceBoundary, AsAbstractSpaceBoundaryMut,
 };
-use crate::model::relief::TinRelief;
 use egml::model::geometry::Envelope;
 use nalgebra::Isometry3;
 
@@ -18,6 +17,22 @@ impl AbstractReliefComponent {
             abstract_space_boundary,
             lod,
         }
+    }
+
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+        self.abstract_space_boundary.iter_features()
+    }
+
+    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+        self.abstract_space_boundary.for_each_feature_mut(f);
+    }
+
+    pub fn compute_envelope(&self) -> Option<Envelope> {
+        self.abstract_space_boundary.compute_envelope()
+    }
+
+    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
+        self.abstract_space_boundary.apply_transform(m);
     }
 }
 
@@ -71,34 +86,3 @@ macro_rules! impl_abstract_relief_component_traits {
 }
 
 impl_abstract_relief_component_traits!(AbstractReliefComponent);
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum ReliefComponentKind {
-    TinRelief(TinRelief),
-}
-
-impl From<TinRelief> for ReliefComponentKind {
-    fn from(item: TinRelief) -> Self {
-        ReliefComponentKind::TinRelief(item)
-    }
-}
-
-impl ReliefComponentKind {
-    pub fn refresh_bounded_by_recursive(&mut self) {
-        match self {
-            ReliefComponentKind::TinRelief(x) => x.refresh_bounded_by_recursive(),
-        }
-    }
-
-    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
-        match self {
-            ReliefComponentKind::TinRelief(x) => x.apply_transform(m),
-        }
-    }
-
-    pub fn bounded_by(&self) -> Option<&Envelope> {
-        match self {
-            ReliefComponentKind::TinRelief(x) => x.bounded_by(),
-        }
-    }
-}

@@ -1,4 +1,9 @@
-use crate::model::core::{AbstractPhysicalSpace, AsAbstractSpace, AsAbstractSpaceMut};
+use crate::model::common::{FeatureRef, FeatureRefMut};
+use crate::model::core::{
+    AbstractPhysicalSpace, AsAbstractPhysicalSpace, AsAbstractPhysicalSpaceMut,
+};
+use egml::model::geometry::Envelope;
+use nalgebra::Isometry3;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbstractUnoccupiedSpace {
@@ -11,15 +16,34 @@ impl AbstractUnoccupiedSpace {
             abstract_physical_space,
         }
     }
+
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+        self.abstract_physical_space.iter_features()
+    }
+
+    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+        self.abstract_physical_space.for_each_feature_mut(f);
+    }
+
+    pub fn compute_envelope(&self) -> Option<Envelope> {
+        self.abstract_physical_space.compute_envelope()
+    }
+
+    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
+        self.abstract_physical_space.apply_transform(m);
+    }
 }
 
-pub trait AsAbstractUnoccupiedSpace: AsAbstractSpace {
+pub trait AsAbstractUnoccupiedSpace: AsAbstractPhysicalSpace {
     fn abstract_unoccupied_space(&self) -> &AbstractUnoccupiedSpace;
 }
 
-pub trait AsAbstractUnoccupiedSpaceMut: AsAbstractSpaceMut + AsAbstractUnoccupiedSpace {
+pub trait AsAbstractUnoccupiedSpaceMut:
+    AsAbstractPhysicalSpaceMut + AsAbstractUnoccupiedSpace
+{
     fn abstract_unoccupied_space_mut(&mut self) -> &mut AbstractUnoccupiedSpace;
 }
+
 impl AsAbstractUnoccupiedSpace for AbstractUnoccupiedSpace {
     fn abstract_unoccupied_space(&self) -> &AbstractUnoccupiedSpace {
         self

@@ -1,9 +1,7 @@
-use crate::model::common::LevelOfDetail;
-use crate::model::core::{
-    AbstractCityObject, AsAbstractCityObjectMut, AsAbstractFeature, RelativeToTerrain,
-    RelativeToWater, SpaceType,
-};
-use crate::model::core::{AsAbstractCityObject, AsAbstractFeatureMut};
+use crate::model::common::{FeatureRef, FeatureRefMut, LevelOfDetail};
+use crate::model::core::AsAbstractCityObject;
+use crate::model::core::space_boundary_property::SpaceBoundaryProperty;
+use crate::model::core::{AbstractCityObject, AsAbstractCityObjectMut, SpaceType};
 use egml::model::geometry::Envelope;
 use egml::model::geometry::aggregates::{MultiCurve, MultiSurface};
 use egml::model::geometry::primitives::Solid;
@@ -15,8 +13,6 @@ pub struct AbstractSpace {
     pub(crate) abstract_city_object: AbstractCityObject,
 
     pub(crate) space_type: Option<SpaceType>,
-    pub(crate) relative_to_terrain: Option<RelativeToTerrain>,
-    pub(crate) relative_to_water: Option<RelativeToWater>,
 
     pub(crate) lod1_solid: Option<Solid>,
     pub(crate) lod2_solid: Option<Solid>,
@@ -29,6 +25,8 @@ pub struct AbstractSpace {
     pub(crate) lod0_multi_curve: Option<MultiCurve>,
     pub(crate) lod2_multi_curve: Option<MultiCurve>,
     pub(crate) lod3_multi_curve: Option<MultiCurve>,
+
+    pub(crate) boundaries: Vec<SpaceBoundaryProperty>,
 }
 
 impl AbstractSpace {
@@ -36,8 +34,6 @@ impl AbstractSpace {
         Self {
             abstract_city_object,
             space_type: None,
-            relative_to_terrain: None,
-            relative_to_water: None,
             lod1_solid: None,
             lod2_solid: None,
             lod3_solid: None,
@@ -47,6 +43,88 @@ impl AbstractSpace {
             lod0_multi_curve: None,
             lod2_multi_curve: None,
             lod3_multi_curve: None,
+            boundaries: Vec::new(),
+        }
+    }
+
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+        self.abstract_city_object.iter_features().chain(
+            self.boundaries
+                .iter()
+                .filter_map(|x| x.object.as_ref())
+                .flat_map(|x| x.iter_features()),
+        )
+    }
+
+    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+        self.abstract_city_object.for_each_feature_mut(f);
+        for prop in &mut self.boundaries {
+            if let Some(x) = prop.object.as_mut() {
+                x.for_each_feature_mut(f);
+            }
+        }
+    }
+
+    pub fn compute_envelope(&self) -> Option<Envelope> {
+        let envelopes: Vec<Envelope> = vec![
+            self.lod1_solid.as_ref().map(|x| x.compute_envelope()),
+            self.lod2_solid.as_ref().map(|x| x.compute_envelope()),
+            self.lod3_solid.as_ref().map(|x| x.compute_envelope()),
+            self.lod0_multi_surface
+                .as_ref()
+                .map(|x| x.compute_envelope()),
+            self.lod2_multi_surface
+                .as_ref()
+                .map(|x| x.compute_envelope()),
+            self.lod3_multi_surface
+                .as_ref()
+                .map(|x| x.compute_envelope()),
+            self.lod0_multi_curve.as_ref().map(|x| x.compute_envelope()),
+            self.lod2_multi_curve.as_ref().map(|x| x.compute_envelope()),
+            self.lod3_multi_curve.as_ref().map(|x| x.compute_envelope()),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+
+        Envelope::from_envelopes(&envelopes)
+    }
+
+    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
+        if let Some(g) = &mut self.lod1_solid {
+            g.apply_transform(m);
+        }
+        if let Some(g) = &mut self.lod2_solid {
+            g.apply_transform(m);
+        }
+        if let Some(g) = &mut self.lod3_solid {
+            g.apply_transform(m);
+        }
+
+        if let Some(g) = &mut self.lod0_multi_surface {
+            g.apply_transform(m);
+        }
+        if let Some(g) = &mut self.lod2_multi_surface {
+            g.apply_transform(m);
+        }
+        if let Some(g) = &mut self.lod3_multi_surface {
+            g.apply_transform(m);
+        }
+
+        if let Some(g) = &mut self.lod0_multi_curve {
+            g.apply_transform(m);
+        }
+        if let Some(g) = &mut self.lod2_multi_curve {
+            g.apply_transform(m);
+        }
+        if let Some(g) = &mut self.lod3_multi_curve {
+            g.apply_transform(m);
+        }
+
+        for prop in &mut self.boundaries {
+            if let Some(x) = prop.object.as_mut() {
+                x.apply_transform(m);
+            }
         }
     }
 }
@@ -56,14 +134,6 @@ pub trait AsAbstractSpace: AsAbstractCityObject {
 
     fn space_type(&self) -> Option<&SpaceType> {
         self.abstract_space().space_type.as_ref()
-    }
-
-    fn relative_to_terrain(&self) -> Option<&RelativeToTerrain> {
-        self.abstract_space().relative_to_terrain.as_ref()
-    }
-
-    fn relative_to_water(&self) -> Option<&RelativeToWater> {
-        self.abstract_space().relative_to_water.as_ref()
     }
 
     fn lod1_solid(&self) -> Option<&Solid> {
@@ -144,23 +214,8 @@ pub trait AsAbstractSpace: AsAbstractCityObject {
         map
     }
 
-    fn compute_envelope(&self) -> Option<Envelope> {
-        let envelopes: Vec<Envelope> = vec![
-            self.lod1_solid().map(|x| x.compute_envelope()),
-            self.lod2_solid().map(|x| x.compute_envelope()),
-            self.lod3_solid().map(|x| x.compute_envelope()),
-            self.lod0_multi_surface().map(|x| x.compute_envelope()),
-            self.lod2_multi_surface().map(|x| x.compute_envelope()),
-            self.lod3_multi_surface().map(|x| x.compute_envelope()),
-            self.lod0_multi_curve().map(|x| x.compute_envelope()),
-            self.lod2_multi_curve().map(|x| x.compute_envelope()),
-            self.lod3_multi_curve().map(|x| x.compute_envelope()),
-        ]
-        .into_iter()
-        .flatten()
-        .collect();
-
-        Envelope::from_envelopes(&envelopes)
+    fn boundaries(&self) -> &Vec<SpaceBoundaryProperty> {
+        self.abstract_space().boundaries.as_ref()
     }
 }
 
@@ -169,14 +224,6 @@ pub trait AsAbstractSpaceMut: AsAbstractCityObjectMut + AsAbstractSpace {
 
     fn set_space_type(&mut self, value: Option<SpaceType>) {
         self.abstract_space_mut().space_type = value;
-    }
-
-    fn set_relative_to_terrain(&mut self, value: Option<RelativeToTerrain>) {
-        self.abstract_space_mut().relative_to_terrain = value;
-    }
-
-    fn set_relative_to_water(&mut self, value: Option<RelativeToWater>) {
-        self.abstract_space_mut().relative_to_water = value;
     }
 
     fn set_lod1_solid(&mut self, value: Option<Solid>) {
@@ -215,41 +262,8 @@ pub trait AsAbstractSpaceMut: AsAbstractCityObjectMut + AsAbstractSpace {
         self.abstract_space_mut().lod3_multi_curve = value;
     }
 
-    fn refresh_bounded_by(&mut self) {
-        let envelope = self.compute_envelope();
-        self.set_bounded_by(envelope);
-    }
-
-    fn apply_transform(&mut self, m: &Isometry3<f64>) {
-        if let Some(g) = &mut self.abstract_space_mut().lod1_solid {
-            g.apply_transform(m);
-        }
-        if let Some(g) = &mut self.abstract_space_mut().lod2_solid {
-            g.apply_transform(m);
-        }
-        if let Some(g) = &mut self.abstract_space_mut().lod3_solid {
-            g.apply_transform(m);
-        }
-
-        if let Some(g) = &mut self.abstract_space_mut().lod0_multi_surface {
-            g.apply_transform(m);
-        }
-        if let Some(g) = &mut self.abstract_space_mut().lod2_multi_surface {
-            g.apply_transform(m);
-        }
-        if let Some(g) = &mut self.abstract_space_mut().lod3_multi_surface {
-            g.apply_transform(m);
-        }
-
-        if let Some(g) = &mut self.abstract_space_mut().lod0_multi_curve {
-            g.apply_transform(m);
-        }
-        if let Some(g) = &mut self.abstract_space_mut().lod2_multi_curve {
-            g.apply_transform(m);
-        }
-        if let Some(g) = &mut self.abstract_space_mut().lod3_multi_curve {
-            g.apply_transform(m);
-        }
+    fn set_boundaries(&mut self, values: Vec<SpaceBoundaryProperty>) {
+        self.abstract_space_mut().boundaries = values;
     }
 }
 
@@ -291,7 +305,7 @@ impl_abstract_space_traits!(AbstractSpace);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::core::{AbstractFeature, AbstractFeatureWithLifespan};
+    use crate::model::core::{AbstractFeature, AbstractFeatureWithLifespan, AsAbstractFeature};
     use egml::model::base::Id;
 
     #[test]

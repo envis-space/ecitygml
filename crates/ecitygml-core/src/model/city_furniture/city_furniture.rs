@@ -1,8 +1,10 @@
+use crate::model::common::{FeatureRef, FeatureRefMut, TopLevelFeatureRef};
 use crate::model::core::{
-    AbstractOccupiedSpace, AsAbstractOccupiedSpace, AsAbstractOccupiedSpaceMut, CityObjectKind,
-    CityObjectRef,
+    AbstractOccupiedSpace, AsAbstractFeatureMut, AsAbstractOccupiedSpace,
+    AsAbstractOccupiedSpaceMut,
 };
-use crate::operations::{Visitable, Visitor};
+use egml::model::geometry::Envelope;
+use nalgebra::Isometry3;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CityFurniture {
@@ -16,8 +18,25 @@ impl CityFurniture {
         }
     }
 
-    pub fn iter_city_object<'a>(&'a self) -> impl Iterator<Item = CityObjectRef<'a>> + 'a {
-        std::iter::once(CityObjectRef::CityFurniture(self))
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+        std::iter::once(self.into()).chain(self.abstract_occupied_space.iter_features())
+    }
+
+    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+        f((&mut *self).into());
+        self.abstract_occupied_space.for_each_feature_mut(f);
+    }
+
+    pub fn compute_envelope(&self) -> Option<Envelope> {
+        self.abstract_occupied_space.compute_envelope()
+    }
+
+    pub fn recompute_bounding_shape(&mut self) {
+        self.set_bounding_shape_from_envelope(self.compute_envelope());
+    }
+
+    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
+        self.abstract_occupied_space.apply_transform(m);
     }
 }
 
@@ -35,14 +54,20 @@ impl AsAbstractOccupiedSpaceMut for CityFurniture {
 
 crate::impl_abstract_occupied_space_traits!(CityFurniture);
 
-impl From<CityFurniture> for CityObjectKind {
-    fn from(item: CityFurniture) -> Self {
-        CityObjectKind::CityFurniture(item)
+impl<'a> From<&'a CityFurniture> for FeatureRef<'a> {
+    fn from(item: &'a CityFurniture) -> Self {
+        FeatureRef::CityFurniture(item)
     }
 }
 
-impl Visitable for CityFurniture {
-    fn accept<V: Visitor>(&self, visitor: &mut V) {
-        visitor.visit_city_furniture(self);
+impl<'a> From<&'a mut CityFurniture> for FeatureRefMut<'a> {
+    fn from(item: &'a mut CityFurniture) -> Self {
+        FeatureRefMut::CityFurniture(item)
+    }
+}
+
+impl<'a> From<&'a CityFurniture> for TopLevelFeatureRef<'a> {
+    fn from(item: &'a CityFurniture) -> Self {
+        TopLevelFeatureRef::CityFurniture(item)
     }
 }

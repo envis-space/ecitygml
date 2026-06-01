@@ -1,7 +1,7 @@
 use crate::city_objects::{
     PyBuilding, PyCityFurniture, PyReliefFeature, PyRoad, PySolitaryVegetationObject, PyTinRelief,
 };
-use ecitygml_rs::model::core::CityObjectKind;
+use ecitygml_rs::model::common::{FeatureRef, TopLevelFeatureRef};
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::*;
 
@@ -75,47 +75,56 @@ pub struct PyCityModel {
 #[pymethods]
 impl PyCityModel {
     pub fn city_objects_len(&self) -> usize {
-        self.inner.city_objects_len()
+        self.inner.city_object_members_len()
     }
 
     pub fn buildings(&self) -> Vec<PyBuilding> {
         self.inner
-            .buildings()
-            .into_iter()
-            .map(PyBuilding::from)
+            .iter_top_level_features()
+            .filter_map(|x| match x {
+                TopLevelFeatureRef::Building(b) => Some(PyBuilding::from(b)),
+                _ => None,
+            })
             .collect()
     }
 
     pub fn roads(&self) -> Vec<PyRoad> {
         self.inner
-            .roads()
-            .into_iter()
-            .map(PyRoad::from)
+            .iter_top_level_features()
+            .filter_map(|x| match x {
+                TopLevelFeatureRef::Road(r) => Some(PyRoad::from(r)),
+                _ => None,
+            })
             .collect()
     }
 
     pub fn solitary_vegetation_objects(&self) -> Vec<PySolitaryVegetationObject> {
         self.inner
-            .solitary_vegetation_objects()
-            .into_iter()
-            .map(PySolitaryVegetationObject::from)
+            .iter_top_level_features()
+            .filter_map(|x| match x {
+                TopLevelFeatureRef::SolitaryVegetationObject(v) => {
+                    Some(PySolitaryVegetationObject::from(v))
+                }
+                _ => None,
+            })
             .collect()
     }
 
     pub fn city_furniture_objects(&self) -> Vec<PyCityFurniture> {
         self.inner
-            .city_furniture_objects()
-            .into_iter()
-            .map(PyCityFurniture::from)
+            .iter_top_level_features()
+            .filter_map(|x| match x {
+                TopLevelFeatureRef::CityFurniture(cf) => Some(PyCityFurniture::from(cf)),
+                _ => None,
+            })
             .collect()
     }
 
     pub fn relief_features(&self) -> Vec<PyReliefFeature> {
         self.inner
-            .city_objects
-            .iter()
+            .iter_top_level_features()
             .filter_map(|x| match x {
-                CityObjectKind::ReliefFeature(rf) => Some(PyReliefFeature::from(rf)),
+                TopLevelFeatureRef::ReliefFeature(rf) => Some(PyReliefFeature::from(rf)),
                 _ => None,
             })
             .collect()
@@ -123,20 +132,19 @@ impl PyCityModel {
 
     pub fn tin_reliefs(&self) -> Vec<PyTinRelief> {
         self.inner
-            .city_objects
-            .iter()
+            .iter_features()
             .filter_map(|x| match x {
-                CityObjectKind::TinRelief(tr) => Some(PyTinRelief::from(tr)),
+                FeatureRef::TinRelief(tr) => Some(PyTinRelief::from(tr)),
                 _ => None,
             })
             .collect()
     }
 
-    pub fn refresh_bounded_by_recursive(&mut self) {
-        self.inner.refresh_bounded_by_recursive();
+    pub fn recompute_child_bounding_shapes(&mut self) {
+        self.inner.recompute_child_bounding_shapes();
     }
 
     pub fn __repr__(&self) -> String {
-        format!("CityModel({} city objects)", self.inner.city_objects_len())
+        format!("CityModel({} city objects)", self.inner.city_object_members_len())
     }
 }

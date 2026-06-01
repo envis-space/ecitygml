@@ -1,12 +1,14 @@
-use crate::model::building::building_room::BuildingRoom;
+use crate::model::building::building_constructive_element_property::BuildingConstructiveElementProperty;
 use crate::model::building::{
-    BuildingConstructiveElement, BuildingInstallation, BuildingSubdivisionKind,
+    BuildingInstallationProperty, BuildingRoomProperty, BuildingSubdivisionProperty,
 };
+use crate::model::common::{FeatureRef, FeatureRefMut};
 use crate::model::construction::{
     AbstractConstruction, AsAbstractConstruction, AsAbstractConstructionMut,
 };
-use crate::model::core::{AsAbstractOccupiedSpaceMut, CityObjectRef};
+
 use egml::model::basic::Code;
+use egml::model::geometry::Envelope;
 use nalgebra::Isometry3;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -18,10 +20,10 @@ pub struct AbstractBuilding {
     pub(crate) roof_type: Option<Code>,
     pub(crate) storeys_above_ground: Option<i64>,
     pub(crate) storeys_below_ground: Option<i64>,
-    pub building_constructive_elements: Vec<BuildingConstructiveElement>,
-    pub building_installations: Vec<BuildingInstallation>,
-    pub building_rooms: Vec<BuildingRoom>,
-    pub building_subdivisions: Vec<BuildingSubdivisionKind>,
+    pub building_constructive_elements: Vec<BuildingConstructiveElementProperty>,
+    pub building_installations: Vec<BuildingInstallationProperty>,
+    pub building_rooms: Vec<BuildingRoomProperty>,
+    pub building_subdivisions: Vec<BuildingSubdivisionProperty>,
 }
 
 impl AbstractBuilding {
@@ -41,22 +43,90 @@ impl AbstractBuilding {
         }
     }
 
-    pub fn iter_city_object<'a>(&'a self) -> impl Iterator<Item = CityObjectRef<'a>> + 'a {
-        self.building_constructive_elements
-            .iter()
-            .flat_map(|x| x.iter_city_object())
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+        self.abstract_construction
+            .iter_features()
+            .chain(
+                self.building_constructive_elements
+                    .iter()
+                    .filter_map(|x| x.object.as_ref())
+                    .flat_map(|x| x.iter_features()),
+            )
             .chain(
                 self.building_installations
                     .iter()
-                    .flat_map(|x| x.iter_city_object()),
+                    .filter_map(|x| x.object.as_ref())
+                    .flat_map(|x| x.iter_features()),
             )
             .chain(
                 self.building_rooms
                     .iter()
-                    .flat_map(|x| x.iter_city_object()),
+                    .filter_map(|x| x.object.as_ref())
+                    .flat_map(|x| x.iter_features()),
+            )
+            .chain(
+                self.building_subdivisions
+                    .iter()
+                    .filter_map(|x| x.object.as_ref())
+                    .flat_map(|x| x.iter_features()),
             )
     }
+
+    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+        self.abstract_construction.for_each_feature_mut(f);
+
+        for prop in &mut self.building_constructive_elements {
+            if let Some(x) = prop.object.as_mut() {
+                x.for_each_feature_mut(f);
+            }
+        }
+        for prop in &mut self.building_installations {
+            if let Some(x) = prop.object.as_mut() {
+                x.for_each_feature_mut(f);
+            }
+        }
+        for prop in &mut self.building_rooms {
+            if let Some(x) = prop.object.as_mut() {
+                x.for_each_feature_mut(f);
+            }
+        }
+        for prop in &mut self.building_subdivisions {
+            if let Some(x) = prop.object.as_mut() {
+                x.for_each_feature_mut(f);
+            }
+        }
+    }
+
+    pub fn compute_envelope(&self) -> Option<Envelope> {
+        self.abstract_construction.compute_envelope()
+    }
+
+    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
+        self.abstract_construction.apply_transform(m);
+
+        for prop in &mut self.building_constructive_elements {
+            if let Some(x) = prop.object.as_mut() {
+                x.apply_transform(m);
+            }
+        }
+        for prop in &mut self.building_installations {
+            if let Some(x) = prop.object.as_mut() {
+                x.apply_transform(m);
+            }
+        }
+        for prop in &mut self.building_rooms {
+            if let Some(x) = prop.object.as_mut() {
+                x.apply_transform(m);
+            }
+        }
+        for prop in &mut self.building_subdivisions {
+            if let Some(x) = prop.object.as_mut() {
+                x.apply_transform(m);
+            }
+        }
+    }
 }
+
 pub trait AsAbstractBuilding: AsAbstractConstruction {
     fn abstract_building(&self) -> &AbstractBuilding;
 
@@ -110,10 +180,6 @@ pub trait AsAbstractBuildingMut: AsAbstractConstructionMut + AsAbstractBuilding 
 
     fn set_storeys_below_ground(&mut self, storeys_below_ground: Option<i64>) {
         self.abstract_building_mut().storeys_below_ground = storeys_below_ground;
-    }
-
-    fn apply_transform(&mut self, m: &Isometry3<f64>) {
-        AsAbstractOccupiedSpaceMut::apply_transform(self, m);
     }
 }
 

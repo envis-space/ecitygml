@@ -12,7 +12,7 @@ use city_objects::{
     PySolitaryVegetationObject, PyTinRelief, PyTrafficArea, PyTrafficSpace, PyWallSurface,
     PyWindowSurface,
 };
-use enums::{PyCityObjectClass, PyLevelOfDetail};
+use enums::{PyFeatureType, PyLevelOfDetail};
 use geometry::{
     PyDirectPosition, PyEnvelope, PyLinearRing, PyMultiCurve, PyMultiSurface, PyPolygon, PySolid,
     PyTriangle, PyTriangulatedSurface,
@@ -35,7 +35,7 @@ fn ecitygml(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Enums
     m.add_class::<PyLevelOfDetail>()?;
-    m.add_class::<PyCityObjectClass>()?;
+    m.add_class::<PyFeatureType>()?;
 
     // Model
     m.add_class::<PyGmlReader>()?;

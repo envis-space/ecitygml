@@ -1,7 +1,9 @@
-use crate::model::construction::{DoorSurface, WindowSurface};
+use crate::model::common::{FeatureRef, FeatureRefMut};
 use crate::model::core::{
     AbstractThematicSurface, AsAbstractThematicSurface, AsAbstractThematicSurfaceMut,
 };
+use egml::model::geometry::Envelope;
+use nalgebra::Isometry3;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbstractFillingSurface {
@@ -13,6 +15,22 @@ impl AbstractFillingSurface {
         Self {
             abstract_thematic_surface,
         }
+    }
+
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+        self.abstract_thematic_surface.iter_features()
+    }
+
+    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+        self.abstract_thematic_surface.for_each_feature_mut(f);
+    }
+
+    pub fn compute_envelope(&self) -> Option<Envelope> {
+        self.abstract_thematic_surface.compute_envelope()
+    }
+
+    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
+        self.abstract_thematic_surface.apply_transform(m);
     }
 }
 
@@ -64,29 +82,3 @@ macro_rules! impl_abstract_filling_surface_traits {
 }
 
 impl_abstract_filling_surface_traits!(AbstractFillingSurface);
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum FillingSurfaceKind {
-    DoorSurface(DoorSurface),
-    WindowSurface(WindowSurface),
-}
-
-impl AsAbstractFillingSurface for FillingSurfaceKind {
-    fn abstract_filling_surface(&self) -> &AbstractFillingSurface {
-        match self {
-            FillingSurfaceKind::DoorSurface(surface) => surface.abstract_filling_surface(),
-            FillingSurfaceKind::WindowSurface(surface) => surface.abstract_filling_surface(),
-        }
-    }
-}
-
-impl AsAbstractFillingSurfaceMut for FillingSurfaceKind {
-    fn abstract_filling_surface_mut(&mut self) -> &mut AbstractFillingSurface {
-        match self {
-            FillingSurfaceKind::DoorSurface(surface) => surface.abstract_filling_surface_mut(),
-            FillingSurfaceKind::WindowSurface(surface) => surface.abstract_filling_surface_mut(),
-        }
-    }
-}
-
-impl_abstract_filling_surface_traits!(FillingSurfaceKind);

@@ -1,14 +1,7 @@
-mod geometry_index;
-mod visitor;
+mod geometry_store;
 
 #[doc(inline)]
-pub use visitor::Visitor;
+pub use geometry_store::CityModelGeometryStore;
 
 #[doc(inline)]
-pub use visitor::Visitable;
-
-#[doc(inline)]
-pub use geometry_index::CityModelGeometryIndex;
-
-#[doc(inline)]
-pub use geometry_index::CityObjectGeometry;
+pub use geometry_store::CityObjectGeometryEntry;

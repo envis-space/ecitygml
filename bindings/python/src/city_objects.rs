@@ -1,20 +1,26 @@
-use crate::enums::PyCityObjectClass;
-use crate::geometry::{PyDirectPosition, PyEnvelope, PyMultiCurve, PyMultiSurface, PySolid, PyTriangulatedSurface};
-use ecitygml_rs::model::building::Building as RustBuilding;
+use crate::enums::PyFeatureType;
+use crate::geometry::{
+    PyDirectPosition, PyEnvelope, PyMultiCurve, PyMultiSurface, PySolid, PyTriangulatedSurface,
+};
+use ecitygml_rs::model::building::{AsAbstractBuilding, Building as RustBuilding};
 use ecitygml_rs::model::city_furniture::CityFurniture as RustCityFurniture;
 use ecitygml_rs::model::construction::{
-    DoorSurface as RustDoorSurface, GroundSurface as RustGroundSurface,
-    RoofSurface as RustRoofSurface, WallSurface as RustWallSurface,
-    WindowSurface as RustWindowSurface,
+    AsAbstractConstructionSurface, ConstructionSurfaceKind, DoorSurface as RustDoorSurface,
+    FillingSurfaceKind, GroundSurface as RustGroundSurface, RoofSurface as RustRoofSurface,
+    WallSurface as RustWallSurface, WindowSurface as RustWindowSurface,
 };
-use ecitygml_rs::model::core::{AsAbstractFeature, AsAbstractOccupiedSpace, AsAbstractSpace, AsAbstractThematicSurface};
-use ecitygml_rs::model::building::{AsAbstractBuilding};
-use ecitygml_rs::model::relief::{ReliefComponentKind, ReliefFeature as RustReliefFeature, TinRelief as RustTinRelief};
+use ecitygml_rs::model::core::{
+    AsAbstractFeature, AsAbstractOccupiedSpace, AsAbstractSpace, AsAbstractThematicSurface,
+    SpaceBoundaryKind, ThematicSurfaceKind,
+};
+use ecitygml_rs::model::relief::{
+    ReliefComponentKind, ReliefFeature as RustReliefFeature, TinRelief as RustTinRelief,
+};
 use ecitygml_rs::model::transportation::{
-    AuxiliaryTrafficArea as RustAuxiliaryTrafficArea,
-    AuxiliaryTrafficSpace as RustAuxiliaryTrafficSpace,
-    Intersection as RustIntersection, Road as RustRoad, Section as RustSection,
-    TrafficArea as RustTrafficArea, TrafficSpace as RustTrafficSpace,
+    AsAbstractTransportationSpace, AuxiliaryTrafficArea as RustAuxiliaryTrafficArea,
+    AuxiliaryTrafficSpace as RustAuxiliaryTrafficSpace, Intersection as RustIntersection,
+    Road as RustRoad, Section as RustSection, TrafficArea as RustTrafficArea,
+    TrafficSpace as RustTrafficSpace,
 };
 use ecitygml_rs::model::vegetation::SolitaryVegetationObject as RustSolitaryVegetationObject;
 use pyo3::prelude::*;
@@ -36,9 +42,9 @@ macro_rules! py_bounded_by {
     };
 }
 
-macro_rules! py_city_object_class {
-    ($variant:expr) => {
-        PyCityObjectClass::from($variant)
+macro_rules! py_feature_type {
+    ($variant:ident) => {
+        PyFeatureType::$variant
     };
 }
 
@@ -90,10 +96,6 @@ macro_rules! py_lod2_multi_curve {
     };
 }
 
-// ---------------------------------------------------------------------------
-// Thematic surface common methods (lod0/2/3 multi_surface via trait)
-// ---------------------------------------------------------------------------
-
 macro_rules! py_ts_lod0_multi_surface {
     ($self:ident) => {
         $self.inner.lod0_multi_surface().map(PyMultiSurface::from)
@@ -110,6 +112,30 @@ macro_rules! py_ts_lod3_multi_surface {
     ($self:ident) => {
         $self.inner.lod3_multi_surface().map(PyMultiSurface::from)
     };
+}
+
+// ---------------------------------------------------------------------------
+// Helper: extract construction surfaces from space boundaries
+// ---------------------------------------------------------------------------
+
+fn construction_surfaces_from_boundaries<T, F>(
+    inner: &impl AsAbstractSpace,
+    extract: F,
+) -> Vec<T>
+where
+    F: Fn(&ConstructionSurfaceKind) -> Option<T>,
+{
+    inner
+        .boundaries()
+        .iter()
+        .filter_map(|b| b.object.as_ref())
+        .filter_map(|b| match b {
+            SpaceBoundaryKind::ThematicSurfaceKind(ThematicSurfaceKind::ConstructionSurfaceKind(
+                csk,
+            )) => extract(csk),
+            _ => None,
+        })
+        .collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -131,7 +157,9 @@ impl From<RustDoorSurface> for PyDoorSurface {
 
 impl From<&RustDoorSurface> for PyDoorSurface {
     fn from(inner: &RustDoorSurface) -> Self {
-        Self { inner: inner.clone() }
+        Self {
+            inner: inner.clone(),
+        }
     }
 }
 
@@ -139,24 +167,34 @@ impl From<&RustDoorSurface> for PyDoorSurface {
 #[pymethods]
 impl PyDoorSurface {
     #[getter]
-    pub fn id(&self) -> String { py_id!(self) }
-
-    #[getter]
-    pub fn bounded_by(&self) -> Option<PyEnvelope> { py_bounded_by!(self) }
-
-    #[getter]
-    pub fn city_object_class(&self) -> PyCityObjectClass {
-        py_city_object_class!(ecitygml_rs::model::common::CityObjectClass::DoorSurface)
+    pub fn id(&self) -> String {
+        py_id!(self)
     }
 
     #[getter]
-    pub fn lod0_multi_surface(&self) -> Option<PyMultiSurface> { py_ts_lod0_multi_surface!(self) }
+    pub fn bounded_by(&self) -> Option<PyEnvelope> {
+        py_bounded_by!(self)
+    }
 
     #[getter]
-    pub fn lod2_multi_surface(&self) -> Option<PyMultiSurface> { py_ts_lod2_multi_surface!(self) }
+    pub fn feature_type(&self) -> PyFeatureType {
+        py_feature_type!(DoorSurface)
+    }
 
     #[getter]
-    pub fn lod3_multi_surface(&self) -> Option<PyMultiSurface> { py_ts_lod3_multi_surface!(self) }
+    pub fn lod0_multi_surface(&self) -> Option<PyMultiSurface> {
+        py_ts_lod0_multi_surface!(self)
+    }
+
+    #[getter]
+    pub fn lod2_multi_surface(&self) -> Option<PyMultiSurface> {
+        py_ts_lod2_multi_surface!(self)
+    }
+
+    #[getter]
+    pub fn lod3_multi_surface(&self) -> Option<PyMultiSurface> {
+        py_ts_lod3_multi_surface!(self)
+    }
 
     pub fn __repr__(&self) -> String {
         format!("DoorSurface(id='{}')", py_id!(self))
@@ -182,7 +220,9 @@ impl From<RustWindowSurface> for PyWindowSurface {
 
 impl From<&RustWindowSurface> for PyWindowSurface {
     fn from(inner: &RustWindowSurface) -> Self {
-        Self { inner: inner.clone() }
+        Self {
+            inner: inner.clone(),
+        }
     }
 }
 
@@ -190,24 +230,34 @@ impl From<&RustWindowSurface> for PyWindowSurface {
 #[pymethods]
 impl PyWindowSurface {
     #[getter]
-    pub fn id(&self) -> String { py_id!(self) }
-
-    #[getter]
-    pub fn bounded_by(&self) -> Option<PyEnvelope> { py_bounded_by!(self) }
-
-    #[getter]
-    pub fn city_object_class(&self) -> PyCityObjectClass {
-        py_city_object_class!(ecitygml_rs::model::common::CityObjectClass::WindowSurface)
+    pub fn id(&self) -> String {
+        py_id!(self)
     }
 
     #[getter]
-    pub fn lod0_multi_surface(&self) -> Option<PyMultiSurface> { py_ts_lod0_multi_surface!(self) }
+    pub fn bounded_by(&self) -> Option<PyEnvelope> {
+        py_bounded_by!(self)
+    }
 
     #[getter]
-    pub fn lod2_multi_surface(&self) -> Option<PyMultiSurface> { py_ts_lod2_multi_surface!(self) }
+    pub fn feature_type(&self) -> PyFeatureType {
+        py_feature_type!(WindowSurface)
+    }
 
     #[getter]
-    pub fn lod3_multi_surface(&self) -> Option<PyMultiSurface> { py_ts_lod3_multi_surface!(self) }
+    pub fn lod0_multi_surface(&self) -> Option<PyMultiSurface> {
+        py_ts_lod0_multi_surface!(self)
+    }
+
+    #[getter]
+    pub fn lod2_multi_surface(&self) -> Option<PyMultiSurface> {
+        py_ts_lod2_multi_surface!(self)
+    }
+
+    #[getter]
+    pub fn lod3_multi_surface(&self) -> Option<PyMultiSurface> {
+        py_ts_lod3_multi_surface!(self)
+    }
 
     pub fn __repr__(&self) -> String {
         format!("WindowSurface(id='{}')", py_id!(self))
@@ -233,7 +283,9 @@ impl From<RustWallSurface> for PyWallSurface {
 
 impl From<&RustWallSurface> for PyWallSurface {
     fn from(inner: &RustWallSurface) -> Self {
-        Self { inner: inner.clone() }
+        Self {
+            inner: inner.clone(),
+        }
     }
 }
 
@@ -241,33 +293,59 @@ impl From<&RustWallSurface> for PyWallSurface {
 #[pymethods]
 impl PyWallSurface {
     #[getter]
-    pub fn id(&self) -> String { py_id!(self) }
-
-    #[getter]
-    pub fn bounded_by(&self) -> Option<PyEnvelope> { py_bounded_by!(self) }
-
-    #[getter]
-    pub fn city_object_class(&self) -> PyCityObjectClass {
-        py_city_object_class!(ecitygml_rs::model::common::CityObjectClass::WallSurface)
+    pub fn id(&self) -> String {
+        py_id!(self)
     }
 
     #[getter]
-    pub fn lod0_multi_surface(&self) -> Option<PyMultiSurface> { py_ts_lod0_multi_surface!(self) }
+    pub fn bounded_by(&self) -> Option<PyEnvelope> {
+        py_bounded_by!(self)
+    }
 
     #[getter]
-    pub fn lod2_multi_surface(&self) -> Option<PyMultiSurface> { py_ts_lod2_multi_surface!(self) }
+    pub fn feature_type(&self) -> PyFeatureType {
+        py_feature_type!(WallSurface)
+    }
 
     #[getter]
-    pub fn lod3_multi_surface(&self) -> Option<PyMultiSurface> { py_ts_lod3_multi_surface!(self) }
+    pub fn lod0_multi_surface(&self) -> Option<PyMultiSurface> {
+        py_ts_lod0_multi_surface!(self)
+    }
+
+    #[getter]
+    pub fn lod2_multi_surface(&self) -> Option<PyMultiSurface> {
+        py_ts_lod2_multi_surface!(self)
+    }
+
+    #[getter]
+    pub fn lod3_multi_surface(&self) -> Option<PyMultiSurface> {
+        py_ts_lod3_multi_surface!(self)
+    }
 
     #[getter]
     pub fn door_surface(&self) -> Vec<PyDoorSurface> {
-        self.inner.door_surface.iter().map(PyDoorSurface::from).collect()
+        self.inner
+            .filling_surfaces()
+            .iter()
+            .filter_map(|p| p.object.as_ref())
+            .filter_map(|fsk| match fsk {
+                FillingSurfaceKind::DoorSurface(ds) => Some(PyDoorSurface::from(ds)),
+                _ => None,
+            })
+            .collect()
     }
 
     #[getter]
     pub fn window_surface(&self) -> Vec<PyWindowSurface> {
-        self.inner.window_surface.iter().map(PyWindowSurface::from).collect()
+        self.inner
+            .filling_surfaces()
+            .iter()
+            .filter_map(|p| p.object.as_ref())
+            .filter_map(|fsk| match fsk {
+                FillingSurfaceKind::WindowSurface(ws) => Some(PyWindowSurface::from(ws)),
+                _ => None,
+            })
+            .collect()
     }
 
     pub fn __repr__(&self) -> String {
@@ -294,7 +372,9 @@ impl From<RustRoofSurface> for PyRoofSurface {
 
 impl From<&RustRoofSurface> for PyRoofSurface {
     fn from(inner: &RustRoofSurface) -> Self {
-        Self { inner: inner.clone() }
+        Self {
+            inner: inner.clone(),
+        }
     }
 }
 
@@ -302,24 +382,34 @@ impl From<&RustRoofSurface> for PyRoofSurface {
 #[pymethods]
 impl PyRoofSurface {
     #[getter]
-    pub fn id(&self) -> String { py_id!(self) }
-
-    #[getter]
-    pub fn bounded_by(&self) -> Option<PyEnvelope> { py_bounded_by!(self) }
-
-    #[getter]
-    pub fn city_object_class(&self) -> PyCityObjectClass {
-        py_city_object_class!(ecitygml_rs::model::common::CityObjectClass::RoofSurface)
+    pub fn id(&self) -> String {
+        py_id!(self)
     }
 
     #[getter]
-    pub fn lod0_multi_surface(&self) -> Option<PyMultiSurface> { py_ts_lod0_multi_surface!(self) }
+    pub fn bounded_by(&self) -> Option<PyEnvelope> {
+        py_bounded_by!(self)
+    }
 
     #[getter]
-    pub fn lod2_multi_surface(&self) -> Option<PyMultiSurface> { py_ts_lod2_multi_surface!(self) }
+    pub fn feature_type(&self) -> PyFeatureType {
+        py_feature_type!(RoofSurface)
+    }
 
     #[getter]
-    pub fn lod3_multi_surface(&self) -> Option<PyMultiSurface> { py_ts_lod3_multi_surface!(self) }
+    pub fn lod0_multi_surface(&self) -> Option<PyMultiSurface> {
+        py_ts_lod0_multi_surface!(self)
+    }
+
+    #[getter]
+    pub fn lod2_multi_surface(&self) -> Option<PyMultiSurface> {
+        py_ts_lod2_multi_surface!(self)
+    }
+
+    #[getter]
+    pub fn lod3_multi_surface(&self) -> Option<PyMultiSurface> {
+        py_ts_lod3_multi_surface!(self)
+    }
 
     pub fn __repr__(&self) -> String {
         format!("RoofSurface(id='{}')", py_id!(self))
@@ -345,7 +435,9 @@ impl From<RustGroundSurface> for PyGroundSurface {
 
 impl From<&RustGroundSurface> for PyGroundSurface {
     fn from(inner: &RustGroundSurface) -> Self {
-        Self { inner: inner.clone() }
+        Self {
+            inner: inner.clone(),
+        }
     }
 }
 
@@ -353,24 +445,34 @@ impl From<&RustGroundSurface> for PyGroundSurface {
 #[pymethods]
 impl PyGroundSurface {
     #[getter]
-    pub fn id(&self) -> String { py_id!(self) }
-
-    #[getter]
-    pub fn bounded_by(&self) -> Option<PyEnvelope> { py_bounded_by!(self) }
-
-    #[getter]
-    pub fn city_object_class(&self) -> PyCityObjectClass {
-        py_city_object_class!(ecitygml_rs::model::common::CityObjectClass::GroundSurface)
+    pub fn id(&self) -> String {
+        py_id!(self)
     }
 
     #[getter]
-    pub fn lod0_multi_surface(&self) -> Option<PyMultiSurface> { py_ts_lod0_multi_surface!(self) }
+    pub fn bounded_by(&self) -> Option<PyEnvelope> {
+        py_bounded_by!(self)
+    }
 
     #[getter]
-    pub fn lod2_multi_surface(&self) -> Option<PyMultiSurface> { py_ts_lod2_multi_surface!(self) }
+    pub fn feature_type(&self) -> PyFeatureType {
+        py_feature_type!(GroundSurface)
+    }
 
     #[getter]
-    pub fn lod3_multi_surface(&self) -> Option<PyMultiSurface> { py_ts_lod3_multi_surface!(self) }
+    pub fn lod0_multi_surface(&self) -> Option<PyMultiSurface> {
+        py_ts_lod0_multi_surface!(self)
+    }
+
+    #[getter]
+    pub fn lod2_multi_surface(&self) -> Option<PyMultiSurface> {
+        py_ts_lod2_multi_surface!(self)
+    }
+
+    #[getter]
+    pub fn lod3_multi_surface(&self) -> Option<PyMultiSurface> {
+        py_ts_lod3_multi_surface!(self)
+    }
 
     pub fn __repr__(&self) -> String {
         format!("GroundSurface(id='{}')", py_id!(self))
@@ -396,7 +498,9 @@ impl From<RustBuilding> for PyBuilding {
 
 impl From<&RustBuilding> for PyBuilding {
     fn from(inner: &RustBuilding) -> Self {
-        Self { inner: inner.clone() }
+        Self {
+            inner: inner.clone(),
+        }
     }
 }
 
@@ -404,14 +508,18 @@ impl From<&RustBuilding> for PyBuilding {
 #[pymethods]
 impl PyBuilding {
     #[getter]
-    pub fn id(&self) -> String { py_id!(self) }
+    pub fn id(&self) -> String {
+        py_id!(self)
+    }
 
     #[getter]
-    pub fn bounded_by(&self) -> Option<PyEnvelope> { py_bounded_by!(self) }
+    pub fn bounded_by(&self) -> Option<PyEnvelope> {
+        py_bounded_by!(self)
+    }
 
     #[getter]
-    pub fn city_object_class(&self) -> PyCityObjectClass {
-        py_city_object_class!(ecitygml_rs::model::common::CityObjectClass::Building)
+    pub fn feature_type(&self) -> PyFeatureType {
+        py_feature_type!(Building)
     }
 
     #[getter]
@@ -425,36 +533,57 @@ impl PyBuilding {
     }
 
     #[getter]
-    pub fn lod1_solid(&self) -> Option<PySolid> { py_lod1_solid!(self) }
+    pub fn lod1_solid(&self) -> Option<PySolid> {
+        py_lod1_solid!(self)
+    }
 
     #[getter]
-    pub fn lod2_solid(&self) -> Option<PySolid> { py_lod2_solid!(self) }
+    pub fn lod2_solid(&self) -> Option<PySolid> {
+        py_lod2_solid!(self)
+    }
 
     #[getter]
-    pub fn lod3_solid(&self) -> Option<PySolid> { py_lod3_solid!(self) }
+    pub fn lod3_solid(&self) -> Option<PySolid> {
+        py_lod3_solid!(self)
+    }
 
     #[getter]
-    pub fn lod0_multi_surface(&self) -> Option<PyMultiSurface> { py_lod0_multi_surface!(self) }
+    pub fn lod0_multi_surface(&self) -> Option<PyMultiSurface> {
+        py_lod0_multi_surface!(self)
+    }
 
     #[getter]
-    pub fn lod2_multi_surface(&self) -> Option<PyMultiSurface> { py_lod2_multi_surface!(self) }
+    pub fn lod2_multi_surface(&self) -> Option<PyMultiSurface> {
+        py_lod2_multi_surface!(self)
+    }
 
     #[getter]
-    pub fn lod3_multi_surface(&self) -> Option<PyMultiSurface> { py_lod3_multi_surface!(self) }
+    pub fn lod3_multi_surface(&self) -> Option<PyMultiSurface> {
+        py_lod3_multi_surface!(self)
+    }
 
     #[getter]
     pub fn wall_surface(&self) -> Vec<PyWallSurface> {
-        self.inner.wall_surface.iter().map(PyWallSurface::from).collect()
+        construction_surfaces_from_boundaries(&self.inner, |csk| match csk {
+            ConstructionSurfaceKind::WallSurface(ws) => Some(PyWallSurface::from(ws)),
+            _ => None,
+        })
     }
 
     #[getter]
     pub fn roof_surface(&self) -> Vec<PyRoofSurface> {
-        self.inner.roof_surface.iter().map(PyRoofSurface::from).collect()
+        construction_surfaces_from_boundaries(&self.inner, |csk| match csk {
+            ConstructionSurfaceKind::RoofSurface(rs) => Some(PyRoofSurface::from(rs)),
+            _ => None,
+        })
     }
 
     #[getter]
     pub fn ground_surface(&self) -> Vec<PyGroundSurface> {
-        self.inner.ground_surface.iter().map(PyGroundSurface::from).collect()
+        construction_surfaces_from_boundaries(&self.inner, |csk| match csk {
+            ConstructionSurfaceKind::GroundSurface(gs) => Some(PyGroundSurface::from(gs)),
+            _ => None,
+        })
     }
 
     pub fn __repr__(&self) -> String {
@@ -481,7 +610,9 @@ impl From<RustTrafficArea> for PyTrafficArea {
 
 impl From<&RustTrafficArea> for PyTrafficArea {
     fn from(inner: &RustTrafficArea) -> Self {
-        Self { inner: inner.clone() }
+        Self {
+            inner: inner.clone(),
+        }
     }
 }
 
@@ -489,18 +620,24 @@ impl From<&RustTrafficArea> for PyTrafficArea {
 #[pymethods]
 impl PyTrafficArea {
     #[getter]
-    pub fn id(&self) -> String { py_id!(self) }
-
-    #[getter]
-    pub fn bounded_by(&self) -> Option<PyEnvelope> { py_bounded_by!(self) }
-
-    #[getter]
-    pub fn city_object_class(&self) -> PyCityObjectClass {
-        py_city_object_class!(ecitygml_rs::model::common::CityObjectClass::TrafficArea)
+    pub fn id(&self) -> String {
+        py_id!(self)
     }
 
     #[getter]
-    pub fn lod2_multi_surface(&self) -> Option<PyMultiSurface> { py_ts_lod2_multi_surface!(self) }
+    pub fn bounded_by(&self) -> Option<PyEnvelope> {
+        py_bounded_by!(self)
+    }
+
+    #[getter]
+    pub fn feature_type(&self) -> PyFeatureType {
+        py_feature_type!(TrafficArea)
+    }
+
+    #[getter]
+    pub fn lod2_multi_surface(&self) -> Option<PyMultiSurface> {
+        py_ts_lod2_multi_surface!(self)
+    }
 
     pub fn __repr__(&self) -> String {
         format!("TrafficArea(id='{}')", py_id!(self))
@@ -526,7 +663,9 @@ impl From<RustAuxiliaryTrafficArea> for PyAuxiliaryTrafficArea {
 
 impl From<&RustAuxiliaryTrafficArea> for PyAuxiliaryTrafficArea {
     fn from(inner: &RustAuxiliaryTrafficArea) -> Self {
-        Self { inner: inner.clone() }
+        Self {
+            inner: inner.clone(),
+        }
     }
 }
 
@@ -534,18 +673,24 @@ impl From<&RustAuxiliaryTrafficArea> for PyAuxiliaryTrafficArea {
 #[pymethods]
 impl PyAuxiliaryTrafficArea {
     #[getter]
-    pub fn id(&self) -> String { py_id!(self) }
-
-    #[getter]
-    pub fn bounded_by(&self) -> Option<PyEnvelope> { py_bounded_by!(self) }
-
-    #[getter]
-    pub fn city_object_class(&self) -> PyCityObjectClass {
-        py_city_object_class!(ecitygml_rs::model::common::CityObjectClass::AuxiliaryTrafficArea)
+    pub fn id(&self) -> String {
+        py_id!(self)
     }
 
     #[getter]
-    pub fn lod2_multi_surface(&self) -> Option<PyMultiSurface> { py_ts_lod2_multi_surface!(self) }
+    pub fn bounded_by(&self) -> Option<PyEnvelope> {
+        py_bounded_by!(self)
+    }
+
+    #[getter]
+    pub fn feature_type(&self) -> PyFeatureType {
+        py_feature_type!(AuxiliaryTrafficArea)
+    }
+
+    #[getter]
+    pub fn lod2_multi_surface(&self) -> Option<PyMultiSurface> {
+        py_ts_lod2_multi_surface!(self)
+    }
 
     pub fn __repr__(&self) -> String {
         format!("AuxiliaryTrafficArea(id='{}')", py_id!(self))
@@ -571,7 +716,9 @@ impl From<RustTrafficSpace> for PyTrafficSpace {
 
 impl From<&RustTrafficSpace> for PyTrafficSpace {
     fn from(inner: &RustTrafficSpace) -> Self {
-        Self { inner: inner.clone() }
+        Self {
+            inner: inner.clone(),
+        }
     }
 }
 
@@ -579,25 +726,43 @@ impl From<&RustTrafficSpace> for PyTrafficSpace {
 #[pymethods]
 impl PyTrafficSpace {
     #[getter]
-    pub fn id(&self) -> String { py_id!(self) }
-
-    #[getter]
-    pub fn bounded_by(&self) -> Option<PyEnvelope> { py_bounded_by!(self) }
-
-    #[getter]
-    pub fn city_object_class(&self) -> PyCityObjectClass {
-        py_city_object_class!(ecitygml_rs::model::common::CityObjectClass::TrafficSpace)
+    pub fn id(&self) -> String {
+        py_id!(self)
     }
 
     #[getter]
-    pub fn lod2_multi_surface(&self) -> Option<PyMultiSurface> { py_lod2_multi_surface!(self) }
+    pub fn bounded_by(&self) -> Option<PyEnvelope> {
+        py_bounded_by!(self)
+    }
 
     #[getter]
-    pub fn lod2_multi_curve(&self) -> Option<PyMultiCurve> { py_lod2_multi_curve!(self) }
+    pub fn feature_type(&self) -> PyFeatureType {
+        py_feature_type!(TrafficSpace)
+    }
+
+    #[getter]
+    pub fn lod2_multi_surface(&self) -> Option<PyMultiSurface> {
+        py_lod2_multi_surface!(self)
+    }
+
+    #[getter]
+    pub fn lod2_multi_curve(&self) -> Option<PyMultiCurve> {
+        py_lod2_multi_curve!(self)
+    }
 
     #[getter]
     pub fn traffic_area(&self) -> Vec<PyTrafficArea> {
-        self.inner.traffic_area.iter().map(PyTrafficArea::from).collect()
+        self.inner
+            .boundaries()
+            .iter()
+            .filter_map(|b| b.object.as_ref())
+            .filter_map(|b| match b {
+                SpaceBoundaryKind::ThematicSurfaceKind(ThematicSurfaceKind::TrafficArea(ta)) => {
+                    Some(PyTrafficArea::from(ta))
+                }
+                _ => None,
+            })
+            .collect()
     }
 
     pub fn __repr__(&self) -> String {
@@ -624,7 +789,9 @@ impl From<RustAuxiliaryTrafficSpace> for PyAuxiliaryTrafficSpace {
 
 impl From<&RustAuxiliaryTrafficSpace> for PyAuxiliaryTrafficSpace {
     fn from(inner: &RustAuxiliaryTrafficSpace) -> Self {
-        Self { inner: inner.clone() }
+        Self {
+            inner: inner.clone(),
+        }
     }
 }
 
@@ -632,25 +799,43 @@ impl From<&RustAuxiliaryTrafficSpace> for PyAuxiliaryTrafficSpace {
 #[pymethods]
 impl PyAuxiliaryTrafficSpace {
     #[getter]
-    pub fn id(&self) -> String { py_id!(self) }
-
-    #[getter]
-    pub fn bounded_by(&self) -> Option<PyEnvelope> { py_bounded_by!(self) }
-
-    #[getter]
-    pub fn city_object_class(&self) -> PyCityObjectClass {
-        py_city_object_class!(ecitygml_rs::model::common::CityObjectClass::AuxiliaryTrafficSpace)
+    pub fn id(&self) -> String {
+        py_id!(self)
     }
 
     #[getter]
-    pub fn lod2_multi_surface(&self) -> Option<PyMultiSurface> { py_lod2_multi_surface!(self) }
+    pub fn bounded_by(&self) -> Option<PyEnvelope> {
+        py_bounded_by!(self)
+    }
 
     #[getter]
-    pub fn lod2_multi_curve(&self) -> Option<PyMultiCurve> { py_lod2_multi_curve!(self) }
+    pub fn feature_type(&self) -> PyFeatureType {
+        py_feature_type!(AuxiliaryTrafficSpace)
+    }
+
+    #[getter]
+    pub fn lod2_multi_surface(&self) -> Option<PyMultiSurface> {
+        py_lod2_multi_surface!(self)
+    }
+
+    #[getter]
+    pub fn lod2_multi_curve(&self) -> Option<PyMultiCurve> {
+        py_lod2_multi_curve!(self)
+    }
 
     #[getter]
     pub fn auxiliary_traffic_area(&self) -> Vec<PyAuxiliaryTrafficArea> {
-        self.inner.auxiliary_traffic_area.iter().map(PyAuxiliaryTrafficArea::from).collect()
+        self.inner
+            .boundaries()
+            .iter()
+            .filter_map(|b| b.object.as_ref())
+            .filter_map(|b| match b {
+                SpaceBoundaryKind::ThematicSurfaceKind(
+                    ThematicSurfaceKind::AuxiliaryTrafficArea(ata),
+                ) => Some(PyAuxiliaryTrafficArea::from(ata)),
+                _ => None,
+            })
+            .collect()
     }
 
     pub fn __repr__(&self) -> String {
@@ -677,7 +862,9 @@ impl From<RustSection> for PySection {
 
 impl From<&RustSection> for PySection {
     fn from(inner: &RustSection) -> Self {
-        Self { inner: inner.clone() }
+        Self {
+            inner: inner.clone(),
+        }
     }
 }
 
@@ -685,33 +872,53 @@ impl From<&RustSection> for PySection {
 #[pymethods]
 impl PySection {
     #[getter]
-    pub fn id(&self) -> String { py_id!(self) }
-
-    #[getter]
-    pub fn bounded_by(&self) -> Option<PyEnvelope> { py_bounded_by!(self) }
-
-    #[getter]
-    pub fn city_object_class(&self) -> PyCityObjectClass {
-        py_city_object_class!(ecitygml_rs::model::common::CityObjectClass::Section)
+    pub fn id(&self) -> String {
+        py_id!(self)
     }
 
     #[getter]
-    pub fn lod0_multi_curve(&self) -> Option<PyMultiCurve> { py_lod0_multi_curve!(self) }
+    pub fn bounded_by(&self) -> Option<PyEnvelope> {
+        py_bounded_by!(self)
+    }
 
     #[getter]
-    pub fn lod0_multi_surface(&self) -> Option<PyMultiSurface> { py_lod0_multi_surface!(self) }
+    pub fn feature_type(&self) -> PyFeatureType {
+        py_feature_type!(Section)
+    }
 
     #[getter]
-    pub fn lod1_solid(&self) -> Option<PySolid> { py_lod1_solid!(self) }
+    pub fn lod0_multi_curve(&self) -> Option<PyMultiCurve> {
+        py_lod0_multi_curve!(self)
+    }
+
+    #[getter]
+    pub fn lod0_multi_surface(&self) -> Option<PyMultiSurface> {
+        py_lod0_multi_surface!(self)
+    }
+
+    #[getter]
+    pub fn lod1_solid(&self) -> Option<PySolid> {
+        py_lod1_solid!(self)
+    }
 
     #[getter]
     pub fn traffic_space(&self) -> Vec<PyTrafficSpace> {
-        self.inner.traffic_space.iter().map(PyTrafficSpace::from).collect()
+        self.inner
+            .traffic_spaces()
+            .iter()
+            .filter_map(|p| p.object.as_ref())
+            .map(PyTrafficSpace::from)
+            .collect()
     }
 
     #[getter]
     pub fn auxiliary_traffic_space(&self) -> Vec<PyAuxiliaryTrafficSpace> {
-        self.inner.auxiliary_traffic_space.iter().map(PyAuxiliaryTrafficSpace::from).collect()
+        self.inner
+            .auxiliary_traffic_spaces()
+            .iter()
+            .filter_map(|p| p.object.as_ref())
+            .map(PyAuxiliaryTrafficSpace::from)
+            .collect()
     }
 
     pub fn __repr__(&self) -> String {
@@ -738,7 +945,9 @@ impl From<RustIntersection> for PyIntersection {
 
 impl From<&RustIntersection> for PyIntersection {
     fn from(inner: &RustIntersection) -> Self {
-        Self { inner: inner.clone() }
+        Self {
+            inner: inner.clone(),
+        }
     }
 }
 
@@ -746,33 +955,53 @@ impl From<&RustIntersection> for PyIntersection {
 #[pymethods]
 impl PyIntersection {
     #[getter]
-    pub fn id(&self) -> String { py_id!(self) }
-
-    #[getter]
-    pub fn bounded_by(&self) -> Option<PyEnvelope> { py_bounded_by!(self) }
-
-    #[getter]
-    pub fn city_object_class(&self) -> PyCityObjectClass {
-        py_city_object_class!(ecitygml_rs::model::common::CityObjectClass::Intersection)
+    pub fn id(&self) -> String {
+        py_id!(self)
     }
 
     #[getter]
-    pub fn lod0_multi_curve(&self) -> Option<PyMultiCurve> { py_lod0_multi_curve!(self) }
+    pub fn bounded_by(&self) -> Option<PyEnvelope> {
+        py_bounded_by!(self)
+    }
 
     #[getter]
-    pub fn lod0_multi_surface(&self) -> Option<PyMultiSurface> { py_lod0_multi_surface!(self) }
+    pub fn feature_type(&self) -> PyFeatureType {
+        py_feature_type!(Intersection)
+    }
 
     #[getter]
-    pub fn lod1_solid(&self) -> Option<PySolid> { py_lod1_solid!(self) }
+    pub fn lod0_multi_curve(&self) -> Option<PyMultiCurve> {
+        py_lod0_multi_curve!(self)
+    }
+
+    #[getter]
+    pub fn lod0_multi_surface(&self) -> Option<PyMultiSurface> {
+        py_lod0_multi_surface!(self)
+    }
+
+    #[getter]
+    pub fn lod1_solid(&self) -> Option<PySolid> {
+        py_lod1_solid!(self)
+    }
 
     #[getter]
     pub fn traffic_space(&self) -> Vec<PyTrafficSpace> {
-        self.inner.traffic_space.iter().map(PyTrafficSpace::from).collect()
+        self.inner
+            .traffic_spaces()
+            .iter()
+            .filter_map(|p| p.object.as_ref())
+            .map(PyTrafficSpace::from)
+            .collect()
     }
 
     #[getter]
     pub fn auxiliary_traffic_space(&self) -> Vec<PyAuxiliaryTrafficSpace> {
-        self.inner.auxiliary_traffic_space.iter().map(PyAuxiliaryTrafficSpace::from).collect()
+        self.inner
+            .auxiliary_traffic_spaces()
+            .iter()
+            .filter_map(|p| p.object.as_ref())
+            .map(PyAuxiliaryTrafficSpace::from)
+            .collect()
     }
 
     pub fn __repr__(&self) -> String {
@@ -799,7 +1028,9 @@ impl From<RustRoad> for PyRoad {
 
 impl From<&RustRoad> for PyRoad {
     fn from(inner: &RustRoad) -> Self {
-        Self { inner: inner.clone() }
+        Self {
+            inner: inner.clone(),
+        }
     }
 }
 
@@ -807,24 +1038,38 @@ impl From<&RustRoad> for PyRoad {
 #[pymethods]
 impl PyRoad {
     #[getter]
-    pub fn id(&self) -> String { py_id!(self) }
+    pub fn id(&self) -> String {
+        py_id!(self)
+    }
 
     #[getter]
-    pub fn bounded_by(&self) -> Option<PyEnvelope> { py_bounded_by!(self) }
+    pub fn bounded_by(&self) -> Option<PyEnvelope> {
+        py_bounded_by!(self)
+    }
 
     #[getter]
-    pub fn city_object_class(&self) -> PyCityObjectClass {
-        py_city_object_class!(ecitygml_rs::model::common::CityObjectClass::Road)
+    pub fn feature_type(&self) -> PyFeatureType {
+        py_feature_type!(Road)
     }
 
     #[getter]
     pub fn section(&self) -> Vec<PySection> {
-        self.inner.section.iter().map(PySection::from).collect()
+        self.inner
+            .sections
+            .iter()
+            .filter_map(|p| p.object.as_ref())
+            .map(PySection::from)
+            .collect()
     }
 
     #[getter]
     pub fn intersection(&self) -> Vec<PyIntersection> {
-        self.inner.intersection.iter().map(PyIntersection::from).collect()
+        self.inner
+            .intersections
+            .iter()
+            .filter_map(|p| p.object.as_ref())
+            .map(PyIntersection::from)
+            .collect()
     }
 
     pub fn __repr__(&self) -> String {
@@ -851,7 +1096,9 @@ impl From<RustTinRelief> for PyTinRelief {
 
 impl From<&RustTinRelief> for PyTinRelief {
     fn from(inner: &RustTinRelief) -> Self {
-        Self { inner: inner.clone() }
+        Self {
+            inner: inner.clone(),
+        }
     }
 }
 
@@ -859,19 +1106,26 @@ impl From<&RustTinRelief> for PyTinRelief {
 #[pymethods]
 impl PyTinRelief {
     #[getter]
-    pub fn id(&self) -> String { py_id!(self) }
-
-    #[getter]
-    pub fn bounded_by(&self) -> Option<PyEnvelope> { py_bounded_by!(self) }
-
-    #[getter]
-    pub fn city_object_class(&self) -> PyCityObjectClass {
-        py_city_object_class!(ecitygml_rs::model::common::CityObjectClass::TinRelief)
+    pub fn id(&self) -> String {
+        py_id!(self)
     }
 
     #[getter]
-    pub fn tin(&self) -> PyTriangulatedSurface {
-        PyTriangulatedSurface::from(self.inner.tin().clone())
+    pub fn bounded_by(&self) -> Option<PyEnvelope> {
+        py_bounded_by!(self)
+    }
+
+    #[getter]
+    pub fn feature_type(&self) -> PyFeatureType {
+        py_feature_type!(TinRelief)
+    }
+
+    #[getter]
+    pub fn tin(&self) -> Option<PyTriangulatedSurface> {
+        self.inner
+            .tin()
+            .as_ref()
+            .map(|x| PyTriangulatedSurface::from(x.clone()))
     }
 
     pub fn __repr__(&self) -> String {
@@ -898,7 +1152,9 @@ impl From<RustReliefFeature> for PyReliefFeature {
 
 impl From<&RustReliefFeature> for PyReliefFeature {
     fn from(inner: &RustReliefFeature) -> Self {
-        Self { inner: inner.clone() }
+        Self {
+            inner: inner.clone(),
+        }
     }
 }
 
@@ -906,21 +1162,26 @@ impl From<&RustReliefFeature> for PyReliefFeature {
 #[pymethods]
 impl PyReliefFeature {
     #[getter]
-    pub fn id(&self) -> String { py_id!(self) }
+    pub fn id(&self) -> String {
+        py_id!(self)
+    }
 
     #[getter]
-    pub fn bounded_by(&self) -> Option<PyEnvelope> { py_bounded_by!(self) }
+    pub fn bounded_by(&self) -> Option<PyEnvelope> {
+        py_bounded_by!(self)
+    }
 
     #[getter]
-    pub fn city_object_class(&self) -> PyCityObjectClass {
-        py_city_object_class!(ecitygml_rs::model::common::CityObjectClass::ReliefFeature)
+    pub fn feature_type(&self) -> PyFeatureType {
+        py_feature_type!(ReliefFeature)
     }
 
     #[getter]
     pub fn relief_component(&self) -> Vec<PyTinRelief> {
         self.inner
-            .relief_component()
+            .relief_components()
             .iter()
+            .filter_map(|p| p.object.as_ref())
             .filter_map(|c| match c {
                 ReliefComponentKind::TinRelief(t) => Some(PyTinRelief::from(t)),
             })
@@ -951,7 +1212,9 @@ impl From<RustSolitaryVegetationObject> for PySolitaryVegetationObject {
 
 impl From<&RustSolitaryVegetationObject> for PySolitaryVegetationObject {
     fn from(inner: &RustSolitaryVegetationObject) -> Self {
-        Self { inner: inner.clone() }
+        Self {
+            inner: inner.clone(),
+        }
     }
 }
 
@@ -959,24 +1222,34 @@ impl From<&RustSolitaryVegetationObject> for PySolitaryVegetationObject {
 #[pymethods]
 impl PySolitaryVegetationObject {
     #[getter]
-    pub fn id(&self) -> String { py_id!(self) }
-
-    #[getter]
-    pub fn bounded_by(&self) -> Option<PyEnvelope> { py_bounded_by!(self) }
-
-    #[getter]
-    pub fn city_object_class(&self) -> PyCityObjectClass {
-        py_city_object_class!(ecitygml_rs::model::common::CityObjectClass::SolitaryVegetationObject)
+    pub fn id(&self) -> String {
+        py_id!(self)
     }
 
     #[getter]
-    pub fn lod1_solid(&self) -> Option<PySolid> { py_lod1_solid!(self) }
+    pub fn bounded_by(&self) -> Option<PyEnvelope> {
+        py_bounded_by!(self)
+    }
 
     #[getter]
-    pub fn lod2_solid(&self) -> Option<PySolid> { py_lod2_solid!(self) }
+    pub fn feature_type(&self) -> PyFeatureType {
+        py_feature_type!(SolitaryVegetationObject)
+    }
 
     #[getter]
-    pub fn lod0_multi_surface(&self) -> Option<PyMultiSurface> { py_lod0_multi_surface!(self) }
+    pub fn lod1_solid(&self) -> Option<PySolid> {
+        py_lod1_solid!(self)
+    }
+
+    #[getter]
+    pub fn lod2_solid(&self) -> Option<PySolid> {
+        py_lod2_solid!(self)
+    }
+
+    #[getter]
+    pub fn lod0_multi_surface(&self) -> Option<PyMultiSurface> {
+        py_lod0_multi_surface!(self)
+    }
 
     #[getter]
     pub fn lod1_implicit_representation(&self) -> Option<PyDirectPosition> {
@@ -1009,7 +1282,9 @@ impl From<RustCityFurniture> for PyCityFurniture {
 
 impl From<&RustCityFurniture> for PyCityFurniture {
     fn from(inner: &RustCityFurniture) -> Self {
-        Self { inner: inner.clone() }
+        Self {
+            inner: inner.clone(),
+        }
     }
 }
 
@@ -1017,24 +1292,34 @@ impl From<&RustCityFurniture> for PyCityFurniture {
 #[pymethods]
 impl PyCityFurniture {
     #[getter]
-    pub fn id(&self) -> String { py_id!(self) }
-
-    #[getter]
-    pub fn bounded_by(&self) -> Option<PyEnvelope> { py_bounded_by!(self) }
-
-    #[getter]
-    pub fn city_object_class(&self) -> PyCityObjectClass {
-        py_city_object_class!(ecitygml_rs::model::common::CityObjectClass::CityFurniture)
+    pub fn id(&self) -> String {
+        py_id!(self)
     }
 
     #[getter]
-    pub fn lod1_solid(&self) -> Option<PySolid> { py_lod1_solid!(self) }
+    pub fn bounded_by(&self) -> Option<PyEnvelope> {
+        py_bounded_by!(self)
+    }
 
     #[getter]
-    pub fn lod2_solid(&self) -> Option<PySolid> { py_lod2_solid!(self) }
+    pub fn feature_type(&self) -> PyFeatureType {
+        py_feature_type!(CityFurniture)
+    }
 
     #[getter]
-    pub fn lod0_multi_surface(&self) -> Option<PyMultiSurface> { py_lod0_multi_surface!(self) }
+    pub fn lod1_solid(&self) -> Option<PySolid> {
+        py_lod1_solid!(self)
+    }
+
+    #[getter]
+    pub fn lod2_solid(&self) -> Option<PySolid> {
+        py_lod2_solid!(self)
+    }
+
+    #[getter]
+    pub fn lod0_multi_surface(&self) -> Option<PyMultiSurface> {
+        py_lod0_multi_surface!(self)
+    }
 
     pub fn __repr__(&self) -> String {
         format!("CityFurniture(id='{}')", py_id!(self))

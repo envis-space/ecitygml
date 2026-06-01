@@ -1,0 +1,56 @@
+use crate::Error;
+use crate::gml::codec::core::deserialize_abstract_space_boundary;
+use crate::gml::util::XmlElementSpans;
+use ecitygml_core::model::relief::AbstractReliefComponent;
+use quick_xml::de;
+use serde::{Deserialize, Serialize};
+
+pub fn deserialize_abstract_relief_component(
+    xml_document: &[u8],
+    spans: &XmlElementSpans,
+) -> Result<AbstractReliefComponent, Error> {
+    let (abstract_space_boundary_result, gml_result) = rayon::join(
+        || deserialize_abstract_space_boundary(xml_document, spans),
+        || de::from_reader::<_, GmlAbstractReliefComponent>(xml_document).map_err(Error::from),
+    );
+    let abstract_space_boundary = abstract_space_boundary_result?;
+    let gml = gml_result?;
+
+    let abstract_relief_component =
+        AbstractReliefComponent::new(abstract_space_boundary, gml.lod.try_into()?);
+    Ok(abstract_relief_component)
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct GmlAbstractReliefComponent {
+    pub lod: u8,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::gml::util::extract_xml_element_spans;
+    use ecitygml_core::model::common::LevelOfDetail;
+    use ecitygml_core::model::core::AsAbstractFeature;
+    use ecitygml_core::model::relief::AsAbstractReliefComponent;
+    use egml::model::base::Id;
+
+    #[test]
+    fn test_deserialize_tin_relief() {
+        let xml_document = "
+                <dem:TINRelief gml:id=\"abc\">
+                  <dem:lod>2</dem:lod>
+                </dem:TINRelief>";
+
+        let spans = extract_xml_element_spans(xml_document.as_ref()).expect("should work");
+        let abstract_relief_component =
+            deserialize_abstract_relief_component(xml_document.as_ref(), &spans)
+                .expect("should work");
+
+        assert_eq!(
+            abstract_relief_component.id(),
+            &Id::try_from("abc").unwrap()
+        );
+        assert_eq!(abstract_relief_component.lod(), LevelOfDetail::Two);
+    }
+}

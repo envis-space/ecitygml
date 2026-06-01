@@ -1,11 +1,10 @@
 use crate::impl_abstract_space_boundary_traits;
-use crate::model::common::LevelOfDetail;
+use crate::model::common::{FeatureRef, FeatureRefMut, LevelOfDetail, TopLevelFeatureRef};
 use crate::model::core::{
     AbstractSpaceBoundary, AsAbstractFeatureMut, AsAbstractSpaceBoundary,
-    AsAbstractSpaceBoundaryMut, CityObjectKind, CityObjectRef,
+    AsAbstractSpaceBoundaryMut,
 };
-use crate::model::relief::ReliefComponentKind;
-use crate::operations::{Visitable, Visitor};
+use crate::model::relief::ReliefComponentProperty;
 use egml::model::geometry::Envelope;
 use nalgebra::Isometry3;
 
@@ -13,7 +12,7 @@ use nalgebra::Isometry3;
 pub struct ReliefFeature {
     pub(crate) abstract_space_boundary: AbstractSpaceBoundary,
     lod: LevelOfDetail,
-    relief_component: Vec<ReliefComponentKind>,
+    relief_components: Vec<ReliefComponentProperty>,
 }
 
 impl ReliefFeature {
@@ -21,45 +20,62 @@ impl ReliefFeature {
         Self {
             abstract_space_boundary,
             lod,
-            relief_component: Vec::new(),
+            relief_components: Vec::new(),
         }
     }
 
-    pub fn iter_city_object<'a>(&'a self) -> impl Iterator<Item = CityObjectRef<'a>> + 'a {
-        std::iter::once(CityObjectRef::ReliefFeature(self))
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+        std::iter::once(self.into())
+            .chain(self.abstract_space_boundary.iter_features())
+            .chain(
+                self.relief_components
+                    .iter()
+                    .flat_map(|x| x.object.as_ref())
+                    .flat_map(|x| x.iter_features()),
+            )
     }
 
-    pub fn refresh_bounded_by_recursive(&mut self) {
-        self.relief_component
+    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+        f((&mut *self).into());
+        self.abstract_space_boundary.for_each_feature_mut(f);
+        for prop in &mut self.relief_components {
+            if let Some(x) = prop.object.as_mut() {
+                x.for_each_feature_mut(f);
+            }
+        }
+    }
+
+    pub fn compute_envelope(&self) -> Option<Envelope> {
+        self.abstract_space_boundary.compute_envelope()
+    }
+
+    pub fn recompute_bounding_shape(&mut self) {
+        self.set_bounding_shape_from_envelope(self.compute_envelope());
+    }
+
+    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
+        self.abstract_space_boundary.apply_transform(m);
+
+        self.relief_components
             .iter_mut()
-            .for_each(|x| x.refresh_bounded_by_recursive());
-
-        let envelopes: Vec<Envelope> = self
-            .relief_component
-            .iter()
-            .filter_map(|x| x.bounded_by())
-            .cloned()
-            .collect();
-
-        self.set_bounded_by(Envelope::from_envelopes(&envelopes));
+            .flat_map(|x| x.object.as_mut())
+            .for_each(|x| x.apply_transform(m));
     }
 
-    pub fn relief_component(&self) -> &[ReliefComponentKind] {
-        &self.relief_component
+    pub fn relief_components(&self) -> &[ReliefComponentProperty] {
+        &self.relief_components
     }
 
-    pub fn relief_component_mut(&mut self) -> &mut Vec<ReliefComponentKind> {
-        &mut self.relief_component
+    pub fn relief_components_mut(&mut self) -> &mut Vec<ReliefComponentProperty> {
+        &mut self.relief_components
     }
 
     pub fn num_relief_components(&self) -> usize {
-        self.relief_component.len()
+        self.relief_components.len()
     }
 
-    pub fn apply_transform_recursive(&mut self, m: &Isometry3<f64>) {
-        self.relief_component
-            .iter_mut()
-            .for_each(|x| x.apply_transform(m));
+    pub fn set_relief_components(&mut self, values: Vec<ReliefComponentProperty>) {
+        self.relief_components = values;
     }
 
     pub fn lod(&self) -> LevelOfDetail {
@@ -81,14 +97,20 @@ impl AsAbstractSpaceBoundaryMut for ReliefFeature {
 
 impl_abstract_space_boundary_traits!(ReliefFeature);
 
-impl From<ReliefFeature> for CityObjectKind {
-    fn from(item: ReliefFeature) -> Self {
-        CityObjectKind::ReliefFeature(item)
+impl<'a> From<&'a ReliefFeature> for FeatureRef<'a> {
+    fn from(item: &'a ReliefFeature) -> Self {
+        FeatureRef::ReliefFeature(item)
     }
 }
 
-impl Visitable for ReliefFeature {
-    fn accept<V: Visitor>(&self, visitor: &mut V) {
-        visitor.visit_relief_feature(self);
+impl<'a> From<&'a mut ReliefFeature> for FeatureRefMut<'a> {
+    fn from(item: &'a mut ReliefFeature) -> Self {
+        FeatureRefMut::ReliefFeature(item)
+    }
+}
+
+impl<'a> From<&'a ReliefFeature> for TopLevelFeatureRef<'a> {
+    fn from(item: &'a ReliefFeature) -> Self {
+        TopLevelFeatureRef::ReliefFeature(item)
     }
 }

@@ -1,27 +1,27 @@
-"""Tests for CityObjectClass and LevelOfDetail enums."""
+"""Tests for FeatureType and LevelOfDetail enums."""
 
-from ecitygml import Building, CityObjectClass, GmlReader, LevelOfDetail
+from ecitygml import Building, FeatureType, GmlReader, LevelOfDetail
 
 from conftest import ASAM_JUNCTION, FZK_LOD2
 
 
-class TestCityObjectClass:
+class TestFeatureType:
     def test_equality(self) -> None:
-        assert CityObjectClass.Building == CityObjectClass.Building
+        assert FeatureType.Building == FeatureType.Building
 
     def test_inequality(self) -> None:
-        assert CityObjectClass.Road != CityObjectClass.Building
+        assert FeatureType.Road != FeatureType.Building
 
     def test_repr_contains_variant_name(self) -> None:
-        assert "Building" in repr(CityObjectClass.Building)
+        assert "Building" in repr(FeatureType.Building)
 
-    def test_matches_building_city_object_class(self) -> None:
+    def test_matches_building_feature_type(self) -> None:
         b = GmlReader(FZK_LOD2).finish().buildings()[0]
-        assert b.city_object_class == CityObjectClass.Building
+        assert b.feature_type == FeatureType.Building
 
-    def test_matches_road_city_object_class(self) -> None:
+    def test_matches_road_feature_type(self) -> None:
         r = GmlReader(ASAM_JUNCTION).finish().roads()[0]
-        assert r.city_object_class == CityObjectClass.Road
+        assert r.feature_type == FeatureType.Road
 
     def test_all_expected_variants_exist(self) -> None:
         expected = [
@@ -44,7 +44,7 @@ class TestCityObjectClass:
             "CityFurniture",
         ]
         for name in expected:
-            assert hasattr(CityObjectClass, name), f"Missing CityObjectClass.{name}"
+            assert hasattr(FeatureType, name), f"Missing FeatureType.{name}"
 
 
 class TestLevelOfDetail:

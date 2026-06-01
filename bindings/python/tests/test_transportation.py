@@ -6,7 +6,7 @@ import pytest
 from ecitygml import (
     AuxiliaryTrafficArea,
     AuxiliaryTrafficSpace,
-    CityObjectClass,
+    FeatureType,
     DirectPosition,
     Envelope,
     Intersection,
@@ -26,8 +26,8 @@ class TestRoad:
     def test_id(self, asam_junction_road: Road) -> None:
         assert asam_junction_road.id == "UUID_8a13804c-cbd7-3a2f-9d46-e4d528a4bb4f"
 
-    def test_city_object_class(self, asam_junction_road: Road) -> None:
-        assert asam_junction_road.city_object_class == CityObjectClass.Road
+    def test_feature_type(self, asam_junction_road: Road) -> None:
+        assert asam_junction_road.feature_type == FeatureType.Road
 
     def test_section_count(self, asam_junction_road: Road) -> None:
         assert len(asam_junction_road.section) == 3
@@ -49,8 +49,8 @@ class TestSection:
     def test_id(self, asam_section: Section) -> None:
         assert asam_section.id == "UUID_0950bfa5-204e-33e6-bdb7-c5c318d73a29"
 
-    def test_city_object_class(self, asam_section: Section) -> None:
-        assert asam_section.city_object_class == CityObjectClass.Section
+    def test_feature_type(self, asam_section: Section) -> None:
+        assert asam_section.feature_type == FeatureType.Section
 
     def test_traffic_space_count(self, asam_section: Section) -> None:
         assert len(asam_section.traffic_space) == 2
@@ -72,9 +72,9 @@ class TestIntersection:
     def test_id_non_empty(self, asam_junction_road: Road) -> None:
         assert asam_junction_road.intersection[0].id != ""
 
-    def test_city_object_class(self, asam_junction_road: Road) -> None:
+    def test_feature_type(self, asam_junction_road: Road) -> None:
         inter = asam_junction_road.intersection[0]
-        assert inter.city_object_class == CityObjectClass.Intersection
+        assert inter.feature_type == FeatureType.Intersection
 
     def test_traffic_space_count(self, asam_junction_road: Road) -> None:
         assert len(asam_junction_road.intersection[0].traffic_space) == 3
@@ -88,8 +88,8 @@ class TestTrafficSpace:
     def test_id_non_empty(self, asam_section: Section) -> None:
         assert asam_section.traffic_space[0].id != ""
 
-    def test_city_object_class(self, asam_section: Section) -> None:
-        assert asam_section.traffic_space[0].city_object_class == CityObjectClass.TrafficSpace
+    def test_feature_type(self, asam_section: Section) -> None:
+        assert asam_section.traffic_space[0].feature_type == FeatureType.TrafficSpace
 
     def test_lod2_multi_curve_present(self, asam_section: Section) -> None:
         assert isinstance(asam_section.traffic_space[0].lod2_multi_curve, MultiCurve)
@@ -109,9 +109,9 @@ class TestTrafficArea:
         ta = asam_section.traffic_space[0].traffic_area[0]
         assert ta.id == "UUID_8625bf6f-57cb-3ddf-8fd1-6674b756a2e2"
 
-    def test_city_object_class(self, asam_section: Section) -> None:
+    def test_feature_type(self, asam_section: Section) -> None:
         ta = asam_section.traffic_space[0].traffic_area[0]
-        assert ta.city_object_class == CityObjectClass.TrafficArea
+        assert ta.feature_type == FeatureType.TrafficArea
 
     def test_lod2_multi_surface_present(self, asam_section: Section) -> None:
         ta = asam_section.traffic_space[0].traffic_area[0]
@@ -153,9 +153,9 @@ class TestAuxiliaryTrafficSpace:
     def test_type(self, asam_road_section: Section) -> None:
         assert isinstance(asam_road_section.auxiliary_traffic_space[0], AuxiliaryTrafficSpace)
 
-    def test_city_object_class(self, asam_road_section: Section) -> None:
+    def test_feature_type(self, asam_road_section: Section) -> None:
         ats = asam_road_section.auxiliary_traffic_space[0]
-        assert ats.city_object_class == CityObjectClass.AuxiliaryTrafficSpace
+        assert ats.feature_type == FeatureType.AuxiliaryTrafficSpace
 
     def test_id_non_empty(self, asam_road_section: Section) -> None:
         assert asam_road_section.auxiliary_traffic_space[0].id != ""
@@ -175,10 +175,10 @@ class TestAuxiliaryTrafficArea:
             for ata in ats.auxiliary_traffic_area:
                 assert isinstance(ata, AuxiliaryTrafficArea)
 
-    def test_city_object_class(self, asam_road_section: Section) -> None:
+    def test_feature_type(self, asam_road_section: Section) -> None:
         for ats in asam_road_section.auxiliary_traffic_space:
             for ata in ats.auxiliary_traffic_area:
-                assert ata.city_object_class == CityObjectClass.AuxiliaryTrafficArea
+                assert ata.feature_type == FeatureType.AuxiliaryTrafficArea
 
     def test_id_non_empty(self, asam_road_section: Section) -> None:
         for ats in asam_road_section.auxiliary_traffic_space:

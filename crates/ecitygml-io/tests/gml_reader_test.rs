@@ -1,5 +1,64 @@
-use ecitygml_core::model::core::{AsAbstractFeature, AsAbstractSpace, RelativeToTerrain};
+use ecitygml_core::model::common::TopLevelFeatureRef;
+use ecitygml_core::model::construction::{
+    AsAbstractConstructionSurface, DoorSurface, FillingSurfaceKind, GroundSurface, WindowSurface,
+};
+use ecitygml_core::model::construction::{ConstructionSurfaceKind, RoofSurface, WallSurface};
+use ecitygml_core::model::core::{
+    AsAbstractCityObject, AsAbstractFeature, AsAbstractSpace, RelativeToTerrain, SpaceBoundaryKind,
+    ThematicSurfaceKind,
+};
+use ecitygml_core::model::transportation::AsAbstractTransportationSpace;
 use ecitygml_io::GmlReader;
+
+fn collect_wall_surfaces(building: &ecitygml_core::model::building::Building) -> Vec<&WallSurface> {
+    building
+        .boundaries()
+        .iter()
+        .flat_map(|x| &x.object)
+        .filter_map(|x| match x {
+            SpaceBoundaryKind::ThematicSurfaceKind(
+                ThematicSurfaceKind::ConstructionSurfaceKind(ConstructionSurfaceKind::WallSurface(
+                    w,
+                )),
+            ) => Some(w),
+            _ => None,
+        })
+        .collect()
+}
+
+fn collect_roof_surfaces(building: &ecitygml_core::model::building::Building) -> Vec<&RoofSurface> {
+    building
+        .boundaries()
+        .iter()
+        .flat_map(|x| &x.object)
+        .filter_map(|x| match x {
+            SpaceBoundaryKind::ThematicSurfaceKind(
+                ThematicSurfaceKind::ConstructionSurfaceKind(ConstructionSurfaceKind::RoofSurface(
+                    r,
+                )),
+            ) => Some(r),
+            _ => None,
+        })
+        .collect()
+}
+
+fn collect_ground_surfaces(
+    building: &ecitygml_core::model::building::Building,
+) -> Vec<&GroundSurface> {
+    building
+        .boundaries()
+        .iter()
+        .flat_map(|x| &x.object)
+        .filter_map(|x| match x {
+            SpaceBoundaryKind::ThematicSurfaceKind(
+                ThematicSurfaceKind::ConstructionSurfaceKind(
+                    ConstructionSurfaceKind::GroundSurface(g),
+                ),
+            ) => Some(g),
+            _ => None,
+        })
+        .collect()
+}
 
 #[test]
 fn test_lod1_building_model_fzk() {
@@ -9,10 +68,16 @@ fn test_lod1_building_model_fzk() {
             .finish()
             .expect("should work");
 
-    assert_eq!(city_model.city_objects_len(), 1);
-    assert_eq!(city_model.buildings().len(), 1);
+    assert_eq!(city_model.city_object_members_len(), 1);
 
-    let buildings = city_model.buildings();
+    let buildings: Vec<_> = city_model
+        .iter_top_level_features()
+        .filter_map(|x| match x {
+            TopLevelFeatureRef::Building(building) => Some(building),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(buildings.len(), 1);
     let building = buildings.first().expect("should work");
     assert_eq!(
         building.id().to_string(),
@@ -30,19 +95,25 @@ fn test_lod2_building_model_fzk() {
             .finish()
             .expect("should work");
 
-    assert_eq!(city_model.city_objects_len(), 1);
-    assert_eq!(city_model.buildings().len(), 1);
+    assert_eq!(city_model.city_object_members_len(), 1);
 
-    let buildings = city_model.buildings();
+    let buildings: Vec<_> = city_model
+        .iter_top_level_features()
+        .filter_map(|x| match x {
+            TopLevelFeatureRef::Building(building) => Some(building),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(buildings.len(), 1);
     let building = buildings.first().expect("should work");
     assert_eq!(
         building.id().to_string(),
         "UUID_d281adfc-4901-0f52-540b-4cc1a9325f82"
     );
 
-    assert_eq!(building.wall_surface.len(), 4);
-    assert_eq!(building.roof_surface.len(), 2);
-    assert_eq!(building.ground_surface.len(), 1);
+    assert_eq!(collect_wall_surfaces(building).len(), 4);
+    assert_eq!(collect_roof_surfaces(building).len(), 2);
+    assert_eq!(collect_ground_surfaces(building).len(), 1);
 }
 
 #[test]
@@ -53,10 +124,16 @@ fn test_lod3_building_model_fzk() {
             .finish()
             .expect("should work");
 
-    assert_eq!(city_model.city_objects_len(), 1);
-    assert_eq!(city_model.buildings().len(), 1);
+    assert_eq!(city_model.city_object_members_len(), 1);
+    let buildings: Vec<_> = city_model
+        .iter_top_level_features()
+        .filter_map(|x| match x {
+            TopLevelFeatureRef::Building(building) => Some(building),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(buildings.len(), 1);
 
-    let buildings = city_model.buildings();
     let building = buildings.first().expect("should work");
     assert_eq!(
         building.id().to_string(),
@@ -67,12 +144,22 @@ fn test_lod3_building_model_fzk() {
         RelativeToTerrain::EntirelyAboveTerrain
     );
 
-    assert_eq!(building.wall_surface.len(), 4);
-    assert_eq!(building.roof_surface.len(), 2);
-    assert_eq!(building.ground_surface.len(), 1);
+    let wall_surfaces = collect_wall_surfaces(building);
+    assert_eq!(wall_surfaces.len(), 4);
+    assert_eq!(collect_roof_surfaces(building).len(), 2);
+    assert_eq!(collect_ground_surfaces(building).len(), 1);
 
-    let wall_surface = building.wall_surface.first().expect("should work");
-    assert_eq!(wall_surface.door_surface.len(), 1);
+    let wall_surface = wall_surfaces.first().expect("should work");
+    let door_surfaces: Vec<&DoorSurface> = wall_surface
+        .filling_surfaces()
+        .iter()
+        .flat_map(|x| &x.object)
+        .filter_map(|x| match x {
+            FillingSurfaceKind::DoorSurface(x) => Some(x),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(door_surfaces.len(), 1);
 }
 
 #[test]
@@ -82,15 +169,21 @@ fn test_lod2_building_model_tum() {
         .finish()
         .expect("should work");
 
-    assert_eq!(city_model.city_objects_len(), 1);
+    assert_eq!(city_model.city_object_members_len(), 1);
 
-    let buildings = city_model.buildings();
+    let buildings: Vec<_> = city_model
+        .iter_top_level_features()
+        .filter_map(|x| match x {
+            TopLevelFeatureRef::Building(building) => Some(building),
+            _ => None,
+        })
+        .collect();
     let building = buildings.first().expect("should work");
     assert_eq!(building.id().to_string(), "DEBY_LOD2_4959457");
 
-    assert_eq!(building.wall_surface.len(), 14);
-    assert_eq!(building.roof_surface.len(), 2);
-    assert_eq!(building.ground_surface.len(), 1);
+    assert_eq!(collect_wall_surfaces(building).len(), 14);
+    assert_eq!(collect_roof_surfaces(building).len(), 2);
+    assert_eq!(collect_ground_surfaces(building).len(), 1);
 }
 
 #[test]
@@ -101,16 +194,28 @@ fn test_road_model_asam_junction() {
             .finish()
             .expect("should work");
 
-    assert_eq!(city_model.city_objects_len(), 1);
-    assert_eq!(city_model.roads().len(), 1);
+    assert_eq!(city_model.city_object_members_len(), 1);
 
-    let roads = city_model.roads();
+    let roads: Vec<_> = city_model
+        .iter_top_level_features()
+        .filter_map(|x| match x {
+            TopLevelFeatureRef::Road(road) => Some(road),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(roads.len(), 1);
     let road = roads.first().expect("should work");
-    assert_eq!(road.section.len(), 3);
-    assert_eq!(road.intersection.len(), 1);
+    assert_eq!(road.sections.len(), 3);
+    assert_eq!(road.intersections.len(), 1);
 
-    let intersection = road.intersection.first().expect("should work");
-    assert_eq!(intersection.traffic_space.len(), 3);
+    let intersection = road
+        .intersections
+        .first()
+        .expect("should work")
+        .object
+        .as_ref()
+        .unwrap();
+    assert_eq!(intersection.traffic_spaces().len(), 3);
 }
 
 #[test]
@@ -120,14 +225,26 @@ fn test_road_model_asam_road_shape() {
         .finish()
         .expect("should work");
 
-    assert_eq!(city_model.city_objects_len(), 1);
-    assert_eq!(city_model.roads().len(), 1);
+    assert_eq!(city_model.city_object_members_len(), 1);
 
-    let roads = city_model.roads();
+    let roads: Vec<_> = city_model
+        .iter_top_level_features()
+        .filter_map(|x| match x {
+            TopLevelFeatureRef::Road(road) => Some(road),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(roads.len(), 1);
     let road = roads.first().expect("should work");
-    assert_eq!(road.section.len(), 1);
+    assert_eq!(road.sections.len(), 1);
 
-    let section = road.section.first().expect("should work");
-    assert_eq!(section.traffic_space.len(), 2);
-    assert_eq!(section.auxiliary_traffic_space.len(), 2);
+    let section = road
+        .sections
+        .first()
+        .expect("should work")
+        .object
+        .as_ref()
+        .unwrap();
+    assert_eq!(section.traffic_spaces().len(), 2);
+    assert_eq!(section.auxiliary_traffic_spaces().len(), 2);
 }

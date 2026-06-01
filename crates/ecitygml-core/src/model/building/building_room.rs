@@ -1,9 +1,9 @@
 use crate::impl_abstract_unoccupied_space_traits;
+use crate::model::common::{FeatureRef, FeatureRefMut};
 use crate::model::core::{
-    AbstractUnoccupiedSpace, AsAbstractFeatureMut, AsAbstractSpace, AsAbstractUnoccupiedSpace,
-    AsAbstractUnoccupiedSpaceMut, CityObjectKind, CityObjectRef,
+    AbstractUnoccupiedSpace, AsAbstractFeatureMut, AsAbstractUnoccupiedSpace,
+    AsAbstractUnoccupiedSpaceMut,
 };
-use crate::operations::{Visitable, Visitor};
 use egml::model::basic::Code;
 use egml::model::geometry::Envelope;
 use nalgebra::Isometry3;
@@ -24,6 +24,27 @@ impl BuildingRoom {
             functions: Vec::new(),
             usages: Vec::new(),
         }
+    }
+
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+        std::iter::once(self.into()).chain(self.abstract_unoccupied_space.iter_features())
+    }
+
+    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+        f((&mut *self).into());
+        self.abstract_unoccupied_space.for_each_feature_mut(f);
+    }
+
+    pub fn compute_envelope(&self) -> Option<Envelope> {
+        self.abstract_unoccupied_space.compute_envelope()
+    }
+
+    pub fn recompute_bounding_shape(&mut self) {
+        self.set_bounding_shape_from_envelope(self.compute_envelope());
+    }
+
+    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
+        self.abstract_unoccupied_space.apply_transform(m);
     }
 
     pub fn class(&self) -> &Option<Code> {
@@ -49,34 +70,6 @@ impl BuildingRoom {
     pub fn set_usages(&mut self, usages: Vec<Code>) {
         self.usages = usages;
     }
-
-    pub fn iter_city_object<'a>(&'a self) -> impl Iterator<Item = CityObjectRef<'a>> + 'a {
-        std::iter::once(CityObjectRef::BuildingRoom(self))
-    }
-
-    pub fn refresh_bounded_by_recursive(&mut self) {
-        /*self.wall_surface
-        .iter_mut()
-        .for_each(|x| x.refresh_bounded_by_recursive());*/
-
-        let own_envelope = self.compute_envelope();
-        let envelopes: Vec<Envelope> = own_envelope
-            .as_ref()
-            .into_iter()
-            //.chain(self.wall_surface.iter().filter_map(|x| x.bounded_by()))
-            .cloned()
-            .collect();
-
-        self.set_bounded_by(Envelope::from_envelopes(&envelopes));
-    }
-
-    pub fn apply_transform_recursive(&mut self, _m: &Isometry3<f64>) {
-        // AsAbstractUnoccupiedSpace::apply_transform(&mut self.abstract_unoccupied_space, m);
-
-        /*self.wall_surface
-        .iter_mut()
-        .for_each(|x| x.apply_transform(m));*/
-    }
 }
 
 impl AsAbstractUnoccupiedSpace for BuildingRoom {
@@ -93,14 +86,14 @@ impl AsAbstractUnoccupiedSpaceMut for BuildingRoom {
 
 impl_abstract_unoccupied_space_traits!(BuildingRoom);
 
-impl From<BuildingRoom> for CityObjectKind {
-    fn from(item: BuildingRoom) -> Self {
-        CityObjectKind::BuildingRoom(item)
+impl<'a> From<&'a BuildingRoom> for FeatureRef<'a> {
+    fn from(item: &'a BuildingRoom) -> Self {
+        FeatureRef::BuildingRoom(item)
     }
 }
 
-impl Visitable for BuildingRoom {
-    fn accept<V: Visitor>(&self, visitor: &mut V) {
-        visitor.visit_building_room(self);
+impl<'a> From<&'a mut BuildingRoom> for FeatureRefMut<'a> {
+    fn from(item: &'a mut BuildingRoom) -> Self {
+        FeatureRefMut::BuildingRoom(item)
     }
 }

@@ -1,11 +1,10 @@
 use crate::error::Error;
-use crate::gml::read_impl::decode;
+use crate::gml::read_impl::deserialize;
 use std::fs::File;
 use std::io::{BufReader, Read};
 
 use crate::error::Error::InvalidFileExtension;
 use crate::format::CitygmlFormat;
-use crate::gml::validate_impl::validate_from_reader;
 use ecitygml_core::model::core::CityModel;
 use std::path::Path;
 
@@ -47,10 +46,6 @@ impl<R: Read> GmlReader<R> {
         Ok(content)
     }
 
-    pub fn validate(self) -> Result<crate::gml::validate::report::Report, Error> {
-        validate_from_reader(self.read()?)
-    }
-
     pub fn with_rebuild_object_bounds(mut self, rebuild_object_bounds: bool) -> Self {
         self.rebuild_object_bounds = rebuild_object_bounds;
         self
@@ -58,10 +53,10 @@ impl<R: Read> GmlReader<R> {
 
     pub fn finish(self) -> Result<CityModel, Error> {
         let rebuild_object_bounds = self.rebuild_object_bounds;
-        let mut city_model = decode(self.read()?)?;
+        let mut city_model = deserialize(self.read()?)?;
 
         if rebuild_object_bounds {
-            city_model.refresh_bounded_by_recursive();
+            city_model.recompute_child_bounding_shapes();
         }
 
         Ok(city_model)

@@ -1,7 +1,6 @@
-use crate::model::common::LevelOfDetail;
+use crate::model::common::{FeatureRef, FeatureRefMut, LevelOfDetail};
 use crate::model::core::{
-    AbstractPhysicalSpace, AsAbstractCityObject, AsAbstractFeature, AsAbstractSpace,
-    AsAbstractSpaceMut, ImplicitGeometry,
+    AbstractPhysicalSpace, AsAbstractSpace, AsAbstractSpaceMut, ImplicitGeometry,
 };
 use egml::model::geometry::Envelope;
 use nalgebra::Isometry3;
@@ -22,6 +21,54 @@ impl AbstractOccupiedSpace {
             lod1_implicit_representation: None,
             lod2_implicit_representation: None,
             lod3_implicit_representation: None,
+        }
+    }
+
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+        self.abstract_physical_space.iter_features()
+    }
+
+    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+        self.abstract_physical_space.for_each_feature_mut(f);
+    }
+
+    pub fn compute_envelope(&self) -> Option<Envelope> {
+        let envelopes: Vec<Envelope> = vec![
+            self.abstract_physical_space.compute_envelope(),
+            self.lod1_implicit_representation()
+                .and_then(|x| x.compute_envelope()),
+            self.lod2_implicit_representation()
+                .and_then(|x| x.compute_envelope()),
+            self.lod3_implicit_representation()
+                .and_then(|x| x.compute_envelope()),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+
+        Envelope::from_envelopes(&envelopes)
+    }
+
+    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
+        self.abstract_physical_space.apply_transform(m);
+
+        if let Some(g) = &mut self
+            .abstract_occupied_space_mut()
+            .lod1_implicit_representation
+        {
+            g.apply_transform(m);
+        }
+        if let Some(g) = &mut self
+            .abstract_occupied_space_mut()
+            .lod2_implicit_representation
+        {
+            g.apply_transform(m);
+        }
+        if let Some(g) = &mut self
+            .abstract_occupied_space_mut()
+            .lod3_implicit_representation
+        {
+            g.apply_transform(m);
         }
     }
 }
@@ -60,23 +107,6 @@ pub trait AsAbstractOccupiedSpace: AsAbstractSpace {
         }
         map
     }
-
-    fn compute_envelope(&self) -> Option<Envelope> {
-        let envelopes: Vec<Envelope> = vec![
-            self.abstract_space().compute_envelope(),
-            self.lod1_implicit_representation()
-                .and_then(|x| x.compute_envelope()),
-            self.lod2_implicit_representation()
-                .and_then(|x| x.compute_envelope()),
-            self.lod3_implicit_representation()
-                .and_then(|x| x.compute_envelope()),
-        ]
-        .into_iter()
-        .flatten()
-        .collect();
-
-        Envelope::from_envelopes(&envelopes)
-    }
 }
 
 pub trait AsAbstractOccupiedSpaceMut: AsAbstractSpaceMut + AsAbstractOccupiedSpace {
@@ -95,34 +125,6 @@ pub trait AsAbstractOccupiedSpaceMut: AsAbstractSpaceMut + AsAbstractOccupiedSpa
     fn set_lod3_implicit_representation(&mut self, value: Option<ImplicitGeometry>) {
         self.abstract_occupied_space_mut()
             .lod3_implicit_representation = value;
-    }
-
-    fn refresh_bounded_by(&mut self) {
-        let envelope = AsAbstractOccupiedSpace::compute_envelope(self);
-        self.set_bounded_by(envelope);
-    }
-
-    fn apply_transform(&mut self, m: &Isometry3<f64>) {
-        AsAbstractSpaceMut::apply_transform(self, m);
-
-        if let Some(g) = &mut self
-            .abstract_occupied_space_mut()
-            .lod1_implicit_representation
-        {
-            g.apply_transform(m);
-        }
-        if let Some(g) = &mut self
-            .abstract_occupied_space_mut()
-            .lod2_implicit_representation
-        {
-            g.apply_transform(m);
-        }
-        if let Some(g) = &mut self
-            .abstract_occupied_space_mut()
-            .lod3_implicit_representation
-        {
-            g.apply_transform(m);
-        }
     }
 }
 

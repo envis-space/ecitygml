@@ -5,7 +5,7 @@ import pytest
 
 from ecitygml import (
     Building,
-    CityObjectClass,
+    FeatureType,
     DoorSurface,
     Envelope,
     GroundSurface,
@@ -21,8 +21,8 @@ class TestBuildingLoD1:
     def test_id(self, fzk_lod1_building: Building) -> None:
         assert fzk_lod1_building.id == "UUID_d281adfc-4901-0f52-540b-4cc1a9325f82"
 
-    def test_city_object_class(self, fzk_lod1_building: Building) -> None:
-        assert fzk_lod1_building.city_object_class == CityObjectClass.Building
+    def test_feature_type(self, fzk_lod1_building: Building) -> None:
+        assert fzk_lod1_building.feature_type == FeatureType.Building
 
     def test_storeys_above_ground(self, fzk_lod1_building: Building) -> None:
         assert fzk_lod1_building.storeys_above_ground == 2
@@ -101,8 +101,8 @@ class TestBuildingLoD2:
             assert ws.door_surface == []
             assert ws.window_surface == []
 
-    def test_envelope_volume(self, fzk_lod2_building: Building) -> None:
-        assert fzk_lod2_building.bounded_by.volume == pytest.approx(782.12, abs=1.0)
+    def test_bounded_by_is_none(self, fzk_lod2_building: Building) -> None:
+        assert fzk_lod2_building.bounded_by is None
 
 
 class TestBuildingLoD3:
@@ -150,8 +150,8 @@ class TestTumBuilding:
     def test_id(self, tum_building: Building) -> None:
         assert tum_building.id == "DEBY_LOD2_4959457"
 
-    def test_city_object_class(self, tum_building: Building) -> None:
-        assert tum_building.city_object_class == CityObjectClass.Building
+    def test_feature_type(self, tum_building: Building) -> None:
+        assert tum_building.feature_type == FeatureType.Building
 
     def test_wall_surface_count(self, tum_building: Building) -> None:
         assert len(tum_building.wall_surface) == 14
@@ -162,8 +162,8 @@ class TestTumBuilding:
     def test_ground_surface_count(self, tum_building: Building) -> None:
         assert len(tum_building.ground_surface) == 1
 
-    def test_bounded_by_lower_corner_x(self, tum_building: Building) -> None:
-        assert tum_building.bounded_by.lower_corner[0] == pytest.approx(691009.16, abs=0.1)
+    def test_bounded_by_is_none(self, tum_building: Building) -> None:
+        assert tum_building.bounded_by is None
 
     def test_wall_lod2_multi_surface(self, tum_building: Building) -> None:
         ws = tum_building.wall_surface[0]

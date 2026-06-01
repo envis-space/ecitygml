@@ -1,7 +1,9 @@
+use crate::model::common::{FeatureRef, FeatureRefMut};
 use crate::model::core::{
-    AbstractOccupiedSpace, AsAbstractOccupiedSpace, AsAbstractOccupiedSpaceMut, AsAbstractSpaceMut,
+    AbstractOccupiedSpace, AsAbstractOccupiedSpace, AsAbstractOccupiedSpaceMut,
 };
 use chrono::NaiveDate;
+use egml::model::geometry::Envelope;
 use nalgebra::Isometry3;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -18,6 +20,22 @@ impl AbstractConstruction {
             date_of_construction: None,
             date_of_demolition: None,
         }
+    }
+
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+        self.abstract_occupied_space.iter_features()
+    }
+
+    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+        self.abstract_occupied_space.for_each_feature_mut(f);
+    }
+
+    pub fn compute_envelope(&self) -> Option<Envelope> {
+        self.abstract_occupied_space.compute_envelope()
+    }
+
+    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
+        self.abstract_occupied_space.apply_transform(m);
     }
 }
 
@@ -42,10 +60,6 @@ pub trait AsAbstractConstructionMut: AsAbstractOccupiedSpaceMut + AsAbstractCons
 
     fn set_date_of_demolition(&mut self, date_of_demolition: Option<NaiveDate>) {
         self.abstract_construction_mut().date_of_demolition = date_of_demolition;
-    }
-
-    fn apply_transform(&mut self, m: &Isometry3<f64>) {
-        AsAbstractOccupiedSpaceMut::apply_transform(self, m);
     }
 }
 

@@ -17,10 +17,10 @@ pub fn run(file_path: impl AsRef<Path>) -> Result<(), Error> {
     info!("Read model in {:.3?}", time_elapsed);
 
     let now = Instant::now();
-    city_model.refresh_bounded_by_recursive();
+    city_model.recompute_child_bounding_shapes();
     info!("Refreshed bounded_by in {:.3?}", now.elapsed());
 
-    for current_city_object in city_model.iter_city_object() {
+    for current_city_object in city_model.iter_features() {
         let envelope_str = current_city_object
             .bounded_by()
             .map_or_else(String::new, |e| format!(", {}", e));
@@ -28,7 +28,7 @@ pub fn run(file_path: impl AsRef<Path>) -> Result<(), Error> {
         info!(
             "   ID: {}, class: {}{}",
             current_city_object.id(),
-            current_city_object.city_object_class(),
+            current_city_object.feature_type(),
             envelope_str,
         );
     }

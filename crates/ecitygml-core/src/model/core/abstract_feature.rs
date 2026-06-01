@@ -1,5 +1,7 @@
 use egml::model::base::Id;
+use egml::model::feature::BoundingShape;
 use egml::model::geometry::Envelope;
+use nalgebra::Isometry3;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbstractFeature {
@@ -20,6 +22,10 @@ impl AbstractFeature {
         Self { abstract_feature }
     }
 
+    pub fn gml_abstract_feature(&self) -> &egml::model::feature::AbstractFeature {
+        &self.abstract_feature
+    }
+
     pub fn id(&self) -> &Id {
         self.abstract_feature
             .abstract_gml
@@ -37,11 +43,19 @@ impl AbstractFeature {
     }
 
     pub fn bounded_by(&self) -> Option<&Envelope> {
-        self.abstract_feature.bounded_by.as_ref()
+        self.abstract_feature.bounded_by.as_ref()?.envelope.as_ref()
     }
 
-    pub fn set_bounded_by(&mut self, bounded_by: Option<Envelope>) {
-        self.abstract_feature.bounded_by = bounded_by;
+    pub fn set_bounding_shape(&mut self, bounding_shape: Option<BoundingShape>) {
+        self.abstract_feature.bounded_by = bounding_shape;
+    }
+
+    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
+        if let Some(bounding_shape) = self.abstract_feature.bounded_by.as_mut()
+            && let Some(envelope) = &mut bounding_shape.envelope
+        {
+            envelope.apply_transform(m);
+        }
     }
 }
 
@@ -68,8 +82,15 @@ pub trait AsAbstractFeatureMut: AsAbstractFeature {
         self.abstract_feature_mut().set_name(name);
     }
 
-    fn set_bounded_by(&mut self, envelope: Option<Envelope>) {
-        self.abstract_feature_mut().set_bounded_by(envelope);
+    fn set_bounding_shape_from_envelope(&mut self, envelope: Option<Envelope>) {
+        let bounding_shape = envelope.map(BoundingShape::new);
+        self.abstract_feature_mut()
+            .set_bounding_shape(bounding_shape);
+    }
+
+    fn set_bounding_shape(&mut self, bounding_shape: Option<BoundingShape>) {
+        self.abstract_feature_mut()
+            .set_bounding_shape(bounding_shape);
     }
 }
 

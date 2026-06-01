@@ -28,7 +28,7 @@ from ecitygml._ecitygml import (
     DirectPosition,
     Envelope,
     LevelOfDetail,
-    CityObjectClass,
+    FeatureType,
 )
 
 __version__ = "0.1.0"
@@ -63,5 +63,5 @@ __all__ = [
     "DirectPosition",
     "Envelope",
     "LevelOfDetail",
-    "CityObjectClass",
+    "FeatureType",
 ]

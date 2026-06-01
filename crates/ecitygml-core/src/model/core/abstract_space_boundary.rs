@@ -1,4 +1,7 @@
+use crate::model::common::{FeatureRef, FeatureRefMut};
 use crate::model::core::{AbstractCityObject, AsAbstractCityObject, AsAbstractCityObjectMut};
+use egml::model::geometry::Envelope;
+use nalgebra::Isometry3;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbstractSpaceBoundary {
@@ -10,6 +13,22 @@ impl AbstractSpaceBoundary {
         Self {
             abstract_city_object,
         }
+    }
+
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+        self.abstract_city_object.iter_features()
+    }
+
+    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+        self.abstract_city_object.for_each_feature_mut(f);
+    }
+
+    pub fn compute_envelope(&self) -> Option<Envelope> {
+        self.abstract_city_object.compute_envelope()
+    }
+
+    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
+        self.abstract_city_object.apply_transform(m);
     }
 }
 

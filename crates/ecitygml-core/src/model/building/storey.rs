@@ -2,8 +2,8 @@ use crate::impl_abstract_building_subdivision_traits;
 use crate::model::building::{
     AbstractBuildingSubdivision, AsAbstractBuildingSubdivision, AsAbstractBuildingSubdivisionMut,
 };
-use crate::model::core::{AsAbstractFeatureMut, AsAbstractSpace, CityObjectKind, CityObjectRef};
-use crate::operations::{Visitable, Visitor};
+use crate::model::common::{FeatureRef, FeatureRefMut};
+use crate::model::core::AsAbstractFeatureMut;
 use egml::model::geometry::Envelope;
 use nalgebra::Isometry3;
 
@@ -19,32 +19,25 @@ impl Storey {
         }
     }
 
-    pub fn iter_city_object<'a>(&'a self) -> impl Iterator<Item = CityObjectRef<'a>> + 'a {
-        std::iter::once(CityObjectRef::Storey(self))
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+        std::iter::once(self.into()).chain(self.abstract_building_subdivision.iter_features())
     }
 
-    pub fn refresh_bounded_by(&mut self) {
-        /*self.wall_surface
-        .iter_mut()
-        .for_each(|x| x.refresh_bounded_by_recursive());*/
-
-        let own_envelope = self.compute_envelope();
-        let envelopes: Vec<Envelope> = own_envelope
-            .as_ref()
-            .into_iter()
-            //.chain(self.wall_surface.iter().filter_map(|x| x.bounded_by()))
-            .cloned()
-            .collect();
-
-        self.set_bounded_by(Envelope::from_envelopes(&envelopes));
+    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+        f((&mut *self).into());
+        self.abstract_building_subdivision.for_each_feature_mut(f);
     }
 
-    pub fn apply_transform_recursive(&mut self, _m: &Isometry3<f64>) {
-        // AsAbstractUnoccupiedSpace::apply_transform(&mut self.abstract_unoccupied_space, m);
+    pub fn compute_envelope(&self) -> Option<Envelope> {
+        self.abstract_building_subdivision.compute_envelope()
+    }
 
-        /*self.wall_surface
-        .iter_mut()
-        .for_each(|x| x.apply_transform(m));*/
+    pub fn recompute_bounding_shape(&mut self) {
+        self.set_bounding_shape_from_envelope(self.compute_envelope());
+    }
+
+    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
+        self.abstract_building_subdivision.apply_transform(m);
     }
 }
 
@@ -62,14 +55,14 @@ impl AsAbstractBuildingSubdivisionMut for Storey {
 
 impl_abstract_building_subdivision_traits!(Storey);
 
-impl From<Storey> for CityObjectKind {
-    fn from(item: Storey) -> Self {
-        CityObjectKind::Storey(item)
+impl<'a> From<&'a Storey> for FeatureRef<'a> {
+    fn from(item: &'a Storey) -> Self {
+        FeatureRef::Storey(item)
     }
 }
 
-impl Visitable for Storey {
-    fn accept<V: Visitor>(&self, visitor: &mut V) {
-        visitor.visit_storey(self);
+impl<'a> From<&'a mut Storey> for FeatureRefMut<'a> {
+    fn from(item: &'a mut Storey) -> Self {
+        FeatureRefMut::Storey(item)
     }
 }

@@ -1,90 +1,110 @@
-use crate::model::core::{
-    AbstractSpace, AsAbstractFeature, AsAbstractFeatureMut, AsAbstractSpace, AsAbstractSpaceMut,
-    CityObjectKind, CityObjectRef,
+use crate::model::common::{FeatureRef, FeatureRefMut, TopLevelFeatureRef};
+use crate::model::core::AsAbstractFeatureMut;
+use crate::model::transportation::{
+    AbstractTransportationSpace, AsAbstractTransportationSpace, AsAbstractTransportationSpaceMut,
+    IntersectionProperty, SectionProperty,
 };
-use crate::model::transportation::{Intersection, Section};
-use crate::operations::{Visitable, Visitor};
 use egml::model::geometry::Envelope;
 use nalgebra::Isometry3;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Road {
-    pub(crate) abstract_space: AbstractSpace,
-    pub section: Vec<Section>,
-    pub intersection: Vec<Intersection>,
+    pub(crate) abstract_transportation_space: AbstractTransportationSpace,
+    pub sections: Vec<SectionProperty>,
+    pub intersections: Vec<IntersectionProperty>,
 }
 
 impl Road {
-    pub fn new(abstract_space: AbstractSpace) -> Self {
+    pub fn new(abstract_transportation_space: AbstractTransportationSpace) -> Self {
         Self {
-            abstract_space,
-            section: Default::default(),
-            intersection: Default::default(),
+            abstract_transportation_space,
+            sections: Default::default(),
+            intersections: Default::default(),
         }
     }
 
-    pub fn iter_city_object<'a>(&'a self) -> impl Iterator<Item = CityObjectRef<'a>> + 'a {
-        std::iter::once(CityObjectRef::Road(self))
-            .chain(self.section.iter().flat_map(|x| x.iter_city_object()))
-            .chain(self.intersection.iter().flat_map(|x| x.iter_city_object()))
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+        std::iter::once(self.into())
+            .chain(self.abstract_transportation_space.iter_features())
+            .chain(
+                self.sections
+                    .iter()
+                    .flat_map(|x| x.object.as_ref())
+                    .flat_map(|x| x.iter_features()),
+            )
+            .chain(
+                self.intersections
+                    .iter()
+                    .flat_map(|x| x.object.as_ref())
+                    .flat_map(|x| x.iter_features()),
+            )
     }
 
-    pub fn refresh_bounded_by_recursive(&mut self) {
-        self.section
-            .iter_mut()
-            .for_each(|x| x.refresh_bounded_by_recursive());
-        self.intersection
-            .iter_mut()
-            .for_each(|x| x.refresh_bounded_by_recursive());
-
-        let own_envelope = self.compute_envelope();
-        let envelopes: Vec<Envelope> = own_envelope
-            .as_ref()
-            .into_iter()
-            .chain(self.section.iter().filter_map(|x| x.bounded_by()))
-            .chain(self.intersection.iter().filter_map(|x| x.bounded_by()))
-            .cloned()
-            .collect();
-
-        self.set_bounded_by(Envelope::from_envelopes(&envelopes));
+    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+        f((&mut *self).into());
+        self.abstract_transportation_space.for_each_feature_mut(f);
+        for prop in &mut self.sections {
+            if let Some(x) = prop.object.as_mut() {
+                x.for_each_feature_mut(f);
+            }
+        }
+        for prop in &mut self.intersections {
+            if let Some(x) = prop.object.as_mut() {
+                x.for_each_feature_mut(f);
+            }
+        }
     }
 
-    pub fn apply_transform_recursive(&mut self, m: &Isometry3<f64>) {
-        self.abstract_space.apply_transform(m);
+    pub fn compute_envelope(&self) -> Option<Envelope> {
+        self.abstract_transportation_space.compute_envelope()
+    }
 
-        self.section
+    pub fn recompute_bounding_shape(&mut self) {
+        self.set_bounding_shape_from_envelope(self.compute_envelope());
+    }
+
+    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
+        self.abstract_transportation_space.apply_transform(m);
+
+        self.sections
             .iter_mut()
-            .for_each(|x| x.apply_transform_recursive(m));
-        self.intersection
+            .flat_map(|x| x.object.as_mut())
+            .for_each(|x| x.apply_transform(m));
+        self.intersections
             .iter_mut()
-            .for_each(|x| x.apply_transform_recursive(m));
+            .flat_map(|x| x.object.as_mut())
+            .for_each(|x| x.apply_transform(m));
     }
 }
 
-impl AsAbstractSpace for Road {
-    fn abstract_space(&self) -> &AbstractSpace {
-        &self.abstract_space
+impl AsAbstractTransportationSpace for Road {
+    fn abstract_transportation_space(&self) -> &AbstractTransportationSpace {
+        &self.abstract_transportation_space
     }
 }
 
-impl AsAbstractSpaceMut for Road {
-    fn abstract_space_mut(&mut self) -> &mut AbstractSpace {
-        &mut self.abstract_space
+impl AsAbstractTransportationSpaceMut for Road {
+    fn abstract_transportation_space_mut(&mut self) -> &mut AbstractTransportationSpace {
+        &mut self.abstract_transportation_space
     }
 }
 
-crate::impl_abstract_space_traits!(Road);
+crate::impl_abstract_transportation_space_traits!(Road);
 
-impl From<Road> for CityObjectKind {
-    fn from(item: Road) -> Self {
-        CityObjectKind::Road(item)
+impl<'a> From<&'a Road> for FeatureRef<'a> {
+    fn from(item: &'a Road) -> Self {
+        FeatureRef::Road(item)
     }
 }
 
-impl Visitable for Road {
-    fn accept<V: Visitor>(&self, visitor: &mut V) {
-        visitor.visit_road(self);
-        self.section.iter().for_each(|x| x.accept(visitor));
-        self.intersection.iter().for_each(|x| x.accept(visitor));
+impl<'a> From<&'a mut Road> for FeatureRefMut<'a> {
+    fn from(item: &'a mut Road) -> Self {
+        FeatureRefMut::Road(item)
+    }
+}
+
+impl<'a> From<&'a Road> for TopLevelFeatureRef<'a> {
+    fn from(item: &'a Road) -> Self {
+        TopLevelFeatureRef::Road(item)
     }
 }

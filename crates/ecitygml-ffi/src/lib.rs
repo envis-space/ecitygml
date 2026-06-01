@@ -1,10 +1,10 @@
 use ecitygml::io;
 use ecitygml::model::core;
-use ecitygml::operations::{CityModelGeometryIndex, CityObjectGeometry};
+use ecitygml::operations::{CityModelGeometryStore, CityObjectGeometryEntry};
 use egml::model::base::Id;
 use egml::model::geometry::Envelope;
 use std::fs::File;
-use std::io::Read;
+
 use std::path::PathBuf;
 
 pub struct CCityModel {
@@ -22,14 +22,14 @@ pub unsafe extern "C" fn city_model_destroy(handle: *mut CCityModel) -> CErrorCo
     CErrorCode::OK
 }
 
-pub struct CCityModelGeometryIndex {
-    inner: Option<CityModelGeometryIndex>,
+pub struct CCityModelGeometryStore {
+    inner: Option<CityModelGeometryStore>,
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn city_model_geometry_index_create(
+pub unsafe extern "C" fn city_model_geometry_store_create(
     city_model: *mut CCityModel,
-    out: *mut *mut CCityModelGeometryIndex,
+    out: *mut *mut CCityModelGeometryStore,
 ) -> CErrorCode {
     unsafe {
         if city_model.is_null() || out.is_null() {
@@ -40,8 +40,8 @@ pub unsafe extern "C" fn city_model_geometry_index_create(
 
         match city_model.inner.take() {
             Some(city_model) => {
-                *out = Box::into_raw(Box::new(CCityModelGeometryIndex {
-                    inner: Some(CityModelGeometryIndex::from_city_model(city_model)),
+                *out = Box::into_raw(Box::new(CCityModelGeometryStore {
+                    inner: Some(CityModelGeometryStore::from_city_model(city_model)),
                 }));
                 CErrorCode::OK
             }
@@ -51,8 +51,8 @@ pub unsafe extern "C" fn city_model_geometry_index_create(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn city_model_geometry_index_destroy(
-    handle: *mut CCityModelGeometryIndex,
+pub unsafe extern "C" fn city_model_geometry_store_destroy(
+    handle: *mut CCityModelGeometryStore,
 ) -> CErrorCode {
     if handle.is_null() {
         return CErrorCode::NULL_POINTER;
@@ -64,20 +64,20 @@ pub unsafe extern "C" fn city_model_geometry_index_destroy(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn city_model_geometry_index_objects_len(
-    handle: *mut CCityModelGeometryIndex,
+pub unsafe extern "C" fn city_model_geometry_store_objects_len(
+    handle: *mut CCityModelGeometryStore,
     out: *mut usize,
 ) -> CErrorCode {
     if handle.is_null() || out.is_null() {
         return CErrorCode::NULL_POINTER;
     }
 
-    let city_model_geometry_index = unsafe { &*handle };
+    let city_model_geometry_store = unsafe { &*handle };
 
-    match &city_model_geometry_index.inner {
-        Some(city_model_geometry_index) => {
+    match &city_model_geometry_store.inner {
+        Some(city_model_geometry_store) => {
             unsafe {
-                *out = city_model_geometry_index.objects_len();
+                *out = city_model_geometry_store.objects_len();
             }
             CErrorCode::OK
         }
@@ -86,8 +86,8 @@ pub unsafe extern "C" fn city_model_geometry_index_objects_len(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn city_model_geometry_index_get_object_ids(
-    handle: *mut CCityModelGeometryIndex,
+pub unsafe extern "C" fn city_model_geometry_store_get_object_ids(
+    handle: *mut CCityModelGeometryStore,
     out_ptr: *mut *mut *mut libc::c_char,
     out_len: *mut usize,
 ) -> CErrorCode {
@@ -95,9 +95,9 @@ pub unsafe extern "C" fn city_model_geometry_index_get_object_ids(
         return CErrorCode::NULL_POINTER;
     }
 
-    let city_model_geometry_index = unsafe { &*handle };
+    let city_model_geometry_store = unsafe { &*handle };
 
-    match &city_model_geometry_index.inner {
+    match &city_model_geometry_store.inner {
         Some(index) => {
             let ids = index.object_ids();
             let len = ids.len();
@@ -124,7 +124,7 @@ pub unsafe extern "C" fn city_model_geometry_index_get_object_ids(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn city_model_geometry_index_free_object_ids(
+pub unsafe extern "C" fn city_model_geometry_store_free_object_ids(
     ptr: *mut *mut libc::c_char,
     len: usize,
 ) -> CErrorCode {
@@ -145,8 +145,8 @@ pub unsafe extern "C" fn city_model_geometry_index_free_object_ids(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn city_model_geometry_index_get(
-    handle: *mut CCityModelGeometryIndex,
+pub unsafe extern "C" fn city_model_geometry_store_get(
+    handle: *mut CCityModelGeometryStore,
     id: *const libc::c_char,
     out: *mut *mut CCityObjectGeometry,
 ) -> CErrorCode {
@@ -155,7 +155,7 @@ pub unsafe extern "C" fn city_model_geometry_index_get(
             return CErrorCode::NULL_POINTER;
         }
 
-        let city_model_geometry_index = unsafe { &*handle };
+        let city_model_geometry_store = unsafe { &*handle };
         let id_str = match unsafe { std::ffi::CStr::from_ptr(id).to_str() } {
             Ok(s) => s,
             Err(_) => return CErrorCode::INTERNAL_ERROR,
@@ -165,9 +165,9 @@ pub unsafe extern "C" fn city_model_geometry_index_get(
             Err(_) => return CErrorCode::INTERNAL_ERROR,
         };
 
-        match &city_model_geometry_index.inner {
-            Some(city_model_geometry_index) => {
-                match city_model_geometry_index.get(&id) {
+        match &city_model_geometry_store.inner {
+            Some(city_model_geometry_store) => {
+                match city_model_geometry_store.get_by_id(&id) {
                     None => {
                         *out = std::ptr::null_mut();
                     }
@@ -180,7 +180,7 @@ pub unsafe extern "C" fn city_model_geometry_index_get(
                 CErrorCode::OK
             }
             None => {
-                println!("Error: GeometryCollector is null");
+                println!("Error: GeometryStore is null");
                 CErrorCode::INTERNAL_ERROR
             }
         }
@@ -188,7 +188,7 @@ pub unsafe extern "C" fn city_model_geometry_index_get(
 }
 
 pub struct CCityObjectGeometry {
-    inner: Option<CityObjectGeometry>,
+    inner: Option<CityObjectGeometryEntry>,
 }
 
 #[unsafe(no_mangle)]
@@ -333,7 +333,7 @@ pub unsafe extern "C" fn city_model_objects_len(
     match &model.inner {
         Some(city_model) => {
             unsafe {
-                *out = city_model.city_objects_len();
+                *out = city_model.city_object_members_len();
             }
             CErrorCode::OK
         }

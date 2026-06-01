@@ -1,11 +1,16 @@
+use crate::model::common::{FeatureRef, FeatureRefMut};
+use crate::model::construction::FillingElementProperty;
 use crate::model::core::{
     AbstractOccupiedSpace, AsAbstractOccupiedSpace, AsAbstractOccupiedSpaceMut,
 };
+use egml::model::geometry::Envelope;
+use nalgebra::Isometry3;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbstractConstructiveElement {
     pub abstract_occupied_space: AbstractOccupiedSpace,
     is_structural_element: Option<bool>,
+    fillings: Vec<FillingElementProperty>,
 }
 
 impl AbstractConstructiveElement {
@@ -13,18 +18,68 @@ impl AbstractConstructiveElement {
         Self {
             abstract_occupied_space,
             is_structural_element: None,
+            fillings: Vec::new(),
+        }
+    }
+
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+        self.abstract_occupied_space.iter_features().chain(
+            self.fillings
+                .iter()
+                .filter_map(|x| x.object.as_ref())
+                .flat_map(|x| x.iter_features()),
+        )
+    }
+
+    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+        self.abstract_occupied_space.for_each_feature_mut(f);
+        for prop in &mut self.fillings {
+            if let Some(x) = prop.object.as_mut() {
+                x.for_each_feature_mut(f);
+            }
+        }
+    }
+
+    pub fn compute_envelope(&self) -> Option<Envelope> {
+        self.abstract_occupied_space.compute_envelope()
+    }
+
+    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
+        self.abstract_occupied_space.apply_transform(m);
+
+        for prop in &mut self.fillings {
+            if let Some(x) = prop.object.as_mut() {
+                x.apply_transform(m);
+            }
         }
     }
 }
 
 pub trait AsAbstractConstructiveElement: AsAbstractOccupiedSpace {
     fn abstract_constructive_element(&self) -> &AbstractConstructiveElement;
+
+    fn is_structural_element(&self) -> &Option<bool> {
+        &self.abstract_constructive_element().is_structural_element
+    }
+
+    fn fillings(&self) -> &Vec<FillingElementProperty> {
+        &self.abstract_constructive_element().fillings
+    }
 }
 
 pub trait AsAbstractConstructiveElementMut:
     AsAbstractOccupiedSpaceMut + AsAbstractConstructiveElement
 {
     fn abstract_constructive_element_mut(&mut self) -> &mut AbstractConstructiveElement;
+
+    fn set_is_structural_element(&mut self, is_structural_element: Option<bool>) {
+        self.abstract_constructive_element_mut()
+            .is_structural_element = is_structural_element;
+    }
+
+    fn set_fillings(&mut self, values: Vec<FillingElementProperty>) {
+        self.abstract_constructive_element_mut().fillings = values;
+    }
 }
 
 impl AsAbstractConstructiveElement for AbstractConstructiveElement {

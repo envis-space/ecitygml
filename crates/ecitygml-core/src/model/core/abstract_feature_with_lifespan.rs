@@ -1,5 +1,6 @@
 use crate::model::core::{AbstractFeature, AsAbstractFeature, AsAbstractFeatureMut};
 use chrono::{DateTime, FixedOffset};
+use nalgebra::Isometry3;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbstractFeatureWithLifespan {
@@ -19,6 +20,10 @@ impl AbstractFeatureWithLifespan {
             valid_from: None,
             valid_to: None,
         }
+    }
+
+    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
+        self.abstract_feature.apply_transform(m);
     }
 }
 

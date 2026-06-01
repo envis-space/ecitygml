@@ -1,10 +1,9 @@
+use crate::model::common::{FeatureRef, FeatureRefMut};
 use crate::model::core::{
-    AbstractUnoccupiedSpace, AsAbstractFeature, AsAbstractFeatureMut, AsAbstractSpace,
-    AsAbstractSpaceMut, AsAbstractThematicSurfaceMut, AsAbstractUnoccupiedSpace,
-    AsAbstractUnoccupiedSpaceMut, CityObjectKind, CityObjectRef,
+    AbstractUnoccupiedSpace, AsAbstractFeatureMut, AsAbstractUnoccupiedSpace,
+    AsAbstractUnoccupiedSpaceMut,
 };
-use crate::model::transportation::{AuxiliaryTrafficArea, GranularityValue};
-use crate::operations::{Visitable, Visitor};
+use crate::model::transportation::GranularityValue;
 use egml::model::basic::Code;
 use egml::model::geometry::Envelope;
 use nalgebra::Isometry3;
@@ -12,7 +11,6 @@ use nalgebra::Isometry3;
 #[derive(Debug, Clone, PartialEq)]
 pub struct AuxiliaryTrafficSpace {
     pub(crate) abstract_unoccupied_space: AbstractUnoccupiedSpace,
-    pub auxiliary_traffic_area: Vec<AuxiliaryTrafficArea>, // this should be located in boundaries the space struct
     pub(crate) class: Option<Code>,
     pub(crate) functions: Vec<Code>,
     pub(crate) usages: Vec<Code>,
@@ -26,7 +24,6 @@ impl AuxiliaryTrafficSpace {
     ) -> Self {
         Self {
             abstract_unoccupied_space,
-            auxiliary_traffic_area: Vec::new(),
             class: None,
             functions: Vec::new(),
             usages: Vec::new(),
@@ -34,40 +31,25 @@ impl AuxiliaryTrafficSpace {
         }
     }
 
-    pub fn iter_city_object<'a>(&'a self) -> impl Iterator<Item = CityObjectRef<'a>> + 'a {
-        std::iter::once(CityObjectRef::AuxiliaryTrafficSpace(self)).chain(
-            self.auxiliary_traffic_area
-                .iter()
-                .flat_map(|x| x.iter_city_object()),
-        )
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+        std::iter::once(self.into()).chain(self.abstract_unoccupied_space.iter_features())
     }
 
-    pub fn refresh_bounded_by_recursive(&mut self) {
-        self.auxiliary_traffic_area
-            .iter_mut()
-            .for_each(|x| x.refresh_bounded_by());
-
-        let own_envelope = self.compute_envelope();
-        let envelopes: Vec<Envelope> = own_envelope
-            .as_ref()
-            .into_iter()
-            .chain(
-                self.auxiliary_traffic_area
-                    .iter()
-                    .filter_map(|x| x.bounded_by()),
-            )
-            .cloned()
-            .collect();
-
-        self.set_bounded_by(Envelope::from_envelopes(&envelopes));
+    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+        f((&mut *self).into());
+        self.abstract_unoccupied_space.for_each_feature_mut(f);
     }
 
-    pub fn apply_transform_recursive(&mut self, m: &Isometry3<f64>) {
+    pub fn compute_envelope(&self) -> Option<Envelope> {
+        self.abstract_unoccupied_space.compute_envelope()
+    }
+
+    pub fn recompute_bounding_shape(&mut self) {
+        self.set_bounding_shape_from_envelope(self.compute_envelope());
+    }
+
+    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
         self.abstract_unoccupied_space.apply_transform(m);
-
-        self.auxiliary_traffic_area
-            .iter_mut()
-            .for_each(|x| x.apply_transform(m));
     }
 
     pub fn class(&self) -> &Option<Code> {
@@ -117,17 +99,14 @@ impl AsAbstractUnoccupiedSpaceMut for AuxiliaryTrafficSpace {
 
 crate::impl_abstract_unoccupied_space_traits!(AuxiliaryTrafficSpace);
 
-impl From<AuxiliaryTrafficSpace> for CityObjectKind {
-    fn from(item: AuxiliaryTrafficSpace) -> Self {
-        CityObjectKind::AuxiliaryTrafficSpace(item)
+impl<'a> From<&'a AuxiliaryTrafficSpace> for FeatureRef<'a> {
+    fn from(item: &'a AuxiliaryTrafficSpace) -> Self {
+        FeatureRef::AuxiliaryTrafficSpace(item)
     }
 }
 
-impl Visitable for AuxiliaryTrafficSpace {
-    fn accept<V: Visitor>(&self, visitor: &mut V) {
-        visitor.visit_auxiliary_traffic_space(self);
-        self.auxiliary_traffic_area
-            .iter()
-            .for_each(|x| x.accept(visitor));
+impl<'a> From<&'a mut AuxiliaryTrafficSpace> for FeatureRefMut<'a> {
+    fn from(item: &'a mut AuxiliaryTrafficSpace) -> Self {
+        FeatureRefMut::AuxiliaryTrafficSpace(item)
     }
 }

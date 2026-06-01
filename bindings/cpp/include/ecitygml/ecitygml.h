@@ -14,7 +14,7 @@ typedef enum CErrorCode {
 
 typedef struct CCityModel CCityModel;
 
-typedef struct CCityModelGeometryIndex CCityModelGeometryIndex;
+typedef struct CCityModelGeometryStore CCityModelGeometryStore;
 
 typedef struct CCityObjectGeometry CCityObjectGeometry;
 
@@ -24,21 +24,21 @@ typedef struct CGmlReader CGmlReader;
 
 enum CErrorCode city_model_destroy(struct CCityModel *handle);
 
-enum CErrorCode city_model_geometry_index_create(struct CCityModel *city_model,
-                                                 struct CCityModelGeometryIndex **out);
+enum CErrorCode city_model_geometry_store_create(struct CCityModel *city_model,
+                                                 struct CCityModelGeometryStore **out);
 
-enum CErrorCode city_model_geometry_index_destroy(struct CCityModelGeometryIndex *handle);
+enum CErrorCode city_model_geometry_store_destroy(struct CCityModelGeometryStore *handle);
 
-enum CErrorCode city_model_geometry_index_objects_len(struct CCityModelGeometryIndex *handle,
+enum CErrorCode city_model_geometry_store_objects_len(struct CCityModelGeometryStore *handle,
                                                       uintptr_t *out);
 
-enum CErrorCode city_model_geometry_index_get_object_ids(struct CCityModelGeometryIndex *handle,
+enum CErrorCode city_model_geometry_store_get_object_ids(struct CCityModelGeometryStore *handle,
                                                          char ***out_ptr,
                                                          uintptr_t *out_len);
 
-enum CErrorCode city_model_geometry_index_free_object_ids(char **ptr, uintptr_t len);
+enum CErrorCode city_model_geometry_store_free_object_ids(char **ptr, uintptr_t len);
 
-enum CErrorCode city_model_geometry_index_get(struct CCityModelGeometryIndex *handle,
+enum CErrorCode city_model_geometry_store_get(struct CCityModelGeometryStore *handle,
                                               const char *id,
                                               struct CCityObjectGeometry **out);
 

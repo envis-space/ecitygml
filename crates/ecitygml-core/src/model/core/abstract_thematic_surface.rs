@@ -1,11 +1,9 @@
-use crate::model::common::LevelOfDetail;
+use crate::model::common::{FeatureRef, FeatureRefMut, LevelOfDetail};
 use crate::model::core::{
-    AbstractSpaceBoundary, AsAbstractCityObject, AsAbstractSpaceBoundary,
-    AsAbstractSpaceBoundaryMut,
+    AbstractSpaceBoundary, AsAbstractSpaceBoundary, AsAbstractSpaceBoundaryMut,
 };
-use crate::model::core::{AsAbstractCityObjectMut, AsAbstractFeature};
 use egml::model::geometry::Envelope;
-use egml::model::geometry::aggregates::MultiSurface;
+use egml::model::geometry::aggregates::{MultiCurve, MultiSurface};
 use nalgebra::Isometry3;
 use std::collections::HashMap;
 
@@ -16,6 +14,7 @@ pub struct AbstractThematicSurface {
     pub(crate) lod1_multi_surface: Option<MultiSurface>,
     pub(crate) lod2_multi_surface: Option<MultiSurface>,
     pub(crate) lod3_multi_surface: Option<MultiSurface>,
+    pub(crate) lod0_multi_curve: Option<MultiCurve>,
 }
 
 impl AbstractThematicSurface {
@@ -26,7 +25,40 @@ impl AbstractThematicSurface {
             lod1_multi_surface: None,
             lod2_multi_surface: None,
             lod3_multi_surface: None,
+            lod0_multi_curve: None,
         }
+    }
+
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+        self.abstract_space_boundary.iter_features()
+    }
+
+    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+        self.abstract_space_boundary.for_each_feature_mut(f);
+    }
+
+    pub fn compute_envelope(&self) -> Option<Envelope> {
+        let envelopes: Vec<Envelope> = vec![
+            self.abstract_space_boundary.compute_envelope(),
+            self.lod0_multi_surface
+                .as_ref()
+                .map(|x| x.compute_envelope()),
+            self.lod1_multi_surface
+                .as_ref()
+                .map(|x| x.compute_envelope()),
+            self.lod2_multi_surface
+                .as_ref()
+                .map(|x| x.compute_envelope()),
+            self.lod3_multi_surface
+                .as_ref()
+                .map(|x| x.compute_envelope()),
+            self.lod0_multi_curve.as_ref().map(|x| x.compute_envelope()),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+
+        Envelope::from_envelopes(&envelopes)
     }
 }
 
@@ -49,6 +81,10 @@ pub trait AsAbstractThematicSurface: AsAbstractSpaceBoundary {
         self.abstract_thematic_surface().lod3_multi_surface.as_ref()
     }
 
+    fn lod0_multi_curve(&self) -> Option<&MultiCurve> {
+        self.abstract_thematic_surface().lod0_multi_curve.as_ref()
+    }
+
     fn multi_surfaces_by_lod(&self) -> HashMap<LevelOfDetail, &MultiSurface> {
         let mut map = HashMap::new();
         if let Some(x) = self.lod0_multi_surface() {
@@ -64,20 +100,6 @@ pub trait AsAbstractThematicSurface: AsAbstractSpaceBoundary {
             map.insert(LevelOfDetail::Three, x);
         }
         map
-    }
-
-    fn compute_envelope(&self) -> Option<Envelope> {
-        let envelopes: Vec<Envelope> = vec![
-            self.lod0_multi_surface().map(|x| x.compute_envelope()),
-            self.lod1_multi_surface().map(|x| x.compute_envelope()),
-            self.lod2_multi_surface().map(|x| x.compute_envelope()),
-            self.lod3_multi_surface().map(|x| x.compute_envelope()),
-        ]
-        .into_iter()
-        .flatten()
-        .collect();
-
-        Envelope::from_envelopes(&envelopes)
     }
 }
 
@@ -102,9 +124,8 @@ pub trait AsAbstractThematicSurfaceMut:
         self.abstract_thematic_surface_mut().lod3_multi_surface = value;
     }
 
-    fn refresh_bounded_by(&mut self) {
-        let envelope = self.compute_envelope();
-        self.set_bounded_by(envelope);
+    fn set_lod0_multi_curve(&mut self, value: Option<MultiCurve>) {
+        self.abstract_thematic_surface_mut().lod0_multi_curve = value;
     }
 
     fn apply_transform(&mut self, m: &Isometry3<f64>) {
@@ -118,6 +139,9 @@ pub trait AsAbstractThematicSurfaceMut:
             g.apply_transform(m);
         }
         if let Some(g) = &mut self.abstract_thematic_surface_mut().lod3_multi_surface {
+            g.apply_transform(m);
+        }
+        if let Some(g) = &mut self.abstract_thematic_surface_mut().lod0_multi_curve {
             g.apply_transform(m);
         }
     }

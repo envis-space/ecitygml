@@ -1,4 +1,7 @@
+use crate::model::common::{FeatureRef, FeatureRefMut};
 use crate::model::core::{AbstractSpace, AsAbstractSpace, AsAbstractSpaceMut};
+use egml::model::geometry::Envelope;
+use nalgebra::Isometry3;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbstractLogicalSpace {
@@ -7,7 +10,23 @@ pub struct AbstractLogicalSpace {
 
 impl AbstractLogicalSpace {
     pub fn new(abstract_space: AbstractSpace) -> Self {
-        AbstractLogicalSpace { abstract_space }
+        Self { abstract_space }
+    }
+
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+        self.abstract_space.iter_features()
+    }
+
+    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+        self.abstract_space.for_each_feature_mut(f);
+    }
+
+    pub fn compute_envelope(&self) -> Option<Envelope> {
+        self.abstract_space.compute_envelope()
+    }
+
+    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
+        self.abstract_space.apply_transform(m);
     }
 }
 

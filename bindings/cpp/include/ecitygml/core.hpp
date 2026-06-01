@@ -130,7 +130,7 @@ public:
 
     ~ObjectIds() {
         if (ptr_ != nullptr) {
-            city_model_geometry_index_free_object_ids(ptr_, len_);
+            city_model_geometry_store_free_object_ids(ptr_, len_);
         }
     }
 
@@ -149,7 +149,7 @@ public:
         if (this != &other) {
             // Clean up existing resources
             if (ptr_ != nullptr) {
-                city_model_geometry_index_free_object_ids(ptr_, len_);
+                city_model_geometry_store_free_object_ids(ptr_, len_);
             }
 
             // Move from other
@@ -202,24 +202,24 @@ private:
 };
 
 
-class CityModelGeometryIndex
+class CityModelGeometryStore
 {
 public:
-    explicit CityModelGeometryIndex(const CityModel* city_model)
+    explicit CityModelGeometryStore(const CityModel* city_model)
     {
-        CErrorCode err = city_model_geometry_index_create(city_model->handle(), &handle_);
+        CErrorCode err = city_model_geometry_store_create(city_model->handle(), &handle_);
         if (err != CErrorCode::OK) {
             throw std::invalid_argument("Error code: " + std::to_string(static_cast<int>(err)));
         }
     };
 
-    [[nodiscard]] CCityModelGeometryIndex* handle() const noexcept { return handle_; }
+    [[nodiscard]] CCityModelGeometryStore* handle() const noexcept { return handle_; }
 
 
     [[nodiscard]] uint objects_len() const
     {
         uintptr_t count = 0;
-        CErrorCode err = city_model_geometry_index_objects_len(handle_, &count);
+        CErrorCode err = city_model_geometry_store_objects_len(handle_, &count);
         if (err != CErrorCode::OK) {
             throw std::invalid_argument("Error code: " + std::to_string(static_cast<int>(err)));
         }
@@ -231,7 +231,7 @@ public:
         char** ptr = nullptr;
         uintptr_t len = 0;
 
-        CErrorCode err = city_model_geometry_index_get_object_ids(handle_, &ptr, &len);
+        CErrorCode err = city_model_geometry_store_get_object_ids(handle_, &ptr, &len);
         if (err != CErrorCode::OK) {
             throw std::runtime_error("Error code: " + std::to_string(static_cast<int>(err)));
         }
@@ -242,7 +242,7 @@ public:
     [[nodiscard]] CityObjectGeometry get(const std::string& id) const
     {
         CCityObjectGeometry* geometry_collection = nullptr;
-        CErrorCode err = city_model_geometry_index_get(handle_, id.c_str(), &geometry_collection);
+        CErrorCode err = city_model_geometry_store_get(handle_, id.c_str(), &geometry_collection);
         if (err != CErrorCode::OK) {
             throw std::invalid_argument("Error code: " + std::to_string(static_cast<int>(err)));
         }
@@ -251,12 +251,12 @@ public:
         return city_object_geometry_collection;
     }
 
-    ~CityModelGeometryIndex() { cleanup(); }
+    ~CityModelGeometryStore() { cleanup(); }
 
 private:
-    CCityModelGeometryIndex* handle_ = nullptr;
+    CCityModelGeometryStore* handle_ = nullptr;
 
     void cleanup() noexcept {
-        if (handle_) { city_model_geometry_index_destroy(handle_); handle_ = nullptr; }
+        if (handle_) { city_model_geometry_store_destroy(handle_); handle_ = nullptr; }
     }
 };

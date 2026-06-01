@@ -1,7 +1,7 @@
 use crate::error::Error;
 use ecitygml::io::CitygmlFormat;
-use ecitygml::model::common::{CityObjectClass, LevelOfDetail};
-use ecitygml::operations::{CityModelGeometryIndex, CityObjectGeometry};
+use ecitygml::model::common::{FeatureType, LevelOfDetail};
+use ecitygml::operations::{CityModelGeometryStore, CityObjectGeometryEntry};
 use std::path::Path;
 use std::time::Instant;
 use strum::IntoEnumIterator;
@@ -36,19 +36,21 @@ fn print_city_model_statistics(file_path: impl AsRef<Path>) -> Result<(), Error>
         file_path.as_ref().display(),
     );
     let now = Instant::now();
-    let city_model = ecitygml::io::GmlReader::from_path(file_path.as_ref())?.finish()?;
+    let city_model = ecitygml::io::GmlReader::from_path(file_path.as_ref())?
+        // .with_rebuild_object_bounds(false)
+        .finish()?;
     let time_elapsed = now.elapsed();
     info!("Read model in {:.3?}", time_elapsed);
 
-    let city_model_geometry_index = CityModelGeometryIndex::from_city_model(city_model);
+    let city_model_geometry_store = CityModelGeometryStore::from_city_model(city_model);
     info!(
         "Number of city objects: {} (read speed: {:.3?} objects/s)",
-        city_model_geometry_index.objects_len(),
-        city_model_geometry_index.objects_len() as f64 / time_elapsed.as_secs_f64()
+        city_model_geometry_store.objects_len(),
+        city_model_geometry_store.objects_len() as f64 / time_elapsed.as_secs_f64()
     );
 
-    for current_city_object_class in CityObjectClass::iter() {
-        print_object_class_statistics(&city_model_geometry_index, current_city_object_class)?;
+    for current_city_object_class in FeatureType::iter() {
+        print_object_class_statistics(&city_model_geometry_store, current_city_object_class)?;
     }
     println!();
 
@@ -56,12 +58,12 @@ fn print_city_model_statistics(file_path: impl AsRef<Path>) -> Result<(), Error>
 }
 
 fn print_object_class_statistics(
-    city_model_geometry_index: &CityModelGeometryIndex,
-    current_city_object_class: CityObjectClass,
+    city_model_geometry_store: &CityModelGeometryStore,
+    current_city_object_class: FeatureType,
 ) -> Result<(), Error> {
-    let filtered_objects: Vec<&CityObjectGeometry> = city_model_geometry_index
+    let filtered_objects: Vec<&CityObjectGeometryEntry> = city_model_geometry_store
         .objects
-        .values()
+        .iter()
         .filter(|x| x.class == current_city_object_class)
         .collect();
 

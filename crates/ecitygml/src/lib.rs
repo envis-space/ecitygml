@@ -19,8 +19,8 @@
 //!     .expect("parsing should work");
 //!
 //! // iterate over all buildings
-//! for current_building in city_model.buildings() {
-//!     println!("GML ID of the current building: {}", current_building.id());
+//! for current_top_level_feature in city_model.iter_top_level_features() {
+//!     println!("GML ID of the current top-level feature: {}", current_top_level_feature.id());
 //! }
 //! ```
 //!

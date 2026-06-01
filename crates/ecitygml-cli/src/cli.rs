@@ -24,15 +24,4 @@ pub enum Commands {
         #[clap(short, long, value_hint = ValueHint::FilePath)]
         file_path: PathBuf,
     },
-
-    /// Validate the dataset
-    Validate {
-        /// Input directory
-        #[clap(short, long, value_hint = ValueHint::FilePath)]
-        file_path: PathBuf,
-
-        /// Output directory
-        #[clap(short, long, value_hint = ValueHint::DirPath)]
-        output_directory_path: PathBuf,
-    },
 }

@@ -14,19 +14,19 @@ impl CitygmlFormat {
         let path_str = path.as_ref().file_name()?.to_string_lossy().to_lowercase();
 
         match path_str {
-            s if s.ends_with(FILE_EXTENSION_GML_FORMAT) => Some(Self::Gml),
-            s if s.ends_with(FILE_EXTENSION_XML_FORMAT) => Some(Self::Gml),
-            s if s.ends_with(FILE_EXTENSION_GML_GZ_FORMAT) => Some(Self::GmlGz),
-            s if s.ends_with(FILE_EXTENSION_GML_ZST_FORMAT) => Some(Self::GmlZst),
+            s if s.ends_with(FILE_EXTENSION_GML_FORMAT) => Some(CitygmlFormat::Gml),
+            s if s.ends_with(FILE_EXTENSION_XML_FORMAT) => Some(CitygmlFormat::Gml),
+            s if s.ends_with(FILE_EXTENSION_GML_GZ_FORMAT) => Some(CitygmlFormat::GmlGz),
+            s if s.ends_with(FILE_EXTENSION_GML_ZST_FORMAT) => Some(CitygmlFormat::GmlZst),
             _ => None,
         }
     }
 
     pub fn extension(&self) -> &'static str {
         match self {
-            Self::Gml => FILE_EXTENSION_GML_FORMAT,
-            Self::GmlZst => FILE_EXTENSION_GML_ZST_FORMAT,
-            Self::GmlGz => FILE_EXTENSION_GML_GZ_FORMAT,
+            CitygmlFormat::Gml => FILE_EXTENSION_GML_FORMAT,
+            CitygmlFormat::GmlZst => FILE_EXTENSION_GML_ZST_FORMAT,
+            CitygmlFormat::GmlGz => FILE_EXTENSION_GML_GZ_FORMAT,
         }
     }
 

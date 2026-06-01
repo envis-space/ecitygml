@@ -1,79 +1,38 @@
 use crate::model::building::{AbstractBuilding, AsAbstractBuilding, AsAbstractBuildingMut};
-use crate::model::construction::{GroundSurface, RoofSurface, WallSurface};
-use crate::model::core::{
-    AsAbstractFeature, AsAbstractFeatureMut, AsAbstractOccupiedSpace, AsAbstractOccupiedSpaceMut,
-    AsAbstractSpaceMut, AsAbstractThematicSurfaceMut, CityObjectKind, CityObjectRef,
-};
-use crate::operations::{Visitable, Visitor};
+use crate::model::common::{FeatureRef, FeatureRefMut, TopLevelFeatureRef};
+use crate::model::core::AsAbstractFeatureMut;
 use egml::model::geometry::Envelope;
 use nalgebra::Isometry3;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Building {
     pub abstract_building: AbstractBuilding,
-    pub wall_surface: Vec<WallSurface>,
-    pub roof_surface: Vec<RoofSurface>,
-    pub ground_surface: Vec<GroundSurface>,
 }
 
 impl Building {
     pub fn new(abstract_building: AbstractBuilding) -> Self {
-        Self {
-            abstract_building,
-            wall_surface: Vec::new(),
-            roof_surface: Vec::new(),
-            ground_surface: Vec::new(),
-        }
+        Self { abstract_building }
     }
 
-    pub fn iter_city_object<'a>(&'a self) -> impl Iterator<Item = CityObjectRef<'a>> + 'a {
-        std::iter::once(CityObjectRef::Building(self))
-            .chain(self.abstract_building.iter_city_object())
-            .chain(self.wall_surface.iter().flat_map(|x| x.iter_city_object()))
-            .chain(self.roof_surface.iter().flat_map(|x| x.iter_city_object()))
-            .chain(
-                self.ground_surface
-                    .iter()
-                    .flat_map(|x| x.iter_city_object()),
-            )
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+        std::iter::once(self.into()).chain(self.abstract_building.iter_features())
     }
 
-    pub fn refresh_bounded_by_recursive(&mut self) {
-        self.wall_surface
-            .iter_mut()
-            .for_each(|x| x.refresh_bounded_by_recursive());
-        self.roof_surface
-            .iter_mut()
-            .for_each(|x| x.refresh_bounded_by());
-        self.ground_surface
-            .iter_mut()
-            .for_each(|x| x.refresh_bounded_by());
-
-        let own_envelope = self.compute_envelope();
-        let envelopes: Vec<Envelope> = own_envelope
-            .as_ref()
-            .into_iter()
-            .chain(self.wall_surface.iter().filter_map(|x| x.bounded_by()))
-            .chain(self.roof_surface.iter().filter_map(|x| x.bounded_by()))
-            .chain(self.ground_surface.iter().filter_map(|x| x.bounded_by()))
-            .cloned()
-            .collect();
-
-        self.set_bounded_by(Envelope::from_envelopes(&envelopes));
+    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+        f((&mut *self).into());
+        self.abstract_building.for_each_feature_mut(f);
     }
 
-    pub fn apply_transform_recursive(&mut self, m: &Isometry3<f64>) {
-        AsAbstractBuildingMut::apply_transform(&mut self.abstract_building, m);
+    pub fn compute_envelope(&self) -> Option<Envelope> {
+        self.abstract_building.compute_envelope()
+    }
 
-        self.wall_surface
-            .iter_mut()
-            .for_each(|x| x.apply_transform(m));
-        self.roof_surface
-            .iter_mut()
-            .for_each(|x| x.apply_transform(m));
-        self.ground_surface
-            .iter_mut()
-            .for_each(|x| x.apply_transform(m));
+    pub fn recompute_bounding_shape(&mut self) {
+        self.set_bounding_shape_from_envelope(self.compute_envelope());
+    }
+
+    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
+        self.abstract_building.apply_transform(m);
     }
 }
 
@@ -91,17 +50,20 @@ impl AsAbstractBuildingMut for Building {
 
 crate::impl_abstract_building_traits!(Building);
 
-impl From<Building> for CityObjectKind {
-    fn from(item: Building) -> Self {
-        CityObjectKind::Building(item)
+impl<'a> From<&'a Building> for FeatureRef<'a> {
+    fn from(item: &'a Building) -> Self {
+        FeatureRef::Building(item)
     }
 }
 
-impl Visitable for Building {
-    fn accept<V: Visitor>(&self, visitor: &mut V) {
-        visitor.visit_building(self);
-        self.wall_surface.iter().for_each(|x| x.accept(visitor));
-        self.roof_surface.iter().for_each(|x| x.accept(visitor));
-        self.ground_surface.iter().for_each(|x| x.accept(visitor));
+impl<'a> From<&'a mut Building> for FeatureRefMut<'a> {
+    fn from(item: &'a mut Building) -> Self {
+        FeatureRefMut::Building(item)
+    }
+}
+
+impl<'a> From<&'a Building> for TopLevelFeatureRef<'a> {
+    fn from(item: &'a Building) -> Self {
+        TopLevelFeatureRef::Building(item)
     }
 }

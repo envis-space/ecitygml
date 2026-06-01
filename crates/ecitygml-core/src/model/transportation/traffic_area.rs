@@ -1,9 +1,11 @@
+use crate::model::common::{FeatureRef, FeatureRefMut};
 use crate::model::core::{
-    AbstractThematicSurface, AsAbstractThematicSurface, AsAbstractThematicSurfaceMut,
-    CityObjectKind, CityObjectRef,
+    AbstractThematicSurface, AsAbstractFeatureMut, AsAbstractThematicSurface,
+    AsAbstractThematicSurfaceMut,
 };
-use crate::operations::{Visitable, Visitor};
 use egml::model::basic::Code;
+use egml::model::geometry::Envelope;
+use nalgebra::Isometry3;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TrafficArea {
@@ -25,8 +27,25 @@ impl TrafficArea {
         }
     }
 
-    pub fn iter_city_object<'a>(&'a self) -> impl Iterator<Item = CityObjectRef<'a>> + 'a {
-        std::iter::once(CityObjectRef::TrafficArea(self))
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+        std::iter::once(self.into()).chain(self.abstract_thematic_surface.iter_features())
+    }
+
+    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+        f((&mut *self).into());
+        self.abstract_thematic_surface.for_each_feature_mut(f);
+    }
+
+    pub fn compute_envelope(&self) -> Option<Envelope> {
+        self.abstract_thematic_surface.compute_envelope()
+    }
+
+    pub fn recompute_bounding_shape(&mut self) {
+        self.set_bounding_shape_from_envelope(self.compute_envelope());
+    }
+
+    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
+        self.abstract_thematic_surface.apply_transform(m);
     }
 
     pub fn class(&self) -> &Option<Code> {
@@ -76,14 +95,14 @@ impl AsAbstractThematicSurfaceMut for TrafficArea {
 
 crate::impl_abstract_thematic_surface_traits!(TrafficArea);
 
-impl From<TrafficArea> for CityObjectKind {
-    fn from(item: TrafficArea) -> Self {
-        CityObjectKind::TrafficArea(item)
+impl<'a> From<&'a TrafficArea> for FeatureRef<'a> {
+    fn from(item: &'a TrafficArea) -> Self {
+        FeatureRef::TrafficArea(item)
     }
 }
 
-impl Visitable for TrafficArea {
-    fn accept<V: Visitor>(&self, visitor: &mut V) {
-        visitor.visit_traffic_area(self);
+impl<'a> From<&'a mut TrafficArea> for FeatureRefMut<'a> {
+    fn from(item: &'a mut TrafficArea) -> Self {
+        FeatureRefMut::TrafficArea(item)
     }
 }

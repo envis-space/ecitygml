@@ -18,12 +18,6 @@ fn main() -> Result<()> {
         Commands::ListObjects { file_path } => {
             commands::list_objects::run(file_path.canonicalize()?)?;
         }
-        Commands::Validate {
-            file_path,
-            output_directory_path,
-        } => {
-            commands::validate::run(file_path.canonicalize()?, output_directory_path)?;
-        }
     };
 
     Ok(())

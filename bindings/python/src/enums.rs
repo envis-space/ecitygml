@@ -44,13 +44,13 @@ impl From<ecitygml_rs::model::common::LevelOfDetail> for PyLevelOfDetail {
 }
 
 // ---------------------------------------------------------------------------
-// CityObjectClass
+// FeatureType
 // ---------------------------------------------------------------------------
 
 #[gen_stub_pyclass_enum]
-#[pyclass(name = "CityObjectClass", eq, frozen, skip_from_py_object)]
+#[pyclass(name = "FeatureType", eq, frozen, skip_from_py_object)]
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum PyCityObjectClass {
+pub enum PyFeatureType {
     AuxiliaryTrafficArea,
     AuxiliaryTrafficSpace,
     Bridge,
@@ -70,6 +70,7 @@ pub enum PyCityObjectClass {
     CityFurniture,
     CityObjectGroup,
     ClearanceSpace,
+    ClosureSurface,
     Door,
     DoorSurface,
     FloorSurface,
@@ -115,13 +116,13 @@ pub enum PyCityObjectClass {
 }
 
 #[pymethods]
-impl PyCityObjectClass {
+impl PyFeatureType {
     pub fn __repr__(&self) -> String {
-        format!("CityObjectClass.{:?}", self)
+        format!("FeatureType.{:?}", self)
     }
 }
 
-impl std::fmt::Debug for PyCityObjectClass {
+impl std::fmt::Debug for PyFeatureType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
             Self::AuxiliaryTrafficArea => "AuxiliaryTrafficArea",
@@ -143,6 +144,7 @@ impl std::fmt::Debug for PyCityObjectClass {
             Self::CityFurniture => "CityFurniture",
             Self::CityObjectGroup => "CityObjectGroup",
             Self::ClearanceSpace => "ClearanceSpace",
+            Self::ClosureSurface => "ClosureSurface",
             Self::Door => "Door",
             Self::DoorSurface => "DoorSurface",
             Self::FloorSurface => "FloorSurface",
@@ -190,71 +192,72 @@ impl std::fmt::Debug for PyCityObjectClass {
     }
 }
 
-impl From<ecitygml_rs::model::common::CityObjectClass> for PyCityObjectClass {
-    fn from(c: ecitygml_rs::model::common::CityObjectClass) -> Self {
-        use ecitygml_rs::model::common::CityObjectClass as C;
-        match c {
-            C::AuxiliaryTrafficArea => Self::AuxiliaryTrafficArea,
-            C::AuxiliaryTrafficSpace => Self::AuxiliaryTrafficSpace,
-            C::Bridge => Self::Bridge,
-            C::BridgeConstructiveElement => Self::BridgeConstructiveElement,
-            C::BridgeFurniture => Self::BridgeFurniture,
-            C::BridgeInstallation => Self::BridgeInstallation,
-            C::BridgePart => Self::BridgePart,
-            C::BridgeRoom => Self::BridgeRoom,
-            C::Building => Self::Building,
-            C::BuildingConstructiveElement => Self::BuildingConstructiveElement,
-            C::BuildingFurniture => Self::BuildingFurniture,
-            C::BuildingInstallation => Self::BuildingInstallation,
-            C::BuildingPart => Self::BuildingPart,
-            C::BuildingRoom => Self::BuildingRoom,
-            C::BuildingUnit => Self::BuildingUnit,
-            C::CeilingSurface => Self::CeilingSurface,
-            C::CityFurniture => Self::CityFurniture,
-            C::CityObjectGroup => Self::CityObjectGroup,
-            C::ClearanceSpace => Self::ClearanceSpace,
-            C::Door => Self::Door,
-            C::DoorSurface => Self::DoorSurface,
-            C::FloorSurface => Self::FloorSurface,
-            C::GenericLogicalSpace => Self::GenericLogicalSpace,
-            C::GenericOccupiedSpace => Self::GenericOccupiedSpace,
-            C::GenericThematicSurface => Self::GenericThematicSurface,
-            C::GenericUnoccupiedSpace => Self::GenericUnoccupiedSpace,
-            C::GroundSurface => Self::GroundSurface,
-            C::Hole => Self::Hole,
-            C::HoleSurface => Self::HoleSurface,
-            C::HollowSpace => Self::HollowSpace,
-            C::InteriorWallSurface => Self::InteriorWallSurface,
-            C::Intersection => Self::Intersection,
-            C::Marking => Self::Marking,
-            C::OtherConstruction => Self::OtherConstruction,
-            C::OuterCeilingSurface => Self::OuterCeilingSurface,
-            C::OuterFloorSurface => Self::OuterFloorSurface,
-            C::PlantCover => Self::PlantCover,
-            C::Railway => Self::Railway,
-            C::ReliefFeature => Self::ReliefFeature,
-            C::Road => Self::Road,
-            C::RoofSurface => Self::RoofSurface,
-            C::Section => Self::Section,
-            C::SolitaryVegetationObject => Self::SolitaryVegetationObject,
-            C::Square => Self::Square,
-            C::Storey => Self::Storey,
-            C::TinRelief => Self::TinRelief,
-            C::Track => Self::Track,
-            C::TrafficArea => Self::TrafficArea,
-            C::TrafficSpace => Self::TrafficSpace,
-            C::Tunnel => Self::Tunnel,
-            C::TunnelConstructiveElement => Self::TunnelConstructiveElement,
-            C::TunnelFurniture => Self::TunnelFurniture,
-            C::TunnelInstallation => Self::TunnelInstallation,
-            C::TunnelPart => Self::TunnelPart,
-            C::WallSurface => Self::WallSurface,
-            C::WaterBody => Self::WaterBody,
-            C::WaterGroundSurface => Self::WaterGroundSurface,
-            C::WaterSurface => Self::WaterSurface,
-            C::Waterway => Self::Waterway,
-            C::Window => Self::Window,
-            C::WindowSurface => Self::WindowSurface,
+impl From<ecitygml_rs::model::common::FeatureType> for PyFeatureType {
+    fn from(ft: ecitygml_rs::model::common::FeatureType) -> Self {
+        use ecitygml_rs::model::common::FeatureType as F;
+        match ft {
+            F::AuxiliaryTrafficArea => Self::AuxiliaryTrafficArea,
+            F::AuxiliaryTrafficSpace => Self::AuxiliaryTrafficSpace,
+            F::Bridge => Self::Bridge,
+            F::BridgeConstructiveElement => Self::BridgeConstructiveElement,
+            F::BridgeFurniture => Self::BridgeFurniture,
+            F::BridgeInstallation => Self::BridgeInstallation,
+            F::BridgePart => Self::BridgePart,
+            F::BridgeRoom => Self::BridgeRoom,
+            F::Building => Self::Building,
+            F::BuildingConstructiveElement => Self::BuildingConstructiveElement,
+            F::BuildingFurniture => Self::BuildingFurniture,
+            F::BuildingInstallation => Self::BuildingInstallation,
+            F::BuildingPart => Self::BuildingPart,
+            F::BuildingRoom => Self::BuildingRoom,
+            F::BuildingUnit => Self::BuildingUnit,
+            F::CeilingSurface => Self::CeilingSurface,
+            F::CityFurniture => Self::CityFurniture,
+            F::CityObjectGroup => Self::CityObjectGroup,
+            F::ClearanceSpace => Self::ClearanceSpace,
+            F::ClosureSurface => Self::ClosureSurface,
+            F::Door => Self::Door,
+            F::DoorSurface => Self::DoorSurface,
+            F::FloorSurface => Self::FloorSurface,
+            F::GenericLogicalSpace => Self::GenericLogicalSpace,
+            F::GenericOccupiedSpace => Self::GenericOccupiedSpace,
+            F::GenericThematicSurface => Self::GenericThematicSurface,
+            F::GenericUnoccupiedSpace => Self::GenericUnoccupiedSpace,
+            F::GroundSurface => Self::GroundSurface,
+            F::Hole => Self::Hole,
+            F::HoleSurface => Self::HoleSurface,
+            F::HollowSpace => Self::HollowSpace,
+            F::InteriorWallSurface => Self::InteriorWallSurface,
+            F::Intersection => Self::Intersection,
+            F::Marking => Self::Marking,
+            F::OtherConstruction => Self::OtherConstruction,
+            F::OuterCeilingSurface => Self::OuterCeilingSurface,
+            F::OuterFloorSurface => Self::OuterFloorSurface,
+            F::PlantCover => Self::PlantCover,
+            F::Railway => Self::Railway,
+            F::ReliefFeature => Self::ReliefFeature,
+            F::Road => Self::Road,
+            F::RoofSurface => Self::RoofSurface,
+            F::Section => Self::Section,
+            F::SolitaryVegetationObject => Self::SolitaryVegetationObject,
+            F::Square => Self::Square,
+            F::Storey => Self::Storey,
+            F::TinRelief => Self::TinRelief,
+            F::Track => Self::Track,
+            F::TrafficArea => Self::TrafficArea,
+            F::TrafficSpace => Self::TrafficSpace,
+            F::Tunnel => Self::Tunnel,
+            F::TunnelConstructiveElement => Self::TunnelConstructiveElement,
+            F::TunnelFurniture => Self::TunnelFurniture,
+            F::TunnelInstallation => Self::TunnelInstallation,
+            F::TunnelPart => Self::TunnelPart,
+            F::WallSurface => Self::WallSurface,
+            F::WaterBody => Self::WaterBody,
+            F::WaterGroundSurface => Self::WaterGroundSurface,
+            F::WaterSurface => Self::WaterSurface,
+            F::Waterway => Self::Waterway,
+            F::Window => Self::Window,
+            F::WindowSurface => Self::WindowSurface,
         }
     }
 }

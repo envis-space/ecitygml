@@ -1,5 +1,8 @@
+use crate::model::common::{FeatureRef, FeatureRefMut};
 use crate::model::core::{AbstractSpace, AsAbstractSpace, AsAbstractSpaceMut};
+use egml::model::geometry::Envelope;
 use egml::model::geometry::aggregates::MultiCurve;
+use nalgebra::Isometry3;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbstractPhysicalSpace {
@@ -18,6 +21,35 @@ impl AbstractPhysicalSpace {
             lod2_terrain_intersection_curve: None,
             lod3_terrain_intersection_curve: None,
         }
+    }
+
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+        self.abstract_space.iter_features()
+    }
+
+    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+        self.abstract_space.for_each_feature_mut(f);
+    }
+
+    pub fn compute_envelope(&self) -> Option<Envelope> {
+        let envelopes: Vec<Envelope> = vec![
+            self.abstract_space.compute_envelope(),
+            self.lod1_terrain_intersection_curve()
+                .map(|x| x.compute_envelope()),
+            self.lod2_terrain_intersection_curve()
+                .map(|x| x.compute_envelope()),
+            self.lod3_terrain_intersection_curve()
+                .map(|x| x.compute_envelope()),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+
+        Envelope::from_envelopes(&envelopes)
+    }
+
+    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
+        self.abstract_space.apply_transform(m);
     }
 }
 

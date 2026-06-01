@@ -50,6 +50,6 @@ class TestCityModel:
     def test_empty_buildings_for_road_file(self) -> None:
         assert GmlReader(ASAM_JUNCTION).finish().buildings() == []
 
-    def test_refresh_bounded_by_recursive(self) -> None:
+    def test_recompute_child_bounding_shapes(self) -> None:
         model = GmlReader(FZK_LOD2).finish()
-        model.refresh_bounded_by_recursive()  # must not raise
+        model.recompute_child_bounding_shapes()  # must not raise
