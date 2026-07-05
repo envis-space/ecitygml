@@ -1,5 +1,6 @@
 use crate::Error;
-use crate::gml::util::XmlElementSpans;
+use crate::gml::util::{XmlElementSpans, XmlNodeContent, XmlNodeParts, serialize_inner};
+use crate::gml::write::Formatting;
 use ecitygml_core::model::core::AbstractFeature;
 use egml::model::base::Id;
 use serde::{Deserialize, Serialize};
@@ -22,21 +23,35 @@ pub fn deserialize_abstract_feature(
         // gml_abstract_feature.abstract_gml.id = Some(Id::from_hashed_bytes(xml_document))
     }
 
-    let abstract_feature = AbstractFeature::with_gml_abstract_feature(gml_abstract_feature);
+    let abstract_feature = AbstractFeature::from_gml_abstract_feature(gml_abstract_feature);
 
     Ok(abstract_feature)
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Default)]
-pub struct GmlAbstractFeature {
-    #[serde(flatten, skip_deserializing)]
-    pub abstract_feature: egml::io::GmlAbstractFeature,
+pub fn serialize_abstract_feature(
+    abstract_feature: &AbstractFeature,
+    formatting: Formatting,
+) -> Result<XmlNodeParts, Error> {
+    let mut xml_node_parts = XmlNodeParts::empty();
+    xml_node_parts
+        .attributes
+        .push(("gml:id".to_string(), abstract_feature.id().to_string()));
+
+    if let Some(raw) = serialize_inner(
+        egml::io::GmlAbstractFeature::from(abstract_feature.gml_abstract_feature()),
+        formatting,
+    )? {
+        xml_node_parts.content.push(XmlNodeContent::Raw(raw));
+    }
+
+    Ok(xml_node_parts)
 }
 
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+pub struct GmlAbstractFeature {}
+
 impl From<&AbstractFeature> for GmlAbstractFeature {
-    fn from(item: &AbstractFeature) -> Self {
-        Self {
-            abstract_feature: item.gml_abstract_feature().into(),
-        }
+    fn from(_item: &AbstractFeature) -> Self {
+        Self {}
     }
 }

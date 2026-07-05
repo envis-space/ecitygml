@@ -1,6 +1,9 @@
+use crate::impl_abstract_logical_space_mut_traits;
 use crate::impl_abstract_logical_space_traits;
 use crate::model::building::BuildingSubdivisionKind;
-use crate::model::common::{FeatureRef, FeatureRefMut, TopLevelFeatureRef};
+use crate::model::common::{FeatureType, HasFeatureType};
+use crate::model::core::refs::FeatureKindRef;
+use crate::model::core::refs::FeatureKindRefMut;
 use crate::model::core::{AbstractLogicalSpace, AsAbstractLogicalSpace, AsAbstractLogicalSpaceMut};
 use egml::model::geometry::Envelope;
 use nalgebra::Isometry3;
@@ -11,13 +14,13 @@ pub enum LogicalSpaceKind {
 }
 
 impl LogicalSpaceKind {
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
         match self {
             LogicalSpaceKind::BuildingSubdivisionKind(x) => x.iter_features(),
         }
     }
 
-    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
         match self {
             LogicalSpaceKind::BuildingSubdivisionKind(x) => x.for_each_feature_mut(f),
         }
@@ -59,29 +62,12 @@ impl AsAbstractLogicalSpaceMut for LogicalSpaceKind {
 }
 
 impl_abstract_logical_space_traits!(LogicalSpaceKind);
+impl_abstract_logical_space_mut_traits!(LogicalSpaceKind);
 
-impl<'a> From<&'a LogicalSpaceKind> for FeatureRef<'a> {
-    fn from(item: &'a LogicalSpaceKind) -> Self {
-        match item {
-            LogicalSpaceKind::BuildingSubdivisionKind(x) => x.into(),
-        }
-    }
-}
-
-impl<'a> TryFrom<&'a LogicalSpaceKind> for TopLevelFeatureRef<'a> {
-    type Error = ();
-    fn try_from(item: &'a LogicalSpaceKind) -> Result<Self, ()> {
-        match item {
-            LogicalSpaceKind::BuildingSubdivisionKind(_x) => Err(()),
-            // TODO: GenericLogicalSpace
-        }
-    }
-}
-
-impl<'a> From<&'a mut LogicalSpaceKind> for FeatureRefMut<'a> {
-    fn from(item: &'a mut LogicalSpaceKind) -> Self {
-        match item {
-            LogicalSpaceKind::BuildingSubdivisionKind(x) => x.into(),
+impl HasFeatureType for LogicalSpaceKind {
+    fn feature_type(&self) -> FeatureType {
+        match self {
+            Self::BuildingSubdivisionKind(x) => x.feature_type(),
         }
     }
 }
@@ -101,3 +87,25 @@ macro_rules! impl_from_for_logical_space_kind {
     };
 }
 impl_from_for_logical_space_kind!(BuildingSubdivisionKind);
+
+#[macro_export]
+macro_rules! impl_try_from_for_logical_space_kind {
+    ($variant:ident, $type:ty) => {
+        impl TryFrom<$crate::model::core::LogicalSpaceKind> for $type {
+            type Error = ();
+            fn try_from(x: $crate::model::core::LogicalSpaceKind) -> Result<Self, ()> {
+                match x {
+                    $crate::model::core::LogicalSpaceKind::$variant(k) => {
+                        k.try_into().map_err(|_| ())
+                    }
+                    #[allow(unreachable_patterns)]
+                    _ => Err(()),
+                }
+            }
+        }
+        $crate::impl_try_from_for_space_kind!(LogicalSpaceKind, $type);
+    };
+    ($variant:ident) => {
+        $crate::impl_try_from_for_logical_space_kind!($variant, $variant);
+    };
+}

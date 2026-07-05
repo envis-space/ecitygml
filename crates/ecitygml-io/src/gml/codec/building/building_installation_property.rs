@@ -1,6 +1,10 @@
 use crate::Error;
-use crate::gml::codec::building::deserialize_building_installation;
-use crate::gml::util::{XmlElement, XmlElementSpans};
+use crate::gml::codec::building::{
+    deserialize_building_installation, serialize_building_installation,
+};
+use crate::gml::util::xml_element::XmlElement;
+use crate::gml::util::{XmlElementSpans, XmlNode, XmlNodeContent, XmlNodeParts};
+use crate::gml::write::Formatting;
 use ecitygml_core::model::building::BuildingInstallationProperty;
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
@@ -21,6 +25,29 @@ pub fn deserialize_building_installation_property(
     }
 
     Ok(building_installation_property)
+}
+
+pub fn serialize_building_installation_property(
+    building_installation_property: &BuildingInstallationProperty,
+    formatting: Formatting,
+) -> Result<XmlNode, Error> {
+    let mut parts = XmlNodeParts::empty();
+    if let Some(href) = &building_installation_property.href {
+        parts
+            .attributes
+            .push(("xlink:href".to_string(), href.clone()));
+    }
+    if let Some(object) = &building_installation_property.object {
+        parts
+            .content
+            .push(XmlNodeContent::Child(serialize_building_installation(
+                object, formatting,
+            )?));
+    }
+    Ok(XmlNode::new(
+        XmlElement::BuildingInstallationProperty,
+        parts,
+    ))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]

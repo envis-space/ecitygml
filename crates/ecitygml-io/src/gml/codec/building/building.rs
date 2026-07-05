@@ -1,27 +1,83 @@
 use crate::Error;
-use crate::gml::codec::building::deserialize_abstract_building;
-use crate::gml::util::extract_xml_element_spans;
-use ecitygml_core::model::building::Building;
+use crate::gml::codec::building::building_part_property::{
+    deserialize_building_part_property, serialize_building_part_property,
+};
+use crate::gml::codec::building::{deserialize_abstract_building, serialize_abstract_building};
+use crate::gml::codec::transportation::GmlRoad;
+use crate::gml::util::xml_element::XmlElement;
+use crate::gml::util::{XmlNode, XmlNodeContent, collect_children, extract_xml_element_spans};
+use crate::gml::write::Formatting;
+use ecitygml_core::model::building::{AsAbstractBuilding, Building};
+use serde::{Deserialize, Serialize};
 
 pub fn deserialize_building(xml_document: &[u8]) -> Result<Building, Error> {
     let spans = extract_xml_element_spans(xml_document)?;
-    let abstract_building = deserialize_abstract_building(xml_document, &spans)?;
-    let building = Building::new(abstract_building);
+
+    let mut abstract_building_result = None;
+    let mut parsed_result = None;
+    let mut building_parts_result = None;
+
+    rayon::scope(|s| {
+        s.spawn(|_| {
+            abstract_building_result = Some(deserialize_abstract_building(xml_document, &spans))
+        });
+        s.spawn(|_| {
+            parsed_result =
+                Some(quick_xml::de::from_reader::<_, GmlRoad>(xml_document).map_err(Error::from));
+        });
+        s.spawn(|_| {
+            building_parts_result = Some(collect_children(
+                xml_document,
+                &spans,
+                XmlElement::BuildingPartProperty,
+                deserialize_building_part_property,
+            ));
+        });
+    });
+
+    let abstract_building =
+        abstract_building_result.expect("rayon::scope guarantees all spawns complete")?;
+    let _parsed = parsed_result.expect("rayon::scope guarantees all spawns complete")?;
+    let building_parts =
+        building_parts_result.expect("rayon::scope guarantees all spawns complete")?;
+
+    let mut building = Building::from_abstract_building(abstract_building);
+    building.set_building_parts(building_parts);
 
     Ok(building)
+}
+
+pub fn serialize_building(building: &Building, formatting: Formatting) -> Result<XmlNode, Error> {
+    let mut xml_node_parts = serialize_abstract_building(building.abstract_building(), formatting)?;
+
+    for prop in building.building_parts() {
+        let node = serialize_building_part_property(prop, formatting)?;
+        xml_node_parts.content.push(XmlNodeContent::Child(node));
+    }
+
+    Ok(XmlNode::new(XmlElement::Building, xml_node_parts))
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+pub struct GmlBuilding {}
+
+impl From<&Building> for GmlBuilding {
+    fn from(_item: &Building) -> Self {
+        Self {}
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gml::codec::core::deserialize_abstract_thematic_surface;
+    use ecitygml_core::model::building::AsAbstractBuildingMut;
     use ecitygml_core::model::construction::{ConstructionSurfaceKind, WallSurface};
     use ecitygml_core::model::core::{
-        AsAbstractCityObject, AsAbstractFeature, AsAbstractSpace, AsAbstractThematicSurface,
+        AsAbstractCityObject, AsAbstractFeature, AsAbstractFeatureMut, AsAbstractSpace,
         SpaceBoundaryKind, ThematicSurfaceKind,
     };
     use egml::model::base::Id;
-    use quick_xml::{DeError, de};
+    use egml::model::basic::Code;
 
     #[test]
     fn test_deserialize_basic_building() {
@@ -176,5 +232,20 @@ mod tests {
     </bldg:Building>";
 
         let building = deserialize_building(xml_document).expect("should work");
+    }
+
+    #[test]
+    fn test_serialize_basic_building() {
+        let id = Id::try_from("abc").expect("should work");
+        let mut building = Building::new(id);
+
+        building.set_name(vec!["good".to_string(), "morning".to_string()]);
+        building.set_roof_type(Some(Code::new("1000")));
+        building.set_storeys_above_ground(Some(4));
+
+        let gml = serialize_building(&building, Formatting::Indent { char: ' ', size: 2 })
+            .expect("should work");
+        // println!("{}", String::from_utf8_lossy(&gml));
+        println!("");
     }
 }

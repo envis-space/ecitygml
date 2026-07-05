@@ -1,8 +1,8 @@
 [package]
 name = "ecitygml-python"
-version = "0.0.2-alpha.3"
+version = "0.0.2-alpha.4"
 edition = "2021"
-rust-version = "0.0.2-alpha.3"
+rust-version = "0.0.2-alpha.4"
 
 [lib]
 name = "_ecitygml"
@@ -13,10 +13,10 @@ name = "stub_gen"
 path = "src/bin/stub_gen.rs"
 
 [dependencies]
-egml = { version = "0.0.2-alpha.3" }
+egml = { version = "0.0.2-alpha.4" }
 
-ecitygml-rs = { package = "ecitygml", version = "0.0.2-alpha.3", path = "../../crates/ecitygml" }
-pyo3 = { version = "0.0.2-alpha.3", features = ["abi3-py313"] }
-pyo3-stub-gen = { version = "0.0.2-alpha.3", default-features = false }
+ecitygml-rs = { package = "ecitygml", version = "0.0.2-alpha.4", path = "../../crates/ecitygml" }
+pyo3 = { version = "0.0.2-alpha.4", features = ["abi3-py313"] }
+pyo3-stub-gen = { version = "0.0.2-alpha.4", default-features = false }
 
 [workspace]

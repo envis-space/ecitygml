@@ -1,10 +1,14 @@
 use crate::Error;
-use crate::gml::codec::building::building_constructive_element_property::GmlBuildingConstructiveElementProperty;
-use crate::gml::codec::core::deserialize_abstract_logical_space;
-use crate::gml::util::XmlElementSpans;
-use ecitygml_core::model::building::{
-    AbstractBuildingSubdivision, AsAbstractBuildingSubdivisionMut,
+use crate::gml::codec::building::serialize_building_constructive_element_property;
+use crate::gml::codec::core::{
+    deserialize_abstract_logical_space, serialize_abstract_logical_space,
 };
+use crate::gml::util::{XmlElementSpans, XmlNodeContent, XmlNodeParts, serialize_inner};
+use crate::gml::write::Formatting;
+use ecitygml_core::model::building::{
+    AbstractBuildingSubdivision, AsAbstractBuildingSubdivision, AsAbstractBuildingSubdivisionMut,
+};
+use ecitygml_core::model::core::AsAbstractLogicalSpace;
 use egml::io::GmlCode;
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
@@ -20,14 +24,39 @@ pub fn deserialize_abstract_building_subdivision(
     let abstract_logical_space = abstract_logical_space_result?;
     let parsed = parsed_result?;
     let mut abstract_building_subdivision =
-        AbstractBuildingSubdivision::new(abstract_logical_space);
+        AbstractBuildingSubdivision::from_abstract_logical_space(abstract_logical_space);
 
-    abstract_building_subdivision.set_class(parsed.class.map(|x| x.into()));
+    abstract_building_subdivision.set_class(parsed.class.map(Into::into));
     abstract_building_subdivision
-        .set_functions(parsed.functions.into_iter().map(|x| x.into()).collect());
-    abstract_building_subdivision.set_usages(parsed.usages.into_iter().map(|x| x.into()).collect());
+        .set_functions(parsed.functions.into_iter().map(Into::into).collect());
+    abstract_building_subdivision.set_usages(parsed.usages.into_iter().map(Into::into).collect());
 
     Ok(abstract_building_subdivision)
+}
+
+pub fn serialize_abstract_building_subdivision(
+    abstract_building_subdivision: &AbstractBuildingSubdivision,
+    formatting: Formatting,
+) -> Result<XmlNodeParts, Error> {
+    let mut xml_node_parts = serialize_abstract_logical_space(
+        abstract_building_subdivision.abstract_logical_space(),
+        formatting,
+    )?;
+
+    if let Some(raw) = serialize_inner(
+        GmlAbstractBuildingSubdivision::from(abstract_building_subdivision),
+        formatting,
+    )? {
+        xml_node_parts.content.push(XmlNodeContent::Raw(raw));
+    }
+
+    for prop in abstract_building_subdivision.building_constructive_elements() {
+        xml_node_parts.content.push(XmlNodeContent::Child(
+            serialize_building_constructive_element_property(prop, formatting)?,
+        ));
+    }
+
+    Ok(xml_node_parts)
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -43,7 +72,14 @@ pub struct GmlAbstractBuildingSubdivision {
 
     #[serde(rename(serialize = "bldg:usage", deserialize = "usage"), default)]
     pub usages: Vec<GmlCode>,
+}
 
-    #[serde(rename = "buildingConstructiveElement", default)]
-    pub building_constructive_element: Vec<GmlBuildingConstructiveElementProperty>,
+impl From<&AbstractBuildingSubdivision> for GmlAbstractBuildingSubdivision {
+    fn from(item: &AbstractBuildingSubdivision) -> Self {
+        Self {
+            class: item.class().map(Into::into),
+            functions: item.functions().iter().map(Into::into).collect(),
+            usages: item.usages().iter().map(Into::into).collect(),
+        }
+    }
 }

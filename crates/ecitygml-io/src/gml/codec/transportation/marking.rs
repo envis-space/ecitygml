@@ -1,6 +1,11 @@
 use crate::Error;
-use crate::gml::codec::core::deserialize_abstract_thematic_surface;
-use crate::gml::util::extract_xml_element_spans;
+use crate::gml::codec::core::{
+    deserialize_abstract_thematic_surface, serialize_abstract_thematic_surface,
+};
+use crate::gml::util::xml_element::XmlElement;
+use crate::gml::util::{XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner};
+use crate::gml::write::Formatting;
+use ecitygml_core::model::core::AsAbstractThematicSurface;
 use ecitygml_core::model::transportation::Marking;
 use egml::io::GmlCode;
 use quick_xml::de;
@@ -14,11 +19,22 @@ pub fn deserialize_marking(xml_document: &[u8]) -> Result<Marking, Error> {
     );
     let abstract_thematic_surface = abstract_thematic_surface_result?;
     let parsed = parsed_result?;
-    let mut marking = Marking::new(abstract_thematic_surface);
 
-    marking.set_class(parsed.class.map(|x| x.into()));
+    let mut marking = Marking::from_abstract_thematic_surface(abstract_thematic_surface);
+    marking.set_class(parsed.class.map(Into::into));
 
     Ok(marking)
+}
+
+pub fn serialize_marking(marking: &Marking, formatting: Formatting) -> Result<XmlNode, Error> {
+    let mut parts =
+        serialize_abstract_thematic_surface(marking.abstract_thematic_surface(), formatting)?;
+
+    if let Some(raw) = serialize_inner(GmlMarking::from(marking), formatting)? {
+        parts.content.push(XmlNodeContent::Raw(raw));
+    }
+
+    Ok(XmlNode::new(XmlElement::Marking, parts))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -28,6 +44,14 @@ pub struct GmlMarking {
         skip_serializing_if = "Option::is_none"
     )]
     pub class: Option<GmlCode>,
+}
+
+impl From<&Marking> for GmlMarking {
+    fn from(item: &Marking) -> Self {
+        Self {
+            class: item.class().map(Into::into),
+        }
+    }
 }
 
 #[cfg(test)]

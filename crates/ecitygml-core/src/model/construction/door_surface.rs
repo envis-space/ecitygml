@@ -1,40 +1,43 @@
-use crate::model::common::{FeatureRef, FeatureRefMut};
 use crate::model::construction::{
     AbstractFillingSurface, AsAbstractFillingSurface, AsAbstractFillingSurfaceMut,
 };
 use crate::model::core::AsAbstractFeatureMut;
+use crate::model::core::refs::FeatureKindRef;
+use crate::model::core::refs::FeatureKindRefMut;
+use egml::model::base::Id;
 use egml::model::geometry::Envelope;
 use nalgebra::Isometry3;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DoorSurface {
-    pub abstract_filling_surface: AbstractFillingSurface,
+    pub(crate) abstract_filling_surface: AbstractFillingSurface,
 }
 
 impl DoorSurface {
-    pub fn new(abstract_filling_surface: AbstractFillingSurface) -> Self {
+    pub fn new(id: Id) -> Self {
+        Self::from_abstract_filling_surface(AbstractFillingSurface::new(id))
+    }
+
+    pub fn from_abstract_filling_surface(abstract_filling_surface: AbstractFillingSurface) -> Self {
         Self {
             abstract_filling_surface,
         }
     }
-
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+}
+impl DoorSurface {
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
         std::iter::once(self.into()).chain(self.abstract_filling_surface.iter_features())
     }
-
-    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
         f((&mut *self).into());
         self.abstract_filling_surface.for_each_feature_mut(f);
     }
-
     pub fn compute_envelope(&self) -> Option<Envelope> {
         self.abstract_filling_surface.compute_envelope()
     }
-
     pub fn recompute_bounding_shape(&mut self) {
         self.set_bounding_shape_from_envelope(self.compute_envelope());
     }
-
     pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
         self.abstract_filling_surface.apply_transform(m);
     }
@@ -53,15 +56,5 @@ impl AsAbstractFillingSurfaceMut for DoorSurface {
 }
 
 crate::impl_abstract_filling_surface_traits!(DoorSurface);
-
-impl<'a> From<&'a DoorSurface> for FeatureRef<'a> {
-    fn from(item: &'a DoorSurface) -> Self {
-        FeatureRef::DoorSurface(item)
-    }
-}
-
-impl<'a> From<&'a mut DoorSurface> for FeatureRefMut<'a> {
-    fn from(item: &'a mut DoorSurface) -> Self {
-        FeatureRefMut::DoorSurface(item)
-    }
-}
+crate::impl_abstract_filling_surface_mut_traits!(DoorSurface);
+crate::impl_has_feature_type!(DoorSurface, DoorSurface);

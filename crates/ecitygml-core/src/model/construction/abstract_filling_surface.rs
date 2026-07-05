@@ -1,7 +1,9 @@
-use crate::model::common::{FeatureRef, FeatureRefMut};
+use crate::model::core::refs::FeatureKindRef;
+use crate::model::core::refs::FeatureKindRefMut;
 use crate::model::core::{
     AbstractThematicSurface, AsAbstractThematicSurface, AsAbstractThematicSurfaceMut,
 };
+use egml::model::base::Id;
 use egml::model::geometry::Envelope;
 use nalgebra::Isometry3;
 
@@ -11,24 +13,28 @@ pub struct AbstractFillingSurface {
 }
 
 impl AbstractFillingSurface {
-    pub fn new(abstract_thematic_surface: AbstractThematicSurface) -> Self {
+    pub fn new(id: Id) -> Self {
+        Self::from_abstract_thematic_surface(AbstractThematicSurface::new(id))
+    }
+
+    pub fn from_abstract_thematic_surface(
+        abstract_thematic_surface: AbstractThematicSurface,
+    ) -> Self {
         Self {
             abstract_thematic_surface,
         }
     }
-
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+}
+impl AbstractFillingSurface {
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
         self.abstract_thematic_surface.iter_features()
     }
-
-    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
         self.abstract_thematic_surface.for_each_feature_mut(f);
     }
-
     pub fn compute_envelope(&self) -> Option<Envelope> {
         self.abstract_thematic_surface.compute_envelope()
     }
-
     pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
         self.abstract_thematic_surface.apply_transform(m);
     }
@@ -67,6 +73,13 @@ macro_rules! impl_abstract_filling_surface_traits {
                 &self.abstract_filling_surface().abstract_thematic_surface
             }
         }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_abstract_filling_surface_mut_traits {
+    ($type:ty) => {
+        $crate::impl_abstract_thematic_surface_mut_traits!($type);
 
         impl $crate::model::core::AsAbstractThematicSurfaceMut for $type {
             fn abstract_thematic_surface_mut(
@@ -82,3 +95,4 @@ macro_rules! impl_abstract_filling_surface_traits {
 }
 
 impl_abstract_filling_surface_traits!(AbstractFillingSurface);
+impl_abstract_filling_surface_mut_traits!(AbstractFillingSurface);

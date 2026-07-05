@@ -1,14 +1,27 @@
 use crate::Error;
-use crate::gml::codec::transportation::abstract_transportation_space::deserialize_abstract_transportation_space;
-use crate::gml::codec::transportation::intersection_property::deserialize_intersection_property;
-use crate::gml::codec::transportation::section_property::deserialize_section_property;
-use crate::gml::util::{XmlElement, collect_children, extract_xml_element_spans};
-use ecitygml_core::model::transportation::Road;
+use crate::gml::codec::transportation::abstract_transportation_space::{
+    deserialize_abstract_transportation_space, serialize_abstract_transportation_space,
+};
+use crate::gml::codec::transportation::intersection_property::{
+    deserialize_intersection_property, serialize_intersection_property,
+};
+use crate::gml::codec::transportation::section_property::{
+    deserialize_section_property, serialize_section_property,
+};
+use crate::gml::util::xml_element::XmlElement;
+use crate::gml::util::{
+    XmlNode, XmlNodeContent, collect_children, extract_xml_element_spans, serialize_inner,
+};
+use crate::gml::write::Formatting;
+use ecitygml_core::model::transportation::{AsAbstractTransportationSpace, Road};
+use egml::io::GmlCode;
+use serde::{Deserialize, Serialize};
 
 pub fn deserialize_road(xml_document: &[u8]) -> Result<Road, Error> {
     let spans = extract_xml_element_spans(xml_document)?;
 
     let mut abstract_transportation_space_result = None;
+    let mut parsed_result = None;
     let mut sections_result = None;
     let mut intersections_result = None;
 
@@ -18,6 +31,10 @@ pub fn deserialize_road(xml_document: &[u8]) -> Result<Road, Error> {
                 xml_document,
                 &spans,
             ))
+        });
+        s.spawn(|_| {
+            parsed_result =
+                Some(quick_xml::de::from_reader::<_, GmlRoad>(xml_document).map_err(Error::from));
         });
         s.spawn(|_| {
             sections_result = Some(collect_children(
@@ -39,14 +56,65 @@ pub fn deserialize_road(xml_document: &[u8]) -> Result<Road, Error> {
 
     let abstract_transportation_space = abstract_transportation_space_result
         .expect("rayon::scope guarantees all spawns complete")?;
+    let parsed = parsed_result.expect("rayon::scope guarantees all spawns complete")?;
     let sections = sections_result.expect("rayon::scope guarantees all spawns complete")?;
     let intersections =
         intersections_result.expect("rayon::scope guarantees all spawns complete")?;
 
-    let mut road = Road::new(abstract_transportation_space);
-    road.sections = sections;
-    road.intersections = intersections;
+    let mut road = Road::from_abstract_transportation_space(abstract_transportation_space);
+    road.set_class(parsed.class.map(Into::into));
+    road.set_functions(parsed.functions.into_iter().map(Into::into).collect());
+    road.set_usages(parsed.usages.into_iter().map(Into::into).collect());
+    road.set_sections(sections);
+    road.set_intersections(intersections);
+
     Ok(road)
+}
+
+pub fn serialize_road(road: &Road, formatting: Formatting) -> Result<XmlNode, Error> {
+    let mut xml_node_parts =
+        serialize_abstract_transportation_space(road.abstract_transportation_space(), formatting)?;
+
+    if let Some(raw) = serialize_inner(GmlRoad::from(road), formatting)? {
+        xml_node_parts.content.push(XmlNodeContent::Raw(raw));
+    }
+
+    for section_property in road.sections() {
+        let node = serialize_section_property(section_property, formatting)?;
+        xml_node_parts.content.push(XmlNodeContent::Child(node));
+    }
+
+    for intersection_property in road.intersections() {
+        let node = serialize_intersection_property(intersection_property, formatting)?;
+        xml_node_parts.content.push(XmlNodeContent::Child(node));
+    }
+
+    Ok(XmlNode::new(XmlElement::Road, xml_node_parts))
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+pub struct GmlRoad {
+    #[serde(
+        rename(serialize = "tran:class", deserialize = "class"),
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub class: Option<GmlCode>,
+
+    #[serde(rename(serialize = "tran:function", deserialize = "function"), default)]
+    pub functions: Vec<GmlCode>,
+
+    #[serde(rename(serialize = "tran:usage", deserialize = "usage"), default)]
+    pub usages: Vec<GmlCode>,
+}
+
+impl From<&Road> for GmlRoad {
+    fn from(item: &Road) -> Self {
+        Self {
+            class: item.class().map(Into::into),
+            functions: item.functions().iter().map(Into::into).collect(),
+            usages: item.usages().iter().map(Into::into).collect(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -80,9 +148,9 @@ mod tests {
 
         assert!(road.lod2_multi_surface().is_none());
         assert_eq!(road.generic_attributes().len(), 1);
-        assert!(road.intersections.is_empty());
-        assert_eq!(road.sections.len(), 1);
-        let traffic_space = road.sections.first().unwrap().object.as_ref().unwrap();
+        assert!(road.intersections().is_empty());
+        assert_eq!(road.sections().len(), 1);
+        let traffic_space = road.sections().first().unwrap().object.as_ref().unwrap();
         assert_eq!(
             traffic_space.id(),
             &Id::try_from("UUID_0950bfa5-204e-33e6-bdb7-c5c318d73a29").expect("should work")

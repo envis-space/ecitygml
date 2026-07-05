@@ -1,9 +1,12 @@
 use crate::Error;
-use crate::gml::codec::relief::abstract_relief_component::deserialize_abstract_relief_component;
-use crate::gml::util::extract_xml_element_spans;
-use ecitygml_core::model::relief::TinRelief;
-use egml::io::primitives::GmlTriangulatedSurfaceProperty;
-use egml::model::geometry::primitives::TriangulatedSurface;
+use crate::gml::codec::relief::abstract_relief_component::{
+    deserialize_abstract_relief_component, serialize_abstract_relief_component,
+};
+use crate::gml::codec::relief::tin_property::GmlTinProperty;
+use crate::gml::util::xml_element::XmlElement;
+use crate::gml::util::{XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner};
+use crate::gml::write::Formatting;
+use ecitygml_core::model::relief::{AsAbstractReliefComponent, TinProperty, TinRelief};
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
@@ -16,15 +19,42 @@ pub fn deserialize_tin_relief(xml_document: &[u8]) -> Result<TinRelief, Error> {
     let abstract_relief_component = abstract_relief_component_result?;
     let parsed = parsed_result?;
 
-    let tin: Option<TriangulatedSurface> = parsed.tin.map(|x| x.content.try_into()).transpose()?;
+    let mut tin_relief = TinRelief::from_abstract_relief_component(abstract_relief_component);
+    let tin: Option<TinProperty> = parsed.tin.map(|x| x.try_into()).transpose()?;
+    tin_relief.set_tin(tin);
 
-    Ok(TinRelief::new(abstract_relief_component, tin))
+    Ok(tin_relief)
+}
+
+pub fn serialize_tin_relief(
+    tin_relief: &TinRelief,
+    formatting: Formatting,
+) -> Result<XmlNode, Error> {
+    let mut parts =
+        serialize_abstract_relief_component(tin_relief.abstract_relief_component(), formatting)?;
+
+    if let Some(raw) = serialize_inner(GmlTinRelief::from(tin_relief), formatting)? {
+        parts.content.push(XmlNodeContent::Raw(raw));
+    }
+
+    Ok(XmlNode::new(XmlElement::TINRelief, parts))
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct GmlTinRelief {
-    pub lod: u8,
-    pub tin: Option<GmlTriangulatedSurfaceProperty>,
+    #[serde(
+        rename(serialize = "dem:tin", deserialize = "tin"),
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub tin: Option<GmlTinProperty>,
+}
+
+impl From<&TinRelief> for GmlTinRelief {
+    fn from(item: &TinRelief) -> Self {
+        Self {
+            tin: item.tin().map(Into::into),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -61,7 +91,14 @@ mod tests {
         assert_eq!(tin_relief.id(), &Id::try_from("abc").unwrap());
         assert_eq!(tin_relief.lod(), LevelOfDetail::Three);
         assert_eq!(
-            tin_relief.tin().as_ref().unwrap().patches().patches_len(),
+            tin_relief
+                .tin()
+                .unwrap()
+                .object
+                .as_ref()
+                .unwrap()
+                .patches()
+                .patches_len(),
             1
         );
     }
@@ -96,7 +133,14 @@ mod tests {
 
         assert_eq!(tin_relief.lod(), LevelOfDetail::Two);
         assert_eq!(
-            tin_relief.tin().as_ref().unwrap().patches().patches_len(),
+            tin_relief
+                .tin()
+                .unwrap()
+                .object
+                .as_ref()
+                .unwrap()
+                .patches()
+                .patches_len(),
             2
         );
     }

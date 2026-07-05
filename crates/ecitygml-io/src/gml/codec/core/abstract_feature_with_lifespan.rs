@@ -1,6 +1,9 @@
 use crate::Error;
-use crate::gml::codec::core::abstract_feature::{GmlAbstractFeature, deserialize_abstract_feature};
-use crate::gml::util::XmlElementSpans;
+use crate::gml::codec::core::abstract_feature::{
+    deserialize_abstract_feature, serialize_abstract_feature,
+};
+use crate::gml::util::{XmlElementSpans, XmlNodeContent, XmlNodeParts, serialize_inner};
+use crate::gml::write::Formatting;
 use chrono::{DateTime, FixedOffset};
 use ecitygml_core::model::core::{
     AbstractFeatureWithLifespan, AsAbstractFeature, AsAbstractFeatureWithLifespan,
@@ -20,7 +23,8 @@ pub fn deserialize_abstract_feature_with_lifespan(
     let abstract_feature = abstract_feature_result?;
     let gml = gml_result?;
 
-    let mut abstract_feature_with_lifespan = AbstractFeatureWithLifespan::new(abstract_feature);
+    let mut abstract_feature_with_lifespan =
+        AbstractFeatureWithLifespan::from_abstract_feature(abstract_feature);
     abstract_feature_with_lifespan.set_creation_date(gml.creation_date);
     abstract_feature_with_lifespan.set_termination_date(gml.termination_date);
     abstract_feature_with_lifespan.set_valid_from(gml.valid_from);
@@ -29,11 +33,27 @@ pub fn deserialize_abstract_feature_with_lifespan(
     Ok(abstract_feature_with_lifespan)
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Default)]
-pub struct GmlAbstractFeatureWithLifespan {
-    #[serde(flatten, skip_deserializing)]
-    pub abstract_feature: GmlAbstractFeature,
+pub fn serialize_abstract_feature_with_lifespan(
+    abstract_feature_with_lifespan: &AbstractFeatureWithLifespan,
+    formatting: Formatting,
+) -> Result<XmlNodeParts, Error> {
+    let mut xml_node_parts = serialize_abstract_feature(
+        abstract_feature_with_lifespan.abstract_feature(),
+        formatting,
+    )?;
 
+    if let Some(raw) = serialize_inner(
+        GmlAbstractFeatureWithLifespan::from(abstract_feature_with_lifespan),
+        formatting,
+    )? {
+        xml_node_parts.content.push(XmlNodeContent::Raw(raw));
+    }
+
+    Ok(xml_node_parts)
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+pub struct GmlAbstractFeatureWithLifespan {
     #[serde(rename = "creationDate", skip_serializing_if = "Option::is_none")]
     pub creation_date: Option<DateTime<FixedOffset>>,
 
@@ -50,7 +70,6 @@ pub struct GmlAbstractFeatureWithLifespan {
 impl From<&AbstractFeatureWithLifespan> for GmlAbstractFeatureWithLifespan {
     fn from(item: &AbstractFeatureWithLifespan) -> Self {
         Self {
-            abstract_feature: item.abstract_feature().into(),
             creation_date: item.creation_date().copied(),
             termination_date: item.termination_date().copied(),
             valid_from: item.valid_from().copied(),

@@ -1,9 +1,12 @@
+use crate::impl_abstract_installation_mut_traits;
 use crate::impl_abstract_installation_traits;
 use crate::model::building::BuildingInstallation;
-use crate::model::common::{FeatureRef, FeatureRefMut};
+use crate::model::common::{FeatureType, HasFeatureType};
 use crate::model::construction::{
     AbstractInstallation, AsAbstractInstallation, AsAbstractInstallationMut,
 };
+use crate::model::core::refs::FeatureKindRef;
+use crate::model::core::refs::FeatureKindRefMut;
 use egml::model::geometry::Envelope;
 use nalgebra::Isometry3;
 
@@ -13,13 +16,13 @@ pub enum InstallationKind {
 }
 
 impl InstallationKind {
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
         match self {
             InstallationKind::BuildingInstallation(x) => x.iter_features(),
         }
     }
 
-    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
         match self {
             InstallationKind::BuildingInstallation(x) => x.for_each_feature_mut(f),
         }
@@ -61,19 +64,12 @@ impl AsAbstractInstallationMut for InstallationKind {
 }
 
 impl_abstract_installation_traits!(InstallationKind);
+impl_abstract_installation_mut_traits!(InstallationKind);
 
-impl<'a> From<&'a InstallationKind> for FeatureRef<'a> {
-    fn from(item: &'a InstallationKind) -> Self {
-        match item {
-            InstallationKind::BuildingInstallation(x) => x.into(),
-        }
-    }
-}
-
-impl<'a> From<&'a mut InstallationKind> for FeatureRefMut<'a> {
-    fn from(item: &'a mut InstallationKind) -> Self {
-        match item {
-            InstallationKind::BuildingInstallation(x) => x.into(),
+impl HasFeatureType for InstallationKind {
+    fn feature_type(&self) -> FeatureType {
+        match self {
+            Self::BuildingInstallation(x) => x.feature_type(),
         }
     }
 }
@@ -90,3 +86,23 @@ macro_rules! impl_from_installation_kind {
     };
 }
 impl_from_installation_kind!(BuildingInstallation);
+
+#[macro_export]
+macro_rules! impl_try_from_installation_kind {
+    ($type:ident) => {
+        impl TryFrom<$crate::model::construction::InstallationKind> for $type {
+            type Error = ();
+            fn try_from(x: $crate::model::construction::InstallationKind) -> Result<Self, ()> {
+                match x {
+                    $crate::model::construction::InstallationKind::$type(k) => {
+                        k.try_into().map_err(|_| ())
+                    }
+                    #[allow(unreachable_patterns)]
+                    _ => Err(()),
+                }
+            }
+        }
+        $crate::impl_try_from_for_occupied_space_kind!(InstallationKind, $type);
+    };
+}
+impl_try_from_installation_kind!(BuildingInstallation);

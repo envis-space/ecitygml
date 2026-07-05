@@ -1,30 +1,90 @@
 use crate::Error;
-use crate::gml::codec::core::deserialize_abstract_unoccupied_space;
+use crate::gml::codec::core::{
+    deserialize_abstract_unoccupied_space, serialize_abstract_unoccupied_space,
+};
+use crate::gml::codec::transportation::clearance_space_property::{
+    deserialize_clearance_space_property, serialize_clearance_space_property,
+};
 use crate::gml::codec::transportation::granularity_value::GmlGranularityValue;
 use crate::gml::codec::transportation::traffic_direction_value::GmlTrafficDirectionValue;
-use crate::gml::util::extract_xml_element_spans;
+use crate::gml::util::xml_element::XmlElement;
+use crate::gml::util::{
+    XmlNode, XmlNodeContent, collect_children, extract_xml_element_spans, serialize_inner,
+};
+use crate::gml::write::Formatting;
+use ecitygml_core::model::core::AsAbstractUnoccupiedSpace;
 use ecitygml_core::model::transportation::TrafficSpace;
 use egml::io::GmlCode;
-use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
 pub fn deserialize_traffic_space(xml_document: &[u8]) -> Result<TrafficSpace, Error> {
     let spans = extract_xml_element_spans(xml_document)?;
-    let (abstract_unoccupied_space_result, parsed_result) = rayon::join(
-        || deserialize_abstract_unoccupied_space(xml_document, &spans),
-        || de::from_reader::<_, GmlTrafficSpace>(xml_document).map_err(Error::from),
+
+    let mut abstract_unoccupied_space_result = None;
+    let mut parsed_result = None;
+    let mut clearance_spaces_result = None;
+
+    rayon::scope(|s| {
+        s.spawn(|_| {
+            abstract_unoccupied_space_result =
+                Some(deserialize_abstract_unoccupied_space(xml_document, &spans))
+        });
+        s.spawn(|_| {
+            parsed_result = Some(
+                quick_xml::de::from_reader::<_, GmlTrafficSpace>(xml_document).map_err(Error::from),
+            );
+        });
+        s.spawn(|_| {
+            clearance_spaces_result = Some(collect_children(
+                xml_document,
+                &spans,
+                XmlElement::ClearanceSpaceProperty,
+                deserialize_clearance_space_property,
+            ));
+        });
+    });
+
+    let abstract_unoccupied_space =
+        abstract_unoccupied_space_result.expect("rayon::scope guarantees all spawns complete")?;
+    let parsed = parsed_result.expect("rayon::scope guarantees all spawns complete")?;
+    let clearance_spaces =
+        clearance_spaces_result.expect("rayon::scope guarantees all spawns complete")?;
+
+    let mut traffic_space = TrafficSpace::from_abstract_unoccupied_space(
+        abstract_unoccupied_space,
+        parsed.granularity.into(),
     );
-    let abstract_unoccupied_space = abstract_unoccupied_space_result?;
-    let parsed = parsed_result?;
 
-    let mut traffic_space = TrafficSpace::new(abstract_unoccupied_space, parsed.granularity.into());
+    traffic_space.set_class(parsed.class.map(Into::into));
+    traffic_space.set_functions(parsed.functions.into_iter().map(Into::into).collect());
+    traffic_space.set_usages(parsed.usages.into_iter().map(Into::into).collect());
+    traffic_space.set_traffic_direction(parsed.traffic_direction.map(Into::into));
 
-    traffic_space.set_class(parsed.class.map(|x| x.into()));
-    traffic_space.set_functions(parsed.functions.into_iter().map(|x| x.into()).collect());
-    traffic_space.set_usages(parsed.usages.into_iter().map(|x| x.into()).collect());
-    traffic_space.set_traffic_direction(parsed.traffic_direction.map(|x| x.into()));
+    traffic_space.set_clearance_spaces(clearance_spaces);
 
     Ok(traffic_space)
+}
+
+pub fn serialize_traffic_space(
+    traffic_space: &TrafficSpace,
+    formatting: Formatting,
+) -> Result<XmlNode, Error> {
+    let mut xml_node_parts =
+        serialize_abstract_unoccupied_space(traffic_space.abstract_unoccupied_space(), formatting)?;
+
+    if let Some(raw) = serialize_inner(GmlTrafficSpace::from(traffic_space), formatting)? {
+        xml_node_parts.content.push(XmlNodeContent::Raw(raw));
+    }
+
+    for prop in traffic_space.clearance_spaces() {
+        xml_node_parts
+            .content
+            .push(XmlNodeContent::Child(serialize_clearance_space_property(
+                prop, formatting,
+            )?));
+    }
+
+    Ok(XmlNode::new(XmlElement::TrafficSpace, xml_node_parts))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -41,18 +101,37 @@ pub struct GmlTrafficSpace {
     #[serde(rename(serialize = "tran:usage", deserialize = "usage"), default)]
     pub usages: Vec<GmlCode>,
 
-    #[serde(rename = "granularity", default)]
+    #[serde(
+        rename(serialize = "tran:granularity", deserialize = "granularity"),
+        default
+    )]
     pub granularity: GmlGranularityValue,
 
-    #[serde(rename = "trafficDirection", default)]
+    #[serde(
+        rename(serialize = "tran:trafficDirection", deserialize = "trafficDirection"),
+        skip_serializing_if = "Option::is_none"
+    )]
     pub traffic_direction: Option<GmlTrafficDirectionValue>,
+}
+
+impl From<&TrafficSpace> for GmlTrafficSpace {
+    fn from(item: &TrafficSpace) -> Self {
+        Self {
+            class: item.class().map(Into::into),
+            functions: item.functions().iter().map(Into::into).collect(),
+            usages: item.usages().iter().map(Into::into).collect(),
+            granularity: item.granularity().into(),
+            traffic_direction: item.traffic_direction().as_ref().map(Into::into),
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ecitygml_core::model::core::enums::SpaceType;
     use ecitygml_core::model::core::{
-        AsAbstractCityObject, AsAbstractFeature, AsAbstractSpace, SpaceBoundaryKind, SpaceType,
+        AsAbstractCityObject, AsAbstractFeature, AsAbstractSpace, SpaceBoundaryKind,
         ThematicSurfaceKind,
     };
     use ecitygml_core::model::transportation::{
@@ -108,7 +187,7 @@ mod tests {
         );
         assert!(traffic_space.lod2_multi_surface().is_none());
         assert_eq!(traffic_space.generic_attributes().len(), 1);
-        assert_eq!(traffic_space.space_type(), Some(&SpaceType::Open));
+        assert_eq!(traffic_space.space_type(), Some(SpaceType::Open));
         assert_eq!(traffic_space.functions().first().unwrap().value(), "1");
         assert_eq!(traffic_space.usages().first().unwrap().value(), "2");
         assert_eq!(traffic_space.granularity(), &GranularityValue::Lane);

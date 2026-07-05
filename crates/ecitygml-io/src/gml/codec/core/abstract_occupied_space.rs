@@ -1,9 +1,13 @@
 use crate::Error;
-use crate::gml::codec::core::abstract_physical_space::deserialize_abstract_physical_space;
+use crate::gml::codec::core::abstract_physical_space::{
+    deserialize_abstract_physical_space, serialize_abstract_physical_space,
+};
 use crate::gml::codec::core::implicit_geometry_property::GmlImplicitGeometryProperty;
-use crate::gml::util::XmlElementSpans;
+use crate::gml::util::{XmlElementSpans, XmlNodeContent, XmlNodeParts, serialize_inner};
+use crate::gml::write::Formatting;
 use ecitygml_core::model::core::{
-    AbstractOccupiedSpace, AsAbstractFeature, AsAbstractOccupiedSpaceMut, ImplicitGeometry,
+    AbstractOccupiedSpace, AsAbstractFeature, AsAbstractOccupiedSpaceMut, AsAbstractPhysicalSpace,
+    ImplicitGeometry,
 };
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
@@ -19,7 +23,8 @@ pub fn deserialize_abstract_occupied_space(
     );
     let abstract_physical_space = abstract_physical_space_result?;
     let parsed = parsed_result?;
-    let mut abstract_occupied_space = AbstractOccupiedSpace::new(abstract_physical_space);
+    let mut abstract_occupied_space =
+        AbstractOccupiedSpace::from_abstract_physical_space(abstract_physical_space);
 
     if let Some(gml_implicit_geometry_property) = parsed.lod1_implicit_representation {
         let multi_surface_result: Result<ImplicitGeometry, Error> =
@@ -78,16 +83,54 @@ pub fn deserialize_abstract_occupied_space(
     Ok(abstract_occupied_space)
 }
 
+pub fn serialize_abstract_occupied_space(
+    abstract_occupied_space: &AbstractOccupiedSpace,
+    formatting: Formatting,
+) -> Result<XmlNodeParts, Error> {
+    let mut xml_node_parts = serialize_abstract_physical_space(
+        abstract_occupied_space.abstract_physical_space(),
+        formatting,
+    )?;
+
+    if let Some(raw) = serialize_inner(
+        GmlAbstractOccupiedSpace::from(abstract_occupied_space),
+        formatting,
+    )? {
+        xml_node_parts.content.push(XmlNodeContent::Raw(raw));
+    }
+
+    Ok(xml_node_parts)
+}
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct GmlAbstractOccupiedSpace {
-    #[serde(rename = "lod1ImplicitRepresentation")]
+    #[serde(
+        rename = "lod1ImplicitRepresentation",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub lod1_implicit_representation: Option<GmlImplicitGeometryProperty>,
 
-    #[serde(rename = "lod2ImplicitRepresentation")]
+    #[serde(
+        rename = "lod2ImplicitRepresentation",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub lod2_implicit_representation: Option<GmlImplicitGeometryProperty>,
 
-    #[serde(rename = "lod3ImplicitRepresentation")]
+    #[serde(
+        rename = "lod3ImplicitRepresentation",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub lod3_implicit_representation: Option<GmlImplicitGeometryProperty>,
+}
+
+impl From<&AbstractOccupiedSpace> for GmlAbstractOccupiedSpace {
+    fn from(_item: &AbstractOccupiedSpace) -> Self {
+        Self {
+            lod1_implicit_representation: None, // TODO
+            lod2_implicit_representation: None, // TODO
+            lod3_implicit_representation: None, // TODO
+        }
+    }
 }
 
 #[cfg(test)]
@@ -155,15 +198,33 @@ mod tests {
             .lod1_implicit_representation()
             .unwrap();
         assert_eq!(
-            lod1_implicit_representation.reference_point.pos().x(),
+            lod1_implicit_representation
+                .reference_point
+                .object
+                .as_ref()
+                .expect("must exist")
+                .pos()
+                .x(),
             678279.5998446278
         );
         assert_eq!(
-            lod1_implicit_representation.reference_point.pos().y(),
+            lod1_implicit_representation
+                .reference_point
+                .object
+                .as_ref()
+                .expect("must exist")
+                .pos()
+                .y(),
             5403792.833732292
         );
         assert_eq!(
-            lod1_implicit_representation.reference_point.pos().z(),
+            lod1_implicit_representation
+                .reference_point
+                .object
+                .as_ref()
+                .expect("must exist")
+                .pos()
+                .z(),
             369.2473337509289
         );
     }

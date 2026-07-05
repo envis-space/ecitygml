@@ -1,15 +1,59 @@
 use crate::Error;
-use crate::gml::codec::transportation::abstract_transportation_space::deserialize_abstract_transportation_space;
-use crate::gml::util::extract_xml_element_spans;
-use ecitygml_core::model::transportation::Section;
+use crate::gml::codec::transportation::GmlIntersection;
+use crate::gml::codec::transportation::abstract_transportation_space::{
+    deserialize_abstract_transportation_space, serialize_abstract_transportation_space,
+};
+use crate::gml::util::xml_element::XmlElement;
+use crate::gml::util::{XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner};
+use crate::gml::write::Formatting;
+use ecitygml_core::model::transportation::{AsAbstractTransportationSpace, Section};
+use egml::io::GmlCode;
+use quick_xml::de;
+use serde::{Deserialize, Serialize};
 
 pub fn deserialize_section(xml_document: &[u8]) -> Result<Section, Error> {
     let spans = extract_xml_element_spans(xml_document)?;
-    let abstract_transportation_space =
-        deserialize_abstract_transportation_space(xml_document, &spans)?;
-    let section = Section::new(abstract_transportation_space);
+    let (abstract_transportation_space_result, parsed_result) = rayon::join(
+        || deserialize_abstract_transportation_space(xml_document, &spans),
+        || de::from_reader::<_, GmlIntersection>(xml_document).map_err(Error::from),
+    );
+    let abstract_transportation_space = abstract_transportation_space_result?;
+    let parsed = parsed_result?;
+
+    let mut section = Section::from_abstract_transportation_space(abstract_transportation_space);
+    section.set_class(parsed.class.map(Into::into));
 
     Ok(section)
+}
+
+pub fn serialize_section(section: &Section, formatting: Formatting) -> Result<XmlNode, Error> {
+    let mut xml_node_parts = serialize_abstract_transportation_space(
+        section.abstract_transportation_space(),
+        formatting,
+    )?;
+
+    if let Some(raw) = serialize_inner(GmlSection::from(section), formatting)? {
+        xml_node_parts.content.push(XmlNodeContent::Raw(raw));
+    }
+
+    Ok(XmlNode::new(XmlElement::Section, xml_node_parts))
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+pub struct GmlSection {
+    #[serde(
+        rename(serialize = "tran:class", deserialize = "class"),
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub class: Option<GmlCode>,
+}
+
+impl From<&Section> for GmlSection {
+    fn from(item: &Section) -> Self {
+        Self {
+            class: item.class().map(Into::into),
+        }
+    }
 }
 
 #[cfg(test)]

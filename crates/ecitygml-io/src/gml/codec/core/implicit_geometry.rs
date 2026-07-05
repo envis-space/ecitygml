@@ -29,7 +29,7 @@ impl TryFrom<GmlImplicitGeometry> for ImplicitGeometry {
 
     fn try_from(gml_implicit_geometry: GmlImplicitGeometry) -> Result<Self, Self::Error> {
         Ok(ImplicitGeometry {
-            reference_point: gml_implicit_geometry.reference_point.point.try_into()?,
+            reference_point: gml_implicit_geometry.reference_point.try_into()?,
         })
     }
 }
@@ -52,15 +52,33 @@ mod tests {
         let implicit_geometry = deserialize_implicit_geometry(xml_document).expect("should work");
 
         assert_eq!(
-            implicit_geometry.reference_point.pos().x(),
+            implicit_geometry
+                .reference_point
+                .object
+                .as_ref()
+                .expect("must exist")
+                .pos()
+                .x(),
             678298.3706294019
         );
         assert_eq!(
-            implicit_geometry.reference_point.pos().y(),
+            implicit_geometry
+                .reference_point
+                .object
+                .as_ref()
+                .expect("must exist")
+                .pos()
+                .y(),
             5403791.857383491
         );
         assert_eq!(
-            implicit_geometry.reference_point.pos().z(),
+            implicit_geometry
+                .reference_point
+                .object
+                .as_ref()
+                .expect("must exist")
+                .pos()
+                .z(),
             366.9430094360463
         );
     }

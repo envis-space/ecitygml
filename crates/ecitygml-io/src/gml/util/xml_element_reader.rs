@@ -1,4 +1,6 @@
 use crate::Error;
+use crate::gml::util::xml_element;
+use crate::gml::util::xml_element::XmlElement;
 use quick_xml::Reader;
 use quick_xml::events::Event;
 use rayon::iter::IntoParallelIterator;
@@ -6,101 +8,7 @@ use rayon::iter::ParallelIterator;
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::ops::Range;
-use strum::{Display, EnumIter};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter, Display)]
-pub enum XmlElement {
-    AuxiliaryTrafficArea,
-    AuxiliaryTrafficSpace,
-    AuxiliaryTrafficSpaceProperty,
-    BoundaryProperty,
-    Building,
-    BuildingConstructiveElement,
-    BuildingConstructiveElementProperty,
-    BuildingInstallation,
-    BuildingInstallationProperty,
-    BuildingRoom,
-    BuildingRoomProperty,
-    BuildingSubdivisionProperty,
-    CityFurniture,
-    CityObjectMemberProperty,
-    Door,
-    DoorSurface,
-    FillingElementProperty,
-    FillingSurfaceProperty,
-    GenericAttributeProperty,
-    GroundSurface,
-    Intersection,
-    IntersectionProperty,
-    Marking,
-    MarkingProperty,
-    ReliefComponentProperty,
-    ReliefFeature,
-    Road,
-    RoofSurface,
-    Section,
-    SectionProperty,
-    SolitaryVegetationObject,
-    Storey,
-    TINRelief,
-    TrafficArea,
-    TrafficSpace,
-    TrafficSpaceProperty,
-    WallSurface,
-    Window,
-    WindowSurface,
-}
-
-pub fn xml_element_from_local_name(local_name: &[u8]) -> Option<XmlElement> {
-    match local_name {
-        b"AuxiliaryTrafficArea" => Some(XmlElement::AuxiliaryTrafficArea),
-        b"AuxiliaryTrafficSpace" => Some(XmlElement::AuxiliaryTrafficSpace),
-        b"Building" => Some(XmlElement::Building),
-        b"BuildingConstructiveElement" => Some(XmlElement::BuildingConstructiveElement),
-        b"BuildingInstallation" => Some(XmlElement::BuildingInstallation),
-        b"BuildingRoom" => Some(XmlElement::BuildingRoom),
-        b"CityFurniture" => Some(XmlElement::CityFurniture),
-        b"Door" => Some(XmlElement::Door),
-        b"DoorSurface" => Some(XmlElement::DoorSurface),
-        b"GroundSurface" => Some(XmlElement::GroundSurface),
-        b"Intersection" => Some(XmlElement::Intersection),
-        b"Marking" => Some(XmlElement::Marking),
-        b"ReliefFeature" => Some(XmlElement::ReliefFeature),
-        b"Road" => Some(XmlElement::Road),
-        b"RoofSurface" => Some(XmlElement::RoofSurface),
-        b"Section" => Some(XmlElement::Section),
-        b"SolitaryVegetationObject" => Some(XmlElement::SolitaryVegetationObject),
-        b"Storey" => Some(XmlElement::Storey),
-        b"TINRelief" => Some(XmlElement::TINRelief),
-        b"TrafficArea" => Some(XmlElement::TrafficArea),
-        b"TrafficSpace" => Some(XmlElement::TrafficSpace),
-        b"WallSurface" => Some(XmlElement::WallSurface),
-        b"Window" => Some(XmlElement::Window),
-        b"WindowSurface" => Some(XmlElement::WindowSurface),
-        b"auxiliaryTrafficSpace" => Some(XmlElement::AuxiliaryTrafficSpaceProperty),
-        b"boundary" => Some(XmlElement::BoundaryProperty),
-        b"buildingConstructiveElement" => Some(XmlElement::BuildingConstructiveElementProperty),
-        b"buildingInstallation" => Some(XmlElement::BuildingInstallationProperty),
-        b"buildingRoom" => Some(XmlElement::BuildingRoomProperty),
-        b"buildingSubdivision" => Some(XmlElement::BuildingSubdivisionProperty),
-        b"cityObjectMember" => Some(XmlElement::CityObjectMemberProperty),
-        b"filling" => Some(XmlElement::FillingElementProperty),
-        b"fillingSurface" => Some(XmlElement::FillingSurfaceProperty),
-        b"genericAttribute" => Some(XmlElement::GenericAttributeProperty),
-        b"intersection" => Some(XmlElement::IntersectionProperty),
-        b"marking" => Some(XmlElement::MarkingProperty),
-        b"reliefComponent" => Some(XmlElement::ReliefComponentProperty),
-        b"section" => Some(XmlElement::SectionProperty),
-        b"trafficSpace" => Some(XmlElement::TrafficSpaceProperty),
-        _ => {
-            tracing::debug!(
-                "unknown XML element: {}",
-                String::from_utf8_lossy(local_name)
-            );
-            None
-        }
-    }
-}
+use tracing::debug;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct XmlElementSpans {
@@ -127,6 +35,30 @@ impl XmlElementSpans {
             element
         );
         spans.first()
+    }
+}
+
+pub fn collect_child<T>(
+    xml_document: &[u8],
+    spans: &XmlElementSpans,
+    element: XmlElement,
+    deserializer: fn(&[u8], &XmlElementSpans) -> Result<T, Error>,
+) -> Result<Option<T>, Error> {
+    let all_spans = spans.get(element);
+    if all_spans.len() >= 2 {
+        debug!(
+            "expected at most one {:?}, found {}",
+            element,
+            all_spans.len()
+        );
+    }
+    match all_spans.first() {
+        None => Ok(None),
+        Some(x) => {
+            let slice = &xml_document[x.start..x.end];
+            let child_spans = extract_xml_element_spans(slice)?;
+            deserializer(slice, &child_spans).map(Some)
+        }
     }
 }
 
@@ -181,7 +113,7 @@ pub fn extract_xml_element_spans(xml_document: &[u8]) -> Result<XmlElementSpans,
                     continue;
                 }
 
-                let gml_element = xml_element_from_local_name(e.local_name().as_ref());
+                let gml_element = xml_element::XmlElement::from_local_name(e.local_name().as_ref());
                 if let Some(x) = gml_element {
                     // buffer_position() is right after `>` of the start tag,
                     // so the `<` of the start tag is e.len() + 2 bytes back.
@@ -194,6 +126,19 @@ pub fn extract_xml_element_spans(xml_document: &[u8]) -> Result<XmlElementSpans,
                     depth -= 1;
                 }
             }
+            Ok(Event::Empty(e))
+                // Self-closing elements (<foo/>) only appear as direct children (depth == 1).
+                if depth == 1 => {
+                    let gml_element =
+                        xml_element::XmlElement::from_local_name(e.local_name().as_ref());
+                    if let Some(x) = gml_element {
+                        // buffer_position() is right after `>` of `<foo/>`,
+                        // so `<` is e.len() + 3 bytes back (for `<`, `/`, `>`).
+                        let pos_start = reader.buffer_position() as usize - e.len() - 3;
+                        let pos_end = reader.buffer_position() as usize;
+                        element_spans.entry(x).or_default().push(pos_start..pos_end);
+                    }
+                }
             Ok(Event::End(_)) => {
                 depth -= 1;
             }

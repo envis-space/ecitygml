@@ -1,18 +1,23 @@
 use crate::model::core::{AbstractFeature, AsAbstractFeature, AsAbstractFeatureMut};
 use chrono::{DateTime, FixedOffset};
+use egml::model::base::Id;
 use nalgebra::Isometry3;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbstractFeatureWithLifespan {
     pub(crate) abstract_feature: AbstractFeature,
-    pub(crate) creation_date: Option<DateTime<FixedOffset>>,
-    pub(crate) termination_date: Option<DateTime<FixedOffset>>,
-    pub(crate) valid_from: Option<DateTime<FixedOffset>>,
-    pub(crate) valid_to: Option<DateTime<FixedOffset>>,
+    creation_date: Option<DateTime<FixedOffset>>,
+    termination_date: Option<DateTime<FixedOffset>>,
+    valid_from: Option<DateTime<FixedOffset>>,
+    valid_to: Option<DateTime<FixedOffset>>,
 }
 
 impl AbstractFeatureWithLifespan {
-    pub fn new(abstract_feature: AbstractFeature) -> Self {
+    pub fn new(id: Id) -> Self {
+        Self::from_abstract_feature(AbstractFeature::new(id))
+    }
+
+    pub fn from_abstract_feature(abstract_feature: AbstractFeature) -> Self {
         Self {
             abstract_feature,
             creation_date: None,
@@ -21,7 +26,8 @@ impl AbstractFeatureWithLifespan {
             valid_to: None,
         }
     }
-
+}
+impl AbstractFeatureWithLifespan {
     pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
         self.abstract_feature.apply_transform(m);
     }
@@ -92,7 +98,12 @@ macro_rules! impl_abstract_feature_with_lifespan_traits {
                 &self.abstract_feature_with_lifespan().abstract_feature
             }
         }
+    };
+}
 
+#[macro_export]
+macro_rules! impl_abstract_feature_with_lifespan_mut_traits {
+    ($type:ty) => {
         impl $crate::model::core::AsAbstractFeatureMut for $type {
             fn abstract_feature_mut(&mut self) -> &mut $crate::model::core::AbstractFeature {
                 use $crate::model::core::AsAbstractFeatureWithLifespanMut;
@@ -103,3 +114,4 @@ macro_rules! impl_abstract_feature_with_lifespan_traits {
 }
 
 impl_abstract_feature_with_lifespan_traits!(AbstractFeatureWithLifespan);
+impl_abstract_feature_with_lifespan_mut_traits!(AbstractFeatureWithLifespan);

@@ -1,7 +1,5 @@
 //! `ecitygml` is a library for processing [CityGML](https://www.ogc.org/standards/citygml/) data.
 //!
-//! Only reading of CityGML version 3.0 datasets is currently supported.
-//!
 //! ## Example
 //!
 //! To get started, read a CityGML 3.0 dataset into memory and print all GML IDs of the building.
@@ -18,9 +16,9 @@
 //!     .finish()
 //!     .expect("parsing should work");
 //!
-//! // iterate over all buildings
-//! for current_top_level_feature in city_model.iter_top_level_features() {
-//!     println!("GML ID of the current top-level feature: {}", current_top_level_feature.id());
+//! // iterate over all features
+//! for current_feature_ref in city_model.iter_features() {
+//!     println!("GML ID of the current feature: {}", current_feature_ref.id());
 //! }
 //! ```
 //!

@@ -1,26 +1,71 @@
+use crate::model::building::building_part_property::BuildingPartProperty;
 use crate::model::building::{AbstractBuilding, AsAbstractBuilding, AsAbstractBuildingMut};
-use crate::model::common::{FeatureRef, FeatureRefMut, TopLevelFeatureRef};
 use crate::model::core::AsAbstractFeatureMut;
+use crate::model::core::refs::FeatureKindRef;
+use crate::model::core::refs::FeatureKindRefMut;
+use egml::model::base::Id;
 use egml::model::geometry::Envelope;
 use nalgebra::Isometry3;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Building {
-    pub abstract_building: AbstractBuilding,
+    pub(crate) abstract_building: AbstractBuilding,
+    building_parts: Vec<BuildingPartProperty>,
 }
 
 impl Building {
-    pub fn new(abstract_building: AbstractBuilding) -> Self {
-        Self { abstract_building }
+    pub fn new(id: Id) -> Self {
+        Self::from_abstract_building(AbstractBuilding::new(id))
     }
 
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
-        std::iter::once(self.into()).chain(self.abstract_building.iter_features())
+    pub fn from_abstract_building(abstract_building: AbstractBuilding) -> Self {
+        Self {
+            abstract_building,
+            building_parts: Vec::new(),
+        }
     }
 
-    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+    pub fn building_parts(&self) -> &[BuildingPartProperty] {
+        &self.building_parts
+    }
+
+    pub fn set_building_parts(&mut self, building_parts: Vec<BuildingPartProperty>) {
+        self.building_parts = building_parts;
+    }
+
+    pub fn push_building_part(&mut self, building_part: BuildingPartProperty) {
+        self.building_parts.push(building_part);
+    }
+
+    pub fn extend_building_parts(
+        &mut self,
+        building_parts: impl IntoIterator<Item = BuildingPartProperty>,
+    ) {
+        self.building_parts.extend(building_parts);
+    }
+}
+
+impl Building {
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
+        std::iter::once(self.into())
+            .chain(self.abstract_building.iter_features())
+            .chain(
+                self.building_parts
+                    .iter()
+                    .filter_map(|x| x.object.as_ref())
+                    .flat_map(|x| x.iter_features()),
+            )
+    }
+
+    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
         f((&mut *self).into());
         self.abstract_building.for_each_feature_mut(f);
+
+        for prop in &mut self.building_parts {
+            if let Some(x) = prop.object.as_mut() {
+                x.for_each_feature_mut(f);
+            }
+        }
     }
 
     pub fn compute_envelope(&self) -> Option<Envelope> {
@@ -33,6 +78,12 @@ impl Building {
 
     pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
         self.abstract_building.apply_transform(m);
+
+        for prop in &mut self.building_parts {
+            if let Some(x) = prop.object.as_mut() {
+                x.apply_transform(m);
+            }
+        }
     }
 }
 
@@ -49,21 +100,5 @@ impl AsAbstractBuildingMut for Building {
 }
 
 crate::impl_abstract_building_traits!(Building);
-
-impl<'a> From<&'a Building> for FeatureRef<'a> {
-    fn from(item: &'a Building) -> Self {
-        FeatureRef::Building(item)
-    }
-}
-
-impl<'a> From<&'a mut Building> for FeatureRefMut<'a> {
-    fn from(item: &'a mut Building) -> Self {
-        FeatureRefMut::Building(item)
-    }
-}
-
-impl<'a> From<&'a Building> for TopLevelFeatureRef<'a> {
-    fn from(item: &'a Building) -> Self {
-        TopLevelFeatureRef::Building(item)
-    }
-}
+crate::impl_abstract_building_mut_traits!(Building);
+crate::impl_has_feature_type!(Building, Building);

@@ -1,5 +1,7 @@
+use crate::impl_abstract_city_object_mut_traits;
 use crate::impl_abstract_city_object_traits;
-use crate::model::common::{FeatureRef, FeatureRefMut, TopLevelFeatureRef};
+use crate::model::common::{FeatureType, HasFeatureType};
+use crate::model::core::refs::{FeatureKindRef, FeatureKindRefMut};
 use crate::model::core::space_kind::SpaceKind;
 use crate::model::core::{
     AbstractCityObject, AsAbstractCityObject, AsAbstractCityObjectMut, SpaceBoundaryKind,
@@ -16,14 +18,14 @@ pub enum CityObjectKind {
 
 impl CityObjectKind {
     #[auto_enum(Iterator)]
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
         match self {
             CityObjectKind::SpaceKind(x) => x.iter_features(),
             CityObjectKind::SpaceBoundaryKind(x) => x.iter_features(),
         }
     }
 
-    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
         match self {
             CityObjectKind::SpaceKind(x) => x.for_each_feature_mut(f),
             CityObjectKind::SpaceBoundaryKind(x) => x.for_each_feature_mut(f),
@@ -71,31 +73,13 @@ impl AsAbstractCityObjectMut for CityObjectKind {
 }
 
 impl_abstract_city_object_traits!(CityObjectKind);
+impl_abstract_city_object_mut_traits!(CityObjectKind);
 
-impl<'a> From<&'a CityObjectKind> for FeatureRef<'a> {
-    fn from(item: &'a CityObjectKind) -> Self {
-        match item {
-            CityObjectKind::SpaceKind(x) => x.into(),
-            CityObjectKind::SpaceBoundaryKind(x) => x.into(),
-        }
-    }
-}
-
-impl<'a> TryFrom<&'a CityObjectKind> for TopLevelFeatureRef<'a> {
-    type Error = ();
-    fn try_from(item: &'a CityObjectKind) -> Result<Self, ()> {
-        match item {
-            CityObjectKind::SpaceKind(x) => x.try_into(),
-            CityObjectKind::SpaceBoundaryKind(x) => x.try_into(),
-        }
-    }
-}
-
-impl<'a> From<&'a mut CityObjectKind> for FeatureRefMut<'a> {
-    fn from(item: &'a mut CityObjectKind) -> Self {
-        match item {
-            CityObjectKind::SpaceKind(x) => x.into(),
-            CityObjectKind::SpaceBoundaryKind(x) => x.into(),
+impl HasFeatureType for CityObjectKind {
+    fn feature_type(&self) -> FeatureType {
+        match self {
+            Self::SpaceKind(x) => x.feature_type(),
+            Self::SpaceBoundaryKind(x) => x.feature_type(),
         }
     }
 }
@@ -115,3 +99,27 @@ macro_rules! impl_from_for_city_object_kind {
 }
 impl_from_for_city_object_kind!(SpaceKind);
 impl_from_for_city_object_kind!(SpaceBoundaryKind);
+
+#[macro_export]
+macro_rules! impl_try_from_for_city_object_kind {
+    ($variant:ident, $type:ty) => {
+        impl TryFrom<$crate::model::core::CityObjectKind> for $type {
+            type Error = ();
+            fn try_from(x: $crate::model::core::CityObjectKind) -> Result<Self, ()> {
+                match x {
+                    $crate::model::core::CityObjectKind::$variant(k) => {
+                        k.try_into().map_err(|_| ())
+                    }
+                    #[allow(unreachable_patterns)]
+                    _ => Err(()),
+                }
+            }
+        }
+        $crate::impl_try_from_for_feature_with_lifespan_kind!(CityObjectKind, $type);
+    };
+    ($variant:ident) => {
+        $crate::impl_try_from_for_city_object_kind!($variant, $variant);
+    };
+}
+impl_try_from_for_city_object_kind!(SpaceKind);
+impl_try_from_for_city_object_kind!(SpaceBoundaryKind);

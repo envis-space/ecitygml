@@ -1,8 +1,10 @@
 use crate::Error;
 use crate::gml::codec::construction::{
-    GmlAbstractConstructiveElement, deserialize_abstract_constructive_element,
+    deserialize_abstract_constructive_element, serialize_abstract_constructive_element,
 };
-use crate::gml::util::extract_xml_element_spans;
+use crate::gml::util::xml_element::XmlElement;
+use crate::gml::util::{XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner};
+use crate::gml::write::Formatting;
 use ecitygml_core::model::building::BuildingConstructiveElement;
 use ecitygml_core::model::construction::AsAbstractConstructiveElement;
 use egml::io::GmlCode;
@@ -20,21 +22,42 @@ pub fn deserialize_building_constructive_element(
     let abstract_constructive_element = abstract_constructive_element_result?;
     let parsed = parsed_result?;
     let mut building_constructive_element =
-        BuildingConstructiveElement::new(abstract_constructive_element);
+        BuildingConstructiveElement::from_abstract_constructive_element(
+            abstract_constructive_element,
+        );
 
-    building_constructive_element.set_class(parsed.class.map(|x| x.into()));
+    building_constructive_element.set_class(parsed.class.map(Into::into));
     building_constructive_element
-        .set_functions(parsed.functions.into_iter().map(|x| x.into()).collect());
-    building_constructive_element.set_usages(parsed.usages.into_iter().map(|x| x.into()).collect());
+        .set_functions(parsed.functions.into_iter().map(Into::into).collect());
+    building_constructive_element.set_usages(parsed.usages.into_iter().map(Into::into).collect());
 
     Ok(building_constructive_element)
 }
 
+pub fn serialize_building_constructive_element(
+    building_constructive_element: &BuildingConstructiveElement,
+    formatting: Formatting,
+) -> Result<XmlNode, Error> {
+    let mut xml_node_parts = serialize_abstract_constructive_element(
+        building_constructive_element.abstract_constructive_element(),
+        formatting,
+    )?;
+
+    if let Some(raw) = serialize_inner(
+        GmlBuildingConstructiveElement::from(building_constructive_element),
+        formatting,
+    )? {
+        xml_node_parts.content.push(XmlNodeContent::Raw(raw));
+    }
+
+    Ok(XmlNode::new(
+        XmlElement::BuildingConstructiveElement,
+        xml_node_parts,
+    ))
+}
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct GmlBuildingConstructiveElement {
-    #[serde(flatten, skip_deserializing, default)]
-    pub abstract_constructive_element: Option<GmlAbstractConstructiveElement>,
-
     #[serde(
         rename(serialize = "bldg:class", deserialize = "class"),
         skip_serializing_if = "Option::is_none"
@@ -51,10 +74,9 @@ pub struct GmlBuildingConstructiveElement {
 impl From<&BuildingConstructiveElement> for GmlBuildingConstructiveElement {
     fn from(item: &BuildingConstructiveElement) -> Self {
         Self {
-            abstract_constructive_element: Some(item.abstract_constructive_element().into()),
-            class: item.class().as_ref().map(Into::into),
-            functions: Vec::new(),
-            usages: Vec::new(),
+            class: item.class().map(Into::into),
+            functions: item.functions().iter().map(Into::into).collect(),
+            usages: item.usages().iter().map(Into::into).collect(),
         }
     }
 }
@@ -62,13 +84,8 @@ impl From<&BuildingConstructiveElement> for GmlBuildingConstructiveElement {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ecitygml_core::model::construction::{
-        AbstractConstructiveElement, AsAbstractConstructiveElementMut,
-    };
-    use ecitygml_core::model::core::{
-        AbstractCityObject, AbstractFeature, AbstractFeatureWithLifespan, AbstractOccupiedSpace,
-        AbstractPhysicalSpace, AbstractSpace, AsAbstractFeature,
-    };
+    use ecitygml_core::model::construction::AsAbstractConstructiveElementMut;
+    use ecitygml_core::model::core::AsAbstractFeature;
     use egml::model::base::Id;
     use egml::model::basic::Code;
     use quick_xml::se;
@@ -191,17 +208,8 @@ mod tests {
     #[test]
     fn test_serialize_building_constructive_element() {
         let id = Id::try_from("test-id").expect("should work");
-        let abstract_feature = AbstractFeature::new(id);
-        let abstract_feature_with_lifespan = AbstractFeatureWithLifespan::new(abstract_feature);
-        let abstract_city_object = AbstractCityObject::new(abstract_feature_with_lifespan);
-        let abstract_space = AbstractSpace::new(abstract_city_object);
-        let abstract_physical_space = AbstractPhysicalSpace::new(abstract_space);
-        let abstract_occupied_space = AbstractOccupiedSpace::new(abstract_physical_space);
-        let mut abstract_constructive_element =
-            AbstractConstructiveElement::new(abstract_occupied_space);
-        abstract_constructive_element.set_is_structural_element(Some(true));
-        let mut building_constructive_element =
-            BuildingConstructiveElement::new(abstract_constructive_element);
+        let mut building_constructive_element = BuildingConstructiveElement::new(id);
+        building_constructive_element.set_is_structural_element(Some(true));
         building_constructive_element.set_class(Some(Code::new("Slab")));
 
         let gml_building_constructive_element =

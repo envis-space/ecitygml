@@ -7,10 +7,10 @@ pub struct GmlExternalReference {
     #[serde(rename = "targetResource")]
     pub target_resource: String,
 
-    #[serde(rename = "informationSystem")]
+    #[serde(rename = "informationSystem", skip_serializing_if = "Option::is_none")]
     pub information_system: Option<String>,
 
-    #[serde(rename = "relationType")]
+    #[serde(rename = "relationType", skip_serializing_if = "Option::is_none")]
     pub relation_type: Option<String>,
 }
 

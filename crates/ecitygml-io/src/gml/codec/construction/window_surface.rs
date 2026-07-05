@@ -1,48 +1,46 @@
 use crate::Error;
-use crate::gml::codec::core::{GmlAbstractThematicSurface, deserialize_abstract_filling_surface};
-use crate::gml::util::extract_xml_element_spans;
-use ecitygml_core::model::construction::WindowSurface;
-use ecitygml_core::model::core::AsAbstractThematicSurface;
-use quick_xml::se;
+use crate::gml::codec::core::{
+    deserialize_abstract_filling_surface, serialize_abstract_filling_surface,
+};
+use crate::gml::util::xml_element::XmlElement;
+use crate::gml::util::{XmlNode, extract_xml_element_spans};
+use crate::gml::write::Formatting;
+use ecitygml_core::model::construction::{AsAbstractFillingSurface, WindowSurface};
 use serde::{Deserialize, Serialize};
 
 pub fn deserialize_window_surface(xml_document: &[u8]) -> Result<WindowSurface, Error> {
     let spans = extract_xml_element_spans(xml_document)?;
     let abstract_filling_surface = deserialize_abstract_filling_surface(xml_document, &spans)?;
-    let window_surface = WindowSurface::new(abstract_filling_surface);
+    let window_surface = WindowSurface::from_abstract_filling_surface(abstract_filling_surface);
 
     Ok(window_surface)
 }
 
-pub fn serialize_window_surface(window_surface: &WindowSurface) -> Result<String, Error> {
-    let gml = GmlWindowSurface::from(window_surface);
-    Ok(se::to_string_with_root("con:WindowSurface", &gml)?)
+pub fn serialize_window_surface(
+    window_surface: &WindowSurface,
+    formatting: Formatting,
+) -> Result<XmlNode, Error> {
+    let xml_node_parts =
+        serialize_abstract_filling_surface(window_surface.abstract_filling_surface(), formatting)?;
+
+    Ok(XmlNode::new(XmlElement::WindowSurface, xml_node_parts))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
-struct GmlWindowSurface {
-    #[serde(flatten)]
-    abstract_thematic_surface: GmlAbstractThematicSurface,
-}
+pub struct GmlWindowSurface {}
 
 impl From<&WindowSurface> for GmlWindowSurface {
-    fn from(window_surface: &WindowSurface) -> Self {
-        Self {
-            abstract_thematic_surface: GmlAbstractThematicSurface::from(
-                window_surface.abstract_thematic_surface(),
-            ),
-        }
+    fn from(_item: &WindowSurface) -> Self {
+        Self {}
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gml::codec::core::deserialize_abstract_thematic_surface;
-    use ecitygml_core::model::core::{
-        AsAbstractCityObject, AsAbstractFeature, AsAbstractThematicSurface,
-    };
+    use ecitygml_core::model::core::{AsAbstractFeature, AsAbstractThematicSurface};
     use egml::model::base::Id;
+    use itertools::Itertools;
     use quick_xml::{DeError, de};
 
     #[test]
@@ -70,7 +68,10 @@ mod tests {
             </con:WindowSurface>";
 
         let window_surface = deserialize_window_surface(xml_document).unwrap();
-        let xml_output = serialize_window_surface(&window_surface).unwrap();
+        let xml_output = serialize_window_surface(&window_surface, Formatting::default())
+            .unwrap()
+            .to_string(Formatting::default())
+            .unwrap();
 
         assert!(xml_output.contains("con:WindowSurface"));
         assert!(xml_output.contains("gml:id=\"GML_d0f329f3-5b05-428d-87c3-945b3868337f\""));
@@ -110,7 +111,10 @@ mod tests {
             </con:WindowSurface>";
 
         let window_surface = deserialize_window_surface(xml_document).unwrap();
-        let xml_output = serialize_window_surface(&window_surface).unwrap();
+        let xml_output = serialize_window_surface(&window_surface, Formatting::default())
+            .unwrap()
+            .to_string(Formatting::default())
+            .unwrap();
 
         assert!(xml_output.contains("genericAttribute"));
         assert!(xml_output.contains("material"));

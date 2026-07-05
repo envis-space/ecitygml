@@ -26,7 +26,7 @@ TEST_CASE("GeometryStore", "[reader]") {
     auto city_model = reader.finish();
     const auto city_model_geometry_store = CityModelGeometryStore(&city_model);
 
-    REQUIRE(city_model_geometry_store.objects_len() == 8);
+    REQUIRE(city_model_geometry_store.objects_len() == 9);
 }
 
 TEST_CASE("GeometryStore", "[get]") {

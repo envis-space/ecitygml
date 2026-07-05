@@ -1,8 +1,14 @@
 use crate::Error;
-use crate::gml::codec::core::deserialize_abstract_occupied_space;
-use crate::gml::util::XmlElementSpans;
+use crate::gml::codec::core::{
+    deserialize_abstract_occupied_space, serialize_abstract_occupied_space,
+};
+use crate::gml::util::{XmlElementSpans, XmlNodeContent, XmlNodeParts, serialize_inner};
+use crate::gml::write::Formatting;
 use chrono::NaiveDate;
-use ecitygml_core::model::construction::{AbstractConstruction, AsAbstractConstructionMut};
+use ecitygml_core::model::construction::{
+    AbstractConstruction, AsAbstractConstruction, AsAbstractConstructionMut,
+};
+use ecitygml_core::model::core::AsAbstractOccupiedSpace;
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
@@ -16,7 +22,8 @@ pub fn deserialize_abstract_construction(
     );
     let abstract_occupied_space = abstract_occupied_space_result?;
     let parsed = parsed_result?;
-    let mut abstract_construction = AbstractConstruction::new(abstract_occupied_space);
+    let mut abstract_construction =
+        AbstractConstruction::from_abstract_occupied_space(abstract_occupied_space);
 
     abstract_construction.set_date_of_construction(parsed.date_of_construction);
     abstract_construction.set_date_of_demolition(parsed.date_of_demolition);
@@ -24,13 +31,50 @@ pub fn deserialize_abstract_construction(
     Ok(abstract_construction)
 }
 
+pub fn serialize_abstract_construction(
+    abstract_construction: &AbstractConstruction,
+    formatting: Formatting,
+) -> Result<XmlNodeParts, Error> {
+    let mut xml_node_parts = serialize_abstract_occupied_space(
+        abstract_construction.abstract_occupied_space(),
+        formatting,
+    )?;
+
+    if let Some(raw) = serialize_inner(
+        GmlAbstractConstruction::from(abstract_construction),
+        formatting,
+    )? {
+        xml_node_parts.content.push(XmlNodeContent::Raw(raw));
+    }
+
+    Ok(xml_node_parts)
+}
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct GmlAbstractConstruction {
-    #[serde(rename = "dateOfConstruction", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename(
+            serialize = "con:dateOfConstruction",
+            deserialize = "dateOfConstruction"
+        ),
+        skip_serializing_if = "Option::is_none"
+    )]
     pub date_of_construction: Option<NaiveDate>,
 
-    #[serde(rename = "dateOfDemolition", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename(serialize = "con:dateOfDemolition", deserialize = "dateOfDemolition"),
+        skip_serializing_if = "Option::is_none"
+    )]
     pub date_of_demolition: Option<NaiveDate>,
+}
+
+impl From<&AbstractConstruction> for GmlAbstractConstruction {
+    fn from(item: &AbstractConstruction) -> Self {
+        Self {
+            date_of_construction: item.date_of_construction().copied(),
+            date_of_demolition: item.date_of_demolition().copied(),
+        }
+    }
 }
 
 #[cfg(test)]

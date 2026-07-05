@@ -1,8 +1,11 @@
+use crate::impl_abstract_filling_element_mut_traits;
 use crate::impl_abstract_filling_element_traits;
-use crate::model::common::{FeatureRef, FeatureRefMut};
+use crate::model::common::{FeatureType, HasFeatureType};
 use crate::model::construction::{
     AbstractFillingElement, AsAbstractFillingElement, AsAbstractFillingElementMut, Door, Window,
 };
+use crate::model::core::refs::FeatureKindRef;
+use crate::model::core::refs::FeatureKindRefMut;
 use auto_enums::auto_enum;
 use nalgebra::Isometry3;
 
@@ -14,14 +17,14 @@ pub enum FillingElementKind {
 
 impl FillingElementKind {
     #[auto_enum(Iterator)]
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
         match self {
             FillingElementKind::Door(x) => x.iter_features(),
             FillingElementKind::Window(x) => x.iter_features(),
         }
     }
 
-    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
         match self {
             FillingElementKind::Door(x) => x.for_each_feature_mut(f),
             FillingElementKind::Window(x) => x.for_each_feature_mut(f),
@@ -69,21 +72,13 @@ impl AsAbstractFillingElementMut for FillingElementKind {
 }
 
 impl_abstract_filling_element_traits!(FillingElementKind);
+impl_abstract_filling_element_mut_traits!(FillingElementKind);
 
-impl<'a> From<&'a FillingElementKind> for FeatureRef<'a> {
-    fn from(item: &'a FillingElementKind) -> Self {
-        match item {
-            FillingElementKind::Door(x) => x.into(),
-            FillingElementKind::Window(x) => x.into(),
-        }
-    }
-}
-
-impl<'a> From<&'a mut FillingElementKind> for FeatureRefMut<'a> {
-    fn from(item: &'a mut FillingElementKind) -> Self {
-        match item {
-            FillingElementKind::Door(x) => x.into(),
-            FillingElementKind::Window(x) => x.into(),
+impl HasFeatureType for FillingElementKind {
+    fn feature_type(&self) -> FeatureType {
+        match self {
+            Self::Door(x) => x.feature_type(),
+            Self::Window(x) => x.feature_type(),
         }
     }
 }
@@ -101,3 +96,24 @@ macro_rules! impl_from_filling_element_kind {
 }
 impl_from_filling_element_kind!(Door);
 impl_from_filling_element_kind!(Window);
+
+#[macro_export]
+macro_rules! impl_try_from_filling_element_kind {
+    ($type:ident) => {
+        impl TryFrom<$crate::model::construction::FillingElementKind> for $type {
+            type Error = ();
+            fn try_from(x: $crate::model::construction::FillingElementKind) -> Result<Self, ()> {
+                match x {
+                    $crate::model::construction::FillingElementKind::$type(k) => {
+                        k.try_into().map_err(|_| ())
+                    }
+                    #[allow(unreachable_patterns)]
+                    _ => Err(()),
+                }
+            }
+        }
+        $crate::impl_try_from_for_occupied_space_kind!(FillingElementKind, $type);
+    };
+}
+impl_try_from_filling_element_kind!(Door);
+impl_try_from_filling_element_kind!(Window);

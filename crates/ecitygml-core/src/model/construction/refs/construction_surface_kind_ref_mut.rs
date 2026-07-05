@@ -1,0 +1,154 @@
+use crate::impl_try_from_thematic_surface_kind_ref_mut_for_enum;
+use crate::model::common::FeatureType;
+use crate::model::common::HasFeatureType;
+use crate::model::construction::{
+    AbstractConstructionSurface, AsAbstractConstructionSurface, AsAbstractConstructionSurfaceMut,
+    CeilingSurface, ConstructionSurfaceKind, FloorSurface, GroundSurface, InteriorWallSurface,
+    OuterCeilingSurface, OuterFloorSurface, RoofSurface, WallSurface,
+};
+
+#[derive(Debug)]
+pub enum ConstructionSurfaceKindRefMut<'a> {
+    CeilingSurface(&'a mut CeilingSurface),
+    FloorSurface(&'a mut FloorSurface),
+    GroundSurface(&'a mut GroundSurface),
+    InteriorWallSurface(&'a mut InteriorWallSurface),
+    OuterCeilingSurface(&'a mut OuterCeilingSurface),
+    OuterFloorSurface(&'a mut OuterFloorSurface),
+    RoofSurface(&'a mut RoofSurface),
+    WallSurface(&'a mut WallSurface),
+}
+
+impl<'a> From<&'a mut ConstructionSurfaceKind> for ConstructionSurfaceKindRefMut<'a> {
+    fn from(item: &'a mut ConstructionSurfaceKind) -> Self {
+        match item {
+            ConstructionSurfaceKind::CeilingSurface(x) => Self::CeilingSurface(x),
+            ConstructionSurfaceKind::FloorSurface(x) => Self::FloorSurface(x),
+            ConstructionSurfaceKind::GroundSurface(x) => Self::GroundSurface(x),
+            ConstructionSurfaceKind::InteriorWallSurface(x) => Self::InteriorWallSurface(x),
+            ConstructionSurfaceKind::OuterCeilingSurface(x) => Self::OuterCeilingSurface(x),
+            ConstructionSurfaceKind::OuterFloorSurface(x) => Self::OuterFloorSurface(x),
+            ConstructionSurfaceKind::RoofSurface(x) => Self::RoofSurface(x),
+            ConstructionSurfaceKind::WallSurface(x) => Self::WallSurface(x),
+        }
+    }
+}
+
+impl<'a> AsAbstractConstructionSurface for ConstructionSurfaceKindRefMut<'a> {
+    fn abstract_construction_surface(&self) -> &AbstractConstructionSurface {
+        match self {
+            Self::CeilingSurface(x) => x.abstract_construction_surface(),
+            Self::FloorSurface(x) => x.abstract_construction_surface(),
+            Self::GroundSurface(x) => x.abstract_construction_surface(),
+            Self::InteriorWallSurface(x) => x.abstract_construction_surface(),
+            Self::OuterCeilingSurface(x) => x.abstract_construction_surface(),
+            Self::OuterFloorSurface(x) => x.abstract_construction_surface(),
+            Self::RoofSurface(x) => x.abstract_construction_surface(),
+            Self::WallSurface(x) => x.abstract_construction_surface(),
+        }
+    }
+}
+
+impl<'a> AsAbstractConstructionSurfaceMut for ConstructionSurfaceKindRefMut<'a> {
+    fn abstract_construction_surface_mut(&mut self) -> &mut AbstractConstructionSurface {
+        match self {
+            Self::CeilingSurface(x) => x.abstract_construction_surface_mut(),
+            Self::FloorSurface(x) => x.abstract_construction_surface_mut(),
+            Self::GroundSurface(x) => x.abstract_construction_surface_mut(),
+            Self::InteriorWallSurface(x) => x.abstract_construction_surface_mut(),
+            Self::OuterCeilingSurface(x) => x.abstract_construction_surface_mut(),
+            Self::OuterFloorSurface(x) => x.abstract_construction_surface_mut(),
+            Self::RoofSurface(x) => x.abstract_construction_surface_mut(),
+            Self::WallSurface(x) => x.abstract_construction_surface_mut(),
+        }
+    }
+}
+crate::impl_abstract_construction_surface_traits!(ConstructionSurfaceKindRefMut<'_>);
+crate::impl_abstract_construction_surface_mut_traits!(ConstructionSurfaceKindRefMut<'_>);
+
+impl<'a> ConstructionSurfaceKindRefMut<'a> {
+    pub fn recompute_bounding_shape(&mut self) {
+        match self {
+            Self::CeilingSurface(x) => x.recompute_bounding_shape(),
+            Self::FloorSurface(x) => x.recompute_bounding_shape(),
+            Self::GroundSurface(x) => x.recompute_bounding_shape(),
+            Self::InteriorWallSurface(x) => x.recompute_bounding_shape(),
+            Self::OuterCeilingSurface(x) => x.recompute_bounding_shape(),
+            Self::OuterFloorSurface(x) => x.recompute_bounding_shape(),
+            Self::RoofSurface(x) => x.recompute_bounding_shape(),
+            Self::WallSurface(x) => x.recompute_bounding_shape(),
+        }
+    }
+}
+
+impl<'a> HasFeatureType for ConstructionSurfaceKindRefMut<'a> {
+    fn feature_type(&self) -> FeatureType {
+        match self {
+            Self::CeilingSurface(x) => x.feature_type(),
+            Self::FloorSurface(x) => x.feature_type(),
+            Self::GroundSurface(x) => x.feature_type(),
+            Self::InteriorWallSurface(x) => x.feature_type(),
+            Self::OuterCeilingSurface(x) => x.feature_type(),
+            Self::OuterFloorSurface(x) => x.feature_type(),
+            Self::RoofSurface(x) => x.feature_type(),
+            Self::WallSurface(x) => x.feature_type(),
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! impl_from_construction_surface_kind_ref_mut {
+    ($type:ident) => {
+        impl<'a> From<&'a mut $type>
+            for $crate::model::construction::refs::ConstructionSurfaceKindRefMut<'a>
+        {
+            fn from(x: &'a mut $type) -> Self {
+                $crate::model::construction::refs::ConstructionSurfaceKindRefMut::$type(x.into())
+            }
+        }
+        $crate::impl_from_for_thematic_surface_kind_ref_mut!(ConstructionSurfaceKind, $type);
+    };
+}
+impl_from_construction_surface_kind_ref_mut!(CeilingSurface);
+impl_from_construction_surface_kind_ref_mut!(FloorSurface);
+impl_from_construction_surface_kind_ref_mut!(GroundSurface);
+impl_from_construction_surface_kind_ref_mut!(InteriorWallSurface);
+impl_from_construction_surface_kind_ref_mut!(OuterCeilingSurface);
+impl_from_construction_surface_kind_ref_mut!(OuterFloorSurface);
+impl_from_construction_surface_kind_ref_mut!(RoofSurface);
+impl_from_construction_surface_kind_ref_mut!(WallSurface);
+
+#[macro_export]
+macro_rules! impl_try_from_construction_surface_kind_ref_mut {
+    ($type:ident) => {
+        impl<'a> TryFrom<$crate::model::construction::refs::ConstructionSurfaceKindRefMut<'a>>
+            for &'a mut $type
+        {
+            type Error = ();
+            fn try_from(
+                x: $crate::model::construction::refs::ConstructionSurfaceKindRefMut<'a>,
+            ) -> Result<Self, ()> {
+                match x {
+                    $crate::model::construction::refs::ConstructionSurfaceKindRefMut::$type(k) => {
+                        k.try_into().map_err(|_| ())
+                    }
+                    #[allow(unreachable_patterns)]
+                    _ => Err(()),
+                }
+            }
+        }
+        $crate::impl_try_from_for_thematic_surface_kind_ref_mut!(ConstructionSurfaceKind, $type);
+    };
+}
+impl_try_from_construction_surface_kind_ref_mut!(CeilingSurface);
+impl_try_from_construction_surface_kind_ref_mut!(FloorSurface);
+impl_try_from_construction_surface_kind_ref_mut!(GroundSurface);
+impl_try_from_construction_surface_kind_ref_mut!(InteriorWallSurface);
+impl_try_from_construction_surface_kind_ref_mut!(OuterCeilingSurface);
+impl_try_from_construction_surface_kind_ref_mut!(OuterFloorSurface);
+impl_try_from_construction_surface_kind_ref_mut!(RoofSurface);
+impl_try_from_construction_surface_kind_ref_mut!(WallSurface);
+impl_try_from_thematic_surface_kind_ref_mut_for_enum!(
+    ConstructionSurfaceKind,
+    ConstructionSurfaceKindRefMut
+);

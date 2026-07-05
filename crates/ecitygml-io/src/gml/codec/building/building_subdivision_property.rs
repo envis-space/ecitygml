@@ -1,6 +1,10 @@
 use crate::Error;
-use crate::gml::codec::building::building_subdivision_kind::deserialize_building_subdivision_kind;
-use crate::gml::util::XmlElementSpans;
+use crate::gml::codec::building::building_subdivision_kind::{
+    deserialize_building_subdivision_kind, serialize_building_subdivision_kind,
+};
+use crate::gml::util::xml_element::XmlElement;
+use crate::gml::util::{XmlElementSpans, XmlNode, XmlNodeContent, XmlNodeParts};
+use crate::gml::write::Formatting;
 use ecitygml_core::model::building::BuildingSubdivisionProperty;
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
@@ -18,6 +22,26 @@ pub fn deserialize_building_subdivision_property(
         deserialize_building_subdivision_kind(xml_document, spans)?;
 
     Ok(building_subdivision_property)
+}
+
+pub fn serialize_building_subdivision_property(
+    building_subdivision_property: &BuildingSubdivisionProperty,
+    formatting: Formatting,
+) -> Result<XmlNode, Error> {
+    let mut parts = XmlNodeParts::empty();
+    if let Some(href) = &building_subdivision_property.href {
+        parts
+            .attributes
+            .push(("xlink:href".to_string(), href.clone()));
+    }
+    if let Some(object) = &building_subdivision_property.object {
+        parts
+            .content
+            .push(XmlNodeContent::Child(serialize_building_subdivision_kind(
+                object, formatting,
+            )?));
+    }
+    Ok(XmlNode::new(XmlElement::BuildingSubdivisionProperty, parts))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]

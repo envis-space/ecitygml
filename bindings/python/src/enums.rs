@@ -51,6 +51,7 @@ impl From<ecitygml_rs::model::common::LevelOfDetail> for PyLevelOfDetail {
 #[pyclass(name = "FeatureType", eq, frozen, skip_from_py_object)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum PyFeatureType {
+    Appearance,
     AuxiliaryTrafficArea,
     AuxiliaryTrafficSpace,
     Bridge,
@@ -84,11 +85,13 @@ pub enum PyFeatureType {
     HollowSpace,
     InteriorWallSurface,
     Intersection,
+    LandUse,
     Marking,
     OtherConstruction,
     OuterCeilingSurface,
     OuterFloorSurface,
     PlantCover,
+    PointCloud,
     Railway,
     ReliefFeature,
     Road,
@@ -106,6 +109,8 @@ pub enum PyFeatureType {
     TunnelFurniture,
     TunnelInstallation,
     TunnelPart,
+    GeoreferencedTexture,
+    ParameterizedTexture,
     WallSurface,
     WaterBody,
     WaterGroundSurface,
@@ -113,6 +118,7 @@ pub enum PyFeatureType {
     Waterway,
     Window,
     WindowSurface,
+    X3DMaterial,
 }
 
 #[pymethods]
@@ -125,6 +131,7 @@ impl PyFeatureType {
 impl std::fmt::Debug for PyFeatureType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
+            Self::Appearance => "Appearance",
             Self::AuxiliaryTrafficArea => "AuxiliaryTrafficArea",
             Self::AuxiliaryTrafficSpace => "AuxiliaryTrafficSpace",
             Self::Bridge => "Bridge",
@@ -158,11 +165,13 @@ impl std::fmt::Debug for PyFeatureType {
             Self::HollowSpace => "HollowSpace",
             Self::InteriorWallSurface => "InteriorWallSurface",
             Self::Intersection => "Intersection",
+            Self::LandUse => "LandUse",
             Self::Marking => "Marking",
             Self::OtherConstruction => "OtherConstruction",
             Self::OuterCeilingSurface => "OuterCeilingSurface",
             Self::OuterFloorSurface => "OuterFloorSurface",
             Self::PlantCover => "PlantCover",
+            Self::PointCloud => "PointCloud",
             Self::Railway => "Railway",
             Self::ReliefFeature => "ReliefFeature",
             Self::Road => "Road",
@@ -180,6 +189,8 @@ impl std::fmt::Debug for PyFeatureType {
             Self::TunnelFurniture => "TunnelFurniture",
             Self::TunnelInstallation => "TunnelInstallation",
             Self::TunnelPart => "TunnelPart",
+            Self::GeoreferencedTexture => "GeoreferencedTexture",
+            Self::ParameterizedTexture => "ParameterizedTexture",
             Self::WallSurface => "WallSurface",
             Self::WaterBody => "WaterBody",
             Self::WaterGroundSurface => "WaterGroundSurface",
@@ -187,6 +198,7 @@ impl std::fmt::Debug for PyFeatureType {
             Self::Waterway => "Waterway",
             Self::Window => "Window",
             Self::WindowSurface => "WindowSurface",
+            Self::X3DMaterial => "X3DMaterial",
         };
         write!(f, "{}", s)
     }
@@ -196,6 +208,7 @@ impl From<ecitygml_rs::model::common::FeatureType> for PyFeatureType {
     fn from(ft: ecitygml_rs::model::common::FeatureType) -> Self {
         use ecitygml_rs::model::common::FeatureType as F;
         match ft {
+            F::Appearance => Self::Appearance,
             F::AuxiliaryTrafficArea => Self::AuxiliaryTrafficArea,
             F::AuxiliaryTrafficSpace => Self::AuxiliaryTrafficSpace,
             F::Bridge => Self::Bridge,
@@ -229,11 +242,13 @@ impl From<ecitygml_rs::model::common::FeatureType> for PyFeatureType {
             F::HollowSpace => Self::HollowSpace,
             F::InteriorWallSurface => Self::InteriorWallSurface,
             F::Intersection => Self::Intersection,
+            F::LandUse => Self::LandUse,
             F::Marking => Self::Marking,
             F::OtherConstruction => Self::OtherConstruction,
             F::OuterCeilingSurface => Self::OuterCeilingSurface,
             F::OuterFloorSurface => Self::OuterFloorSurface,
             F::PlantCover => Self::PlantCover,
+            F::PointCloud => Self::PointCloud,
             F::Railway => Self::Railway,
             F::ReliefFeature => Self::ReliefFeature,
             F::Road => Self::Road,
@@ -251,6 +266,8 @@ impl From<ecitygml_rs::model::common::FeatureType> for PyFeatureType {
             F::TunnelFurniture => Self::TunnelFurniture,
             F::TunnelInstallation => Self::TunnelInstallation,
             F::TunnelPart => Self::TunnelPart,
+            F::GeoreferencedTexture => Self::GeoreferencedTexture,
+            F::ParameterizedTexture => Self::ParameterizedTexture,
             F::WallSurface => Self::WallSurface,
             F::WaterBody => Self::WaterBody,
             F::WaterGroundSurface => Self::WaterGroundSurface,
@@ -258,6 +275,7 @@ impl From<ecitygml_rs::model::common::FeatureType> for PyFeatureType {
             F::Waterway => Self::Waterway,
             F::Window => Self::Window,
             F::WindowSurface => Self::WindowSurface,
+            F::X3DMaterial => Self::X3DMaterial,
         }
     }
 }

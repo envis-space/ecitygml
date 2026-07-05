@@ -1,6 +1,10 @@
 use crate::Error;
-use crate::gml::codec::core::city_object_kind::deserialize_city_object_kind;
-use crate::gml::util::XmlElementSpans;
+use crate::gml::codec::core::city_object_kind::{
+    deserialize_city_object_kind, serialize_city_object_kind,
+};
+use crate::gml::util::xml_element::XmlElement;
+use crate::gml::util::{XmlElementSpans, XmlNode, XmlNodeContent, XmlNodeParts};
+use crate::gml::write::Formatting;
 use ecitygml_core::model::core::CityObjectProperty;
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
@@ -15,6 +19,29 @@ pub fn deserialize_city_object_property(
     city_object_property.object = deserialize_city_object_kind(xml_document, spans)?;
 
     Ok(city_object_property)
+}
+
+pub fn serialize_city_object_member_property(
+    city_object_property: &CityObjectProperty,
+    formatting: Formatting,
+) -> Result<XmlNode, Error> {
+    let mut parts = XmlNodeParts::empty();
+
+    if let Some(href) = &city_object_property.href {
+        parts
+            .attributes
+            .push(("xlink:href".to_string(), href.clone()));
+    }
+
+    if let Some(object) = &city_object_property.object {
+        parts
+            .content
+            .push(XmlNodeContent::Child(serialize_city_object_kind(
+                object, formatting,
+            )?));
+    }
+
+    Ok(XmlNode::new(XmlElement::CityObjectMemberProperty, parts))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -35,16 +62,18 @@ impl From<GmlCityObjectProperty> for CityObjectProperty {
     }
 }
 
+/*impl From<&CityObjectProperty> for GmlCityObjectProperty {
+    fn from(item: &CityObjectProperty) -> Self {
+        Self {
+            object: item.object.as_ref().map(Into::into),
+            href: item.href.clone(),
+        }
+    }
+}*/
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gml::codec::core::deserialize_abstract_thematic_surface;
-    use ecitygml_core::model::core::{
-        AsAbstractCityObject, AsAbstractFeature, AsAbstractThematicSurface,
-    };
-    use egml::model::base::Id;
-    use quick_xml::{DeError, de};
-
     #[test]
     fn test_deserialize_basic_href_boundary() {
         use crate::gml::util::extract_xml_element_spans;

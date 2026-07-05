@@ -1,7 +1,12 @@
 use crate::Error;
-use crate::gml::codec::core::deserialize_abstract_space_boundary;
-use crate::gml::util::XmlElementSpans;
-use ecitygml_core::model::relief::AbstractReliefComponent;
+use crate::gml::codec::core::basic_types::GmlIntegerBetween0And3;
+use crate::gml::codec::core::{
+    deserialize_abstract_space_boundary, serialize_abstract_space_boundary,
+};
+use crate::gml::util::{XmlElementSpans, XmlNodeContent, XmlNodeParts, serialize_inner};
+use crate::gml::write::Formatting;
+use ecitygml_core::model::core::AsAbstractSpaceBoundary;
+use ecitygml_core::model::relief::{AbstractReliefComponent, AsAbstractReliefComponent};
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
@@ -16,14 +21,44 @@ pub fn deserialize_abstract_relief_component(
     let abstract_space_boundary = abstract_space_boundary_result?;
     let gml = gml_result?;
 
-    let abstract_relief_component =
-        AbstractReliefComponent::new(abstract_space_boundary, gml.lod.try_into()?);
+    let abstract_relief_component = AbstractReliefComponent::from_abstract_space_boundary(
+        abstract_space_boundary,
+        gml.lod.into(),
+    );
     Ok(abstract_relief_component)
+}
+
+pub fn serialize_abstract_relief_component(
+    abstract_relief_component: &AbstractReliefComponent,
+    formatting: Formatting,
+) -> Result<XmlNodeParts, Error> {
+    let mut parts = serialize_abstract_space_boundary(
+        abstract_relief_component.abstract_space_boundary(),
+        formatting,
+    )?;
+
+    if let Some(raw) = serialize_inner(
+        GmlAbstractReliefComponent::from(abstract_relief_component),
+        formatting,
+    )? {
+        parts.content.push(XmlNodeContent::Raw(raw));
+    }
+
+    Ok(parts)
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct GmlAbstractReliefComponent {
-    pub lod: u8,
+    #[serde(rename(serialize = "dem:lod", deserialize = "lod"))]
+    pub lod: GmlIntegerBetween0And3,
+}
+
+impl From<&AbstractReliefComponent> for GmlAbstractReliefComponent {
+    fn from(item: &AbstractReliefComponent) -> Self {
+        Self {
+            lod: item.lod().into(),
+        }
+    }
 }
 
 #[cfg(test)]

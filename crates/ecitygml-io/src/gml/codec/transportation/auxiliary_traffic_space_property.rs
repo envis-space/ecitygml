@@ -1,6 +1,10 @@
 use crate::Error;
-use crate::gml::codec::transportation::deserialize_auxiliary_traffic_space;
-use crate::gml::util::{XmlElement, XmlElementSpans};
+use crate::gml::codec::transportation::{
+    deserialize_auxiliary_traffic_space, serialize_auxiliary_traffic_space,
+};
+use crate::gml::util::xml_element::XmlElement;
+use crate::gml::util::{XmlElementSpans, XmlNode, XmlNodeContent, XmlNodeParts};
+use crate::gml::write::Formatting;
 use ecitygml_core::model::transportation::AuxiliaryTrafficSpaceProperty;
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
@@ -21,6 +25,29 @@ pub fn deserialize_auxiliary_traffic_space_property(
     }
 
     Ok(auxiliary_traffic_space_property)
+}
+
+pub fn serialize_auxiliary_traffic_space_property(
+    property: &AuxiliaryTrafficSpaceProperty,
+    formatting: Formatting,
+) -> Result<XmlNode, Error> {
+    let mut parts = XmlNodeParts::empty();
+    if let Some(href) = &property.href {
+        parts
+            .attributes
+            .push(("xlink:href".to_string(), href.clone()));
+    }
+    if let Some(object) = &property.object {
+        parts
+            .content
+            .push(XmlNodeContent::Child(serialize_auxiliary_traffic_space(
+                object, formatting,
+            )?));
+    }
+    Ok(XmlNode::new(
+        XmlElement::AuxiliaryTrafficSpaceProperty,
+        parts,
+    ))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]

@@ -1,7 +1,17 @@
 use crate::Error;
-use crate::gml::codec::core::deserialize_abstract_space_boundary;
-use crate::gml::codec::relief::relief_component_property::deserialize_relief_component_property;
-use crate::gml::util::{XmlElement, collect_children, extract_xml_element_spans};
+use crate::gml::codec::core::basic_types::GmlIntegerBetween0And3;
+use crate::gml::codec::core::{
+    deserialize_abstract_space_boundary, serialize_abstract_space_boundary,
+};
+use crate::gml::codec::relief::relief_component_property::{
+    deserialize_relief_component_property, serialize_relief_component_property,
+};
+use crate::gml::util::xml_element::XmlElement;
+use crate::gml::util::{
+    XmlNode, XmlNodeContent, collect_children, extract_xml_element_spans, serialize_inner,
+};
+use crate::gml::write::Formatting;
+use ecitygml_core::model::core::AsAbstractSpaceBoundary;
 use ecitygml_core::model::relief::ReliefFeature;
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
@@ -39,14 +49,46 @@ pub fn deserialize_relief_feature(xml_document: &[u8]) -> Result<ReliefFeature, 
     let relief_components =
         relief_components_result.expect("rayon::scope guarantees all spawns complete")?;
 
-    let mut relief_feature = ReliefFeature::new(abstract_space_boundary, parsed.lod.try_into()?);
+    let mut relief_feature =
+        ReliefFeature::from_abstract_space_boundary(abstract_space_boundary, parsed.lod.into());
     relief_feature.set_relief_components(relief_components);
     Ok(relief_feature)
 }
 
+pub fn serialize_relief_feature(
+    relief_feature: &ReliefFeature,
+    formatting: Formatting,
+) -> Result<XmlNode, Error> {
+    let mut parts =
+        serialize_abstract_space_boundary(relief_feature.abstract_space_boundary(), formatting)?;
+
+    if let Some(raw) = serialize_inner(GmlReliefFeature::from(relief_feature), formatting)? {
+        parts.content.push(XmlNodeContent::Raw(raw));
+    }
+
+    for component in relief_feature.relief_components() {
+        parts
+            .content
+            .push(XmlNodeContent::Child(serialize_relief_component_property(
+                component, formatting,
+            )?));
+    }
+
+    Ok(XmlNode::new(XmlElement::ReliefFeature, parts))
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct GmlReliefFeature {
-    pub lod: u8,
+    #[serde(rename(serialize = "dem:lod", deserialize = "lod"))]
+    pub lod: GmlIntegerBetween0And3,
+}
+
+impl From<&ReliefFeature> for GmlReliefFeature {
+    fn from(item: &ReliefFeature) -> Self {
+        Self {
+            lod: item.lod().into(),
+        }
+    }
 }
 
 #[cfg(test)]

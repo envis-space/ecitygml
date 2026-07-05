@@ -2,7 +2,7 @@ use egml::model::geometry::DirectPosition as RustDirectPosition;
 use egml::model::geometry::Envelope as RustEnvelope;
 use egml::model::geometry::aggregates::{MultiCurve as RustMultiCurve, MultiSurface as RustMultiSurface};
 use egml::model::geometry::primitives::{
-    LinearRing as RustLinearRing, Polygon as RustPolygon, RingPropertyKind, Solid as RustSolid,
+    LinearRing as RustLinearRing, Polygon as RustPolygon, RingKind, Solid as RustSolid,
     Triangle as RustTriangle, TriangulatedSurface as RustTriangulatedSurface, SurfaceKind,
     CurveKind,
 };
@@ -169,16 +169,13 @@ impl PyLinearRing {
     }
 }
 
-// Helper to convert a RingPropertyKind reference into a PyLinearRing
-pub fn ring_property_to_py(ring: &RingPropertyKind) -> PyLinearRing {
+// Helper to convert a RingKind reference into a PyLinearRing
+pub fn ring_kind_to_py(ring: &RingKind) -> PyLinearRing {
     match ring {
-        RingPropertyKind::LinearRing(lr) => PyLinearRing { inner: lr.clone() },
-        RingPropertyKind::RingKind(_) => {
-            // RingKind is not common — build a fallback with the available points
-            // We need at least 3 points; if data is valid (from GML) it should be fine
-            use egml::model::geometry::primitives::AbstractRing;
+        RingKind::LinearRing(lr) => PyLinearRing { inner: lr.clone() },
+        RingKind::RingKind(_) => {
             let pts = ring.points().to_vec();
-            let lr = RustLinearRing::new(AbstractRing::default(), pts)
+            let lr = RustLinearRing::new(pts)
                 .expect("ring from valid GML has >= 3 non-duplicate points");
             PyLinearRing { inner: lr }
         }
@@ -207,27 +204,28 @@ impl From<RustPolygon> for PyPolygon {
 impl PyPolygon {
     #[getter]
     pub fn exterior(&self) -> Option<PyLinearRing> {
-        self.inner.exterior.as_ref().map(ring_property_to_py)
+        self.inner.exterior().as_ref()
+            .and_then(|rp| rp.object.as_ref())
+            .map(ring_kind_to_py)
     }
 
     #[getter]
     pub fn interior(&self) -> Vec<PyLinearRing> {
-        self.inner.interior.iter().map(ring_property_to_py).collect()
+        self.inner.interior().iter()
+            .filter_map(|rp| rp.object.as_ref())
+            .map(ring_kind_to_py)
+            .collect()
     }
 
     pub fn compute_envelope(&self) -> Option<PyEnvelope> {
-        if self.inner.exterior.is_some() {
-            Some(PyEnvelope::from(self.inner.compute_envelope()))
-        } else {
-            None
-        }
+        self.inner.compute_envelope().map(PyEnvelope::from)
     }
 
     pub fn __repr__(&self) -> String {
         format!(
             "Polygon(exterior={}, interior={})",
-            self.inner.exterior.is_some(),
-            self.inner.interior.len()
+            self.inner.exterior().is_some(),
+            self.inner.interior().len()
         )
     }
 }
@@ -308,8 +306,8 @@ impl PyTriangulatedSurface {
         self.inner.triangles().iter().map(|t| PyTriangle::from(*t)).collect()
     }
 
-    pub fn compute_envelope(&self) -> PyEnvelope {
-        PyEnvelope::from(self.inner.compute_envelope())
+    pub fn compute_envelope(&self) -> Option<PyEnvelope> {
+        self.inner.compute_envelope().map(PyEnvelope::from)
     }
 
     pub fn __repr__(&self) -> String {
@@ -345,28 +343,40 @@ impl From<&RustSolid> for PySolid {
 impl PySolid {
     pub fn polygons(&self) -> Vec<PyPolygon> {
         self.inner
-            .members()
-            .iter()
-            .filter_map(|sp| match &sp.content {
-                SurfaceKind::Polygon(p) => Some(PyPolygon::from(p.clone())),
-                _ => None,
+            .exterior()
+            .and_then(|sp| sp.object.as_ref())
+            .map(|shell| {
+                shell.members().iter()
+                    .filter_map(|sp| match sp.object.as_ref() {
+                        Some(SurfaceKind::Polygon(p)) => Some(PyPolygon::from(p.clone())),
+                        _ => None,
+                    })
+                    .collect()
             })
-            .collect()
+            .unwrap_or_default()
     }
 
     pub fn triangulate(&self) -> PyResult<PyTriangulatedSurface> {
         self.inner
+            .exterior()
+            .and_then(|sp| sp.object.as_ref())
+            .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("Solid has no exterior shell"))?
             .triangulate()
             .map(PyTriangulatedSurface::from)
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     }
 
-    pub fn compute_envelope(&self) -> PyEnvelope {
-        PyEnvelope::from(self.inner.compute_envelope())
+    pub fn compute_envelope(&self) -> Option<PyEnvelope> {
+        self.inner.compute_envelope().map(PyEnvelope::from)
     }
 
     pub fn __repr__(&self) -> String {
-        format!("Solid({} surfaces)", self.inner.members().len())
+        let count = self.inner
+            .exterior()
+            .and_then(|sp| sp.object.as_ref())
+            .map(|shell| shell.members().len())
+            .unwrap_or(0);
+        format!("Solid({} surfaces)", count)
     }
 }
 
@@ -400,8 +410,8 @@ impl PyMultiSurface {
         self.inner
             .surface_member()
             .iter()
-            .filter_map(|sk| match sk {
-                SurfaceKind::Polygon(p) => Some(PyPolygon::from(p.clone())),
+            .filter_map(|sp| match sp.object.as_ref() {
+                Some(SurfaceKind::Polygon(p)) => Some(PyPolygon::from(p.clone())),
                 _ => None,
             })
             .collect()
@@ -414,8 +424,8 @@ impl PyMultiSurface {
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     }
 
-    pub fn compute_envelope(&self) -> PyEnvelope {
-        PyEnvelope::from(self.inner.compute_envelope())
+    pub fn compute_envelope(&self) -> Option<PyEnvelope> {
+        self.inner.compute_envelope().map(PyEnvelope::from)
     }
 
     pub fn __repr__(&self) -> String {
@@ -453,6 +463,7 @@ impl PyMultiCurve {
         self.inner
             .curve_member()
             .iter()
+            .filter_map(|cp| cp.object.as_ref())
             .map(|ck| match ck {
                 CurveKind::LineString(ls) => {
                     ls.points().iter().map(PyDirectPosition::from).collect()
@@ -461,8 +472,8 @@ impl PyMultiCurve {
             .collect()
     }
 
-    pub fn compute_envelope(&self) -> PyEnvelope {
-        PyEnvelope::from(self.inner.compute_envelope())
+    pub fn compute_envelope(&self) -> Option<PyEnvelope> {
+        self.inner.compute_envelope().map(PyEnvelope::from)
     }
 
     pub fn __repr__(&self) -> String {

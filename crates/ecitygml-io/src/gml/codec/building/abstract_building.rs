@@ -1,15 +1,28 @@
 use crate::Error;
-use crate::gml::codec::building::building_constructive_element_property::deserialize_building_constructive_element_property;
-use crate::gml::codec::building::building_installation_property::deserialize_building_installation_property;
-use crate::gml::codec::building::building_room_property::deserialize_building_room_property;
-use crate::gml::codec::building::building_subdivision_property::deserialize_building_subdivision_property;
-use crate::gml::codec::construction::deserialize_abstract_construction;
-use crate::gml::util::collect_children;
-use crate::gml::util::{XmlElement, XmlElementSpans};
-use ecitygml_core::model::building::{AbstractBuilding, AsAbstractBuildingMut};
+use crate::gml::codec::building::building_constructive_element_property::{
+    deserialize_building_constructive_element_property,
+    serialize_building_constructive_element_property,
+};
+use crate::gml::codec::building::building_installation_property::{
+    deserialize_building_installation_property, serialize_building_installation_property,
+};
+use crate::gml::codec::building::building_room_property::{
+    deserialize_building_room_property, serialize_building_room_property,
+};
+use crate::gml::codec::building::building_subdivision_property::{
+    deserialize_building_subdivision_property, serialize_building_subdivision_property,
+};
+use crate::gml::codec::construction::{
+    deserialize_abstract_construction, serialize_abstract_construction,
+};
+use crate::gml::util::xml_element::XmlElement;
+use crate::gml::util::{XmlElementSpans, XmlNodeContent, XmlNodeParts};
+use crate::gml::util::{collect_children, serialize_inner};
+use crate::gml::write::Formatting;
+use ecitygml_core::model::building::{AbstractBuilding, AsAbstractBuilding, AsAbstractBuildingMut};
+use ecitygml_core::model::construction::AsAbstractConstruction;
 use egml::io::GmlCode;
 use quick_xml::de;
-use rayon::iter::ParallelIterator;
 use serde::{Deserialize, Serialize};
 
 pub fn deserialize_abstract_building(
@@ -78,20 +91,60 @@ pub fn deserialize_abstract_building(
     let building_subdivisions =
         building_subdivisions_result.expect("rayon::scope guarantees all spawns complete")?;
 
-    let mut abstract_building = AbstractBuilding::new(abstract_construction);
-    abstract_building.building_rooms = building_rooms;
-    abstract_building.building_installations = building_installations;
-    abstract_building.building_constructive_elements = building_constructive_elements;
-    abstract_building.building_subdivisions = building_subdivisions;
+    let mut abstract_building = AbstractBuilding::from_abstract_construction(abstract_construction);
+    abstract_building.set_building_constructive_elements(building_constructive_elements);
+    abstract_building.set_building_installations(building_installations);
+    abstract_building.set_building_rooms(building_rooms);
+    abstract_building.set_building_subdivisions(building_subdivisions);
 
-    abstract_building.set_class(parsed.class.map(|x| x.into()));
-    abstract_building.set_functions(parsed.functions.into_iter().map(|x| x.into()).collect());
-    abstract_building.set_usages(parsed.usages.into_iter().map(|x| x.into()).collect());
-    abstract_building.set_roof_type(parsed.roof_type.map(|x| x.into()));
+    abstract_building.set_class(parsed.class.map(Into::into));
+    abstract_building.set_functions(parsed.functions.into_iter().map(Into::into).collect());
+    abstract_building.set_usages(parsed.usages.into_iter().map(Into::into).collect());
+    abstract_building.set_roof_type(parsed.roof_type.map(Into::into));
     abstract_building.set_storeys_above_ground(parsed.storeys_above_ground);
     abstract_building.set_storeys_below_ground(parsed.storeys_below_ground);
 
     Ok(abstract_building)
+}
+
+pub fn serialize_abstract_building(
+    abstract_building: &AbstractBuilding,
+    formatting: Formatting,
+) -> Result<XmlNodeParts, Error> {
+    let mut xml_node_parts =
+        serialize_abstract_construction(abstract_building.abstract_construction(), formatting)?;
+
+    if let Some(raw) = serialize_inner(GmlAbstractBuilding::from(abstract_building), formatting)? {
+        xml_node_parts.content.push(XmlNodeContent::Raw(raw));
+    }
+
+    for prop in abstract_building.building_rooms() {
+        xml_node_parts
+            .content
+            .push(XmlNodeContent::Child(serialize_building_room_property(
+                prop, formatting,
+            )?));
+    }
+
+    for prop in abstract_building.building_installations() {
+        xml_node_parts.content.push(XmlNodeContent::Child(
+            serialize_building_installation_property(prop, formatting)?,
+        ));
+    }
+
+    for prop in abstract_building.building_constructive_elements() {
+        xml_node_parts.content.push(XmlNodeContent::Child(
+            serialize_building_constructive_element_property(prop, formatting)?,
+        ));
+    }
+
+    for prop in abstract_building.building_subdivisions() {
+        xml_node_parts.content.push(XmlNodeContent::Child(
+            serialize_building_subdivision_property(prop, formatting)?,
+        ));
+    }
+
+    Ok(xml_node_parts)
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -108,14 +161,45 @@ pub struct GmlAbstractBuilding {
     #[serde(rename(serialize = "bldg:usage", deserialize = "usage"), default)]
     pub usages: Vec<GmlCode>,
 
-    #[serde(rename = "roofType", default)]
+    #[serde(
+        rename(serialize = "bldg:roofType", deserialize = "roofType"),
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub roof_type: Option<GmlCode>,
 
-    #[serde(rename = "storeysAboveGround", default)]
+    #[serde(
+        rename(
+            serialize = "bldg:storeysAboveGround",
+            deserialize = "storeysAboveGround"
+        ),
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub storeys_above_ground: Option<i64>,
 
-    #[serde(rename = "storeysBelowGround", default)]
+    #[serde(
+        rename(
+            serialize = "bldg:storeysBelowGround",
+            deserialize = "storeysBelowGround"
+        ),
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub storeys_below_ground: Option<i64>,
+}
+
+impl From<&AbstractBuilding> for GmlAbstractBuilding {
+    fn from(item: &AbstractBuilding) -> Self {
+        Self {
+            class: item.class().map(Into::into),
+            functions: item.functions().iter().map(Into::into).collect(),
+            usages: item.usages().iter().map(Into::into).collect(),
+            roof_type: item.roof_type().map(Into::into),
+            storeys_above_ground: item.storeys_above_ground(),
+            storeys_below_ground: item.storeys_below_ground(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -166,7 +250,7 @@ mod tests {
         assert!(abstract_building.date_of_construction().is_none());
         assert!(abstract_building.creation_date().is_some());
         assert_eq!(
-            abstract_building.class().as_ref().unwrap().value(),
+            abstract_building.class().unwrap().value(),
             "MyBuildingClass"
         );
         assert_eq!(
@@ -177,7 +261,6 @@ mod tests {
         assert_eq!(
             abstract_building
                 .roof_type()
-                .as_ref()
                 .expect("should be set")
                 .value(),
             "1000"

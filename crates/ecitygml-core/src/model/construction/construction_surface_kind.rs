@@ -1,10 +1,13 @@
+use crate::impl_abstract_construction_surface_mut_traits;
 use crate::impl_abstract_construction_surface_traits;
-use crate::model::common::{FeatureRef, FeatureRefMut};
+use crate::model::common::{FeatureType, HasFeatureType};
 use crate::model::construction::{
     AbstractConstructionSurface, AsAbstractConstructionSurface, AsAbstractConstructionSurfaceMut,
     CeilingSurface, FloorSurface, GroundSurface, InteriorWallSurface, OuterCeilingSurface,
     OuterFloorSurface, RoofSurface, WallSurface,
 };
+use crate::model::core::refs::FeatureKindRef;
+use crate::model::core::refs::FeatureKindRefMut;
 use auto_enums::auto_enum;
 use egml::model::geometry::Envelope;
 use nalgebra::Isometry3;
@@ -23,7 +26,7 @@ pub enum ConstructionSurfaceKind {
 
 impl ConstructionSurfaceKind {
     #[auto_enum(Iterator)]
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
         match self {
             ConstructionSurfaceKind::CeilingSurface(x) => x.iter_features(),
             ConstructionSurfaceKind::FloorSurface(x) => x.iter_features(),
@@ -36,7 +39,7 @@ impl ConstructionSurfaceKind {
         }
     }
 
-    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
         match self {
             ConstructionSurfaceKind::CeilingSurface(x) => x.for_each_feature_mut(f),
             ConstructionSurfaceKind::FloorSurface(x) => x.for_each_feature_mut(f),
@@ -124,33 +127,19 @@ impl AsAbstractConstructionSurfaceMut for ConstructionSurfaceKind {
 }
 
 impl_abstract_construction_surface_traits!(ConstructionSurfaceKind);
+impl_abstract_construction_surface_mut_traits!(ConstructionSurfaceKind);
 
-impl<'a> From<&'a ConstructionSurfaceKind> for FeatureRef<'a> {
-    fn from(item: &'a ConstructionSurfaceKind) -> Self {
-        match item {
-            ConstructionSurfaceKind::CeilingSurface(x) => x.into(),
-            ConstructionSurfaceKind::FloorSurface(x) => x.into(),
-            ConstructionSurfaceKind::GroundSurface(x) => x.into(),
-            ConstructionSurfaceKind::InteriorWallSurface(x) => x.into(),
-            ConstructionSurfaceKind::OuterCeilingSurface(x) => x.into(),
-            ConstructionSurfaceKind::OuterFloorSurface(x) => x.into(),
-            ConstructionSurfaceKind::RoofSurface(x) => x.into(),
-            ConstructionSurfaceKind::WallSurface(x) => x.into(),
-        }
-    }
-}
-
-impl<'a> From<&'a mut ConstructionSurfaceKind> for FeatureRefMut<'a> {
-    fn from(item: &'a mut ConstructionSurfaceKind) -> Self {
-        match item {
-            ConstructionSurfaceKind::CeilingSurface(x) => x.into(),
-            ConstructionSurfaceKind::FloorSurface(x) => x.into(),
-            ConstructionSurfaceKind::GroundSurface(x) => x.into(),
-            ConstructionSurfaceKind::InteriorWallSurface(x) => x.into(),
-            ConstructionSurfaceKind::OuterCeilingSurface(x) => x.into(),
-            ConstructionSurfaceKind::OuterFloorSurface(x) => x.into(),
-            ConstructionSurfaceKind::RoofSurface(x) => x.into(),
-            ConstructionSurfaceKind::WallSurface(x) => x.into(),
+impl HasFeatureType for ConstructionSurfaceKind {
+    fn feature_type(&self) -> FeatureType {
+        match self {
+            Self::CeilingSurface(x) => x.feature_type(),
+            Self::FloorSurface(x) => x.feature_type(),
+            Self::GroundSurface(x) => x.feature_type(),
+            Self::InteriorWallSurface(x) => x.feature_type(),
+            Self::OuterCeilingSurface(x) => x.feature_type(),
+            Self::OuterFloorSurface(x) => x.feature_type(),
+            Self::RoofSurface(x) => x.feature_type(),
+            Self::WallSurface(x) => x.feature_type(),
         }
     }
 }
@@ -174,3 +163,32 @@ impl_from_construction_surface_kind!(OuterCeilingSurface);
 impl_from_construction_surface_kind!(OuterFloorSurface);
 impl_from_construction_surface_kind!(RoofSurface);
 impl_from_construction_surface_kind!(WallSurface);
+
+#[macro_export]
+macro_rules! impl_try_from_construction_surface_kind {
+    ($type:ident) => {
+        impl TryFrom<$crate::model::construction::ConstructionSurfaceKind> for $type {
+            type Error = ();
+            fn try_from(
+                x: $crate::model::construction::ConstructionSurfaceKind,
+            ) -> Result<Self, ()> {
+                match x {
+                    $crate::model::construction::ConstructionSurfaceKind::$type(k) => {
+                        k.try_into().map_err(|_| ())
+                    }
+                    #[allow(unreachable_patterns)]
+                    _ => Err(()),
+                }
+            }
+        }
+        $crate::impl_try_from_for_thematic_surface_kind!(ConstructionSurfaceKind, $type);
+    };
+}
+impl_try_from_construction_surface_kind!(CeilingSurface);
+impl_try_from_construction_surface_kind!(FloorSurface);
+impl_try_from_construction_surface_kind!(GroundSurface);
+impl_try_from_construction_surface_kind!(InteriorWallSurface);
+impl_try_from_construction_surface_kind!(OuterCeilingSurface);
+impl_try_from_construction_surface_kind!(OuterFloorSurface);
+impl_try_from_construction_surface_kind!(RoofSurface);
+impl_try_from_construction_surface_kind!(WallSurface);

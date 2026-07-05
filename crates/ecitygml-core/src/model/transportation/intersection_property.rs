@@ -14,10 +14,10 @@ impl IntersectionProperty {
         }
     }
 
-    pub fn new_href(href: String) -> Self {
+    pub fn new_href(href: impl Into<String>) -> Self {
         Self {
             object: None,
-            href: Some(href),
+            href: Some(href.into()),
         }
     }
 }

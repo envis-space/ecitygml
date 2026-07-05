@@ -1,8 +1,12 @@
 use crate::Error;
-use crate::gml::codec::vegetation::abstract_vegetation_object::deserialize_abstract_vegetation_object;
-use crate::gml::util::extract_xml_element_spans;
-use ecitygml_core::model::vegetation::SolitaryVegetationObject;
-use egml::io::GmlMeasure;
+use crate::gml::codec::vegetation::abstract_vegetation_object::{
+    deserialize_abstract_vegetation_object, serialize_abstract_vegetation_object,
+};
+use crate::gml::util::xml_element::XmlElement;
+use crate::gml::util::{XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner};
+use crate::gml::write::Formatting;
+use ecitygml_core::model::vegetation::{AsAbstractVegetationObject, SolitaryVegetationObject};
+use egml::io::{GmlCode, GmlMeasure};
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
@@ -16,26 +20,107 @@ pub fn deserialize_solitary_vegetation_object(
     );
     let abstract_vegetation_object = abstract_vegetation_object_result?;
     let parsed = parsed_result?;
-    let mut solitary_vegetation_object = SolitaryVegetationObject::new(abstract_vegetation_object);
+    let mut solitary_vegetation_object =
+        SolitaryVegetationObject::from_abstract_vegetation_object(abstract_vegetation_object);
 
-    if let Some(height) = parsed.height {
-        solitary_vegetation_object.set_height(Some(height.into()));
-    }
-
-    if let Some(trunk_diameter) = parsed.trunk_diameter {
-        solitary_vegetation_object.set_trunk_diameter(Some(trunk_diameter.into()));
-    }
+    solitary_vegetation_object.set_class(parsed.class.map(Into::into));
+    solitary_vegetation_object
+        .set_functions(parsed.functions.into_iter().map(Into::into).collect());
+    solitary_vegetation_object.set_usages(parsed.usages.into_iter().map(Into::into).collect());
+    solitary_vegetation_object.set_species(parsed.species.map(Into::into));
+    solitary_vegetation_object.set_height(parsed.height.map(Into::into));
+    solitary_vegetation_object.set_trunk_diameter(parsed.trunk_diameter.map(Into::into));
+    solitary_vegetation_object.set_crown_diameter(parsed.crown_diameter.map(Into::into));
+    solitary_vegetation_object.set_root_ball_diameter(parsed.root_ball_diameter.map(Into::into));
+    solitary_vegetation_object.set_max_root_ball_depth(parsed.max_root_ball_depth.map(Into::into));
 
     Ok(solitary_vegetation_object)
 }
 
+pub fn serialize_solitary_vegetation_object(
+    solitary_vegetation_object: &SolitaryVegetationObject,
+    formatting: Formatting,
+) -> Result<XmlNode, Error> {
+    let mut parts = serialize_abstract_vegetation_object(
+        solitary_vegetation_object.abstract_vegetation_object(),
+        formatting,
+    )?;
+
+    if let Some(raw) = serialize_inner(
+        GmlSolitaryVegetationObject::from(solitary_vegetation_object),
+        formatting,
+    )? {
+        parts.content.push(XmlNodeContent::Raw(raw));
+    }
+
+    Ok(XmlNode::new(XmlElement::SolitaryVegetationObject, parts))
+}
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct GmlSolitaryVegetationObject {
-    #[serde(rename = "height")]
+    #[serde(
+        rename(serialize = "veg:class", deserialize = "class"),
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub class: Option<GmlCode>,
+
+    #[serde(rename(serialize = "veg:function", deserialize = "function"), default)]
+    pub functions: Vec<GmlCode>,
+
+    #[serde(rename(serialize = "veg:usage", deserialize = "usage"), default)]
+    pub usages: Vec<GmlCode>,
+
+    #[serde(
+        rename(serialize = "veg:species", deserialize = "species"),
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub species: Option<GmlCode>,
+
+    #[serde(
+        rename(serialize = "veg:height", deserialize = "height"),
+        skip_serializing_if = "Option::is_none"
+    )]
     pub height: Option<GmlMeasure>,
 
-    #[serde(rename = "trunkDiameter")]
+    #[serde(
+        rename(serialize = "veg:trunkDiameter", deserialize = "trunkDiameter"),
+        skip_serializing_if = "Option::is_none"
+    )]
     pub trunk_diameter: Option<GmlMeasure>,
+
+    #[serde(
+        rename(serialize = "veg:crownDiameter", deserialize = "crownDiameter"),
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub crown_diameter: Option<GmlMeasure>,
+
+    #[serde(
+        rename(serialize = "veg:rootBallDiameter", deserialize = "rootBallDiameter"),
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub root_ball_diameter: Option<GmlMeasure>,
+
+    #[serde(
+        rename(serialize = "veg:maxRootBallDepth", deserialize = "maxRootBallDepth"),
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub max_root_ball_depth: Option<GmlMeasure>,
+}
+
+impl From<&SolitaryVegetationObject> for GmlSolitaryVegetationObject {
+    fn from(item: &SolitaryVegetationObject) -> Self {
+        Self {
+            class: item.class().map(Into::into),
+            functions: item.functions().iter().map(Into::into).collect(),
+            usages: item.usages().iter().map(Into::into).collect(),
+            species: item.species().map(Into::into),
+            height: item.height().map(Into::into),
+            trunk_diameter: item.trunk_diameter().map(Into::into),
+            crown_diameter: item.crown_diameter().map(Into::into),
+            root_ball_diameter: item.root_ball_diameter().map(Into::into),
+            max_root_ball_depth: item.max_root_ball_depth().map(Into::into),
+        }
+    }
 }
 
 #[cfg(test)]

@@ -1,11 +1,17 @@
+use crate::impl_abstract_thematic_surface_mut_traits;
 use crate::impl_abstract_thematic_surface_traits;
-use crate::model::common::{FeatureRef, FeatureRefMut, TopLevelFeatureRef};
+use crate::model::common::{FeatureType, HasFeatureType};
 use crate::model::construction::{ConstructionSurfaceKind, FillingSurfaceKind};
 use crate::model::core::closure_surface::ClosureSurface;
+use crate::model::core::refs::FeatureKindRef;
+use crate::model::core::refs::FeatureKindRefMut;
 use crate::model::core::{
     AbstractThematicSurface, AsAbstractThematicSurface, AsAbstractThematicSurfaceMut,
 };
+use crate::model::generics::GenericThematicSurface;
+use crate::model::land_use::LandUse;
 use crate::model::transportation::{AuxiliaryTrafficArea, Marking, TrafficArea};
+use crate::model::water_body::WaterBoundarySurfaceKind;
 use auto_enums::auto_enum;
 use egml::model::geometry::Envelope;
 use nalgebra::Isometry3;
@@ -16,31 +22,40 @@ pub enum ThematicSurfaceKind {
     ClosureSurface(ClosureSurface),
     ConstructionSurfaceKind(ConstructionSurfaceKind),
     FillingSurfaceKind(FillingSurfaceKind),
+    GenericThematicSurface(GenericThematicSurface),
+    LandUse(LandUse),
     Marking(Marking),
     TrafficArea(TrafficArea),
+    WaterBoundarySurfaceKind(WaterBoundarySurfaceKind),
 }
 
 impl ThematicSurfaceKind {
     #[auto_enum(Iterator)]
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
         match self {
             ThematicSurfaceKind::AuxiliaryTrafficArea(x) => x.iter_features(),
             ThematicSurfaceKind::ClosureSurface(x) => x.iter_features(),
             ThematicSurfaceKind::ConstructionSurfaceKind(x) => x.iter_features(),
             ThematicSurfaceKind::FillingSurfaceKind(x) => x.iter_features(),
+            ThematicSurfaceKind::GenericThematicSurface(x) => x.iter_features(),
+            ThematicSurfaceKind::LandUse(x) => x.iter_features(),
             ThematicSurfaceKind::Marking(x) => x.iter_features(),
             ThematicSurfaceKind::TrafficArea(x) => x.iter_features(),
+            ThematicSurfaceKind::WaterBoundarySurfaceKind(x) => x.iter_features(),
         }
     }
 
-    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
         match self {
             ThematicSurfaceKind::AuxiliaryTrafficArea(x) => x.for_each_feature_mut(f),
             ThematicSurfaceKind::ClosureSurface(x) => x.for_each_feature_mut(f),
             ThematicSurfaceKind::ConstructionSurfaceKind(x) => x.for_each_feature_mut(f),
             ThematicSurfaceKind::FillingSurfaceKind(x) => x.for_each_feature_mut(f),
+            ThematicSurfaceKind::GenericThematicSurface(x) => x.for_each_feature_mut(f),
+            ThematicSurfaceKind::LandUse(x) => x.for_each_feature_mut(f),
             ThematicSurfaceKind::Marking(x) => x.for_each_feature_mut(f),
             ThematicSurfaceKind::TrafficArea(x) => x.for_each_feature_mut(f),
+            ThematicSurfaceKind::WaterBoundarySurfaceKind(x) => x.for_each_feature_mut(f),
         }
     }
 
@@ -50,8 +65,11 @@ impl ThematicSurfaceKind {
             ThematicSurfaceKind::ClosureSurface(x) => x.compute_envelope(),
             ThematicSurfaceKind::ConstructionSurfaceKind(x) => x.compute_envelope(),
             ThematicSurfaceKind::FillingSurfaceKind(x) => x.compute_envelope(),
+            ThematicSurfaceKind::GenericThematicSurface(x) => x.compute_envelope(),
+            ThematicSurfaceKind::LandUse(x) => x.compute_envelope(),
             ThematicSurfaceKind::Marking(x) => x.compute_envelope(),
             ThematicSurfaceKind::TrafficArea(x) => x.compute_envelope(),
+            ThematicSurfaceKind::WaterBoundarySurfaceKind(x) => x.compute_envelope(),
         }
     }
 
@@ -61,8 +79,11 @@ impl ThematicSurfaceKind {
             ThematicSurfaceKind::ClosureSurface(x) => x.recompute_bounding_shape(),
             ThematicSurfaceKind::ConstructionSurfaceKind(x) => x.recompute_bounding_shape(),
             ThematicSurfaceKind::FillingSurfaceKind(x) => x.recompute_bounding_shape(),
+            ThematicSurfaceKind::GenericThematicSurface(x) => x.recompute_bounding_shape(),
+            ThematicSurfaceKind::LandUse(x) => x.recompute_bounding_shape(),
             ThematicSurfaceKind::Marking(x) => x.recompute_bounding_shape(),
             ThematicSurfaceKind::TrafficArea(x) => x.recompute_bounding_shape(),
+            ThematicSurfaceKind::WaterBoundarySurfaceKind(x) => x.recompute_bounding_shape(),
         }
     }
 
@@ -72,8 +93,11 @@ impl ThematicSurfaceKind {
             ThematicSurfaceKind::ClosureSurface(x) => x.apply_transform(m),
             ThematicSurfaceKind::ConstructionSurfaceKind(x) => x.apply_transform(m),
             ThematicSurfaceKind::FillingSurfaceKind(x) => x.apply_transform(m),
+            ThematicSurfaceKind::GenericThematicSurface(x) => x.apply_transform(m),
+            ThematicSurfaceKind::LandUse(x) => x.apply_transform(m),
             ThematicSurfaceKind::Marking(x) => x.apply_transform(m),
             ThematicSurfaceKind::TrafficArea(x) => x.apply_transform(m),
+            ThematicSurfaceKind::WaterBoundarySurfaceKind(x) => x.apply_transform(m),
         }
     }
 }
@@ -85,8 +109,11 @@ impl AsAbstractThematicSurface for ThematicSurfaceKind {
             ThematicSurfaceKind::ClosureSurface(x) => x.abstract_thematic_surface(),
             ThematicSurfaceKind::ConstructionSurfaceKind(x) => x.abstract_thematic_surface(),
             ThematicSurfaceKind::FillingSurfaceKind(x) => x.abstract_thematic_surface(),
+            ThematicSurfaceKind::GenericThematicSurface(x) => x.abstract_thematic_surface(),
+            ThematicSurfaceKind::LandUse(x) => x.abstract_thematic_surface(),
             ThematicSurfaceKind::Marking(x) => x.abstract_thematic_surface(),
             ThematicSurfaceKind::TrafficArea(x) => x.abstract_thematic_surface(),
+            ThematicSurfaceKind::WaterBoundarySurfaceKind(x) => x.abstract_thematic_surface(),
         }
     }
 }
@@ -98,51 +125,30 @@ impl AsAbstractThematicSurfaceMut for ThematicSurfaceKind {
             ThematicSurfaceKind::ClosureSurface(x) => x.abstract_thematic_surface_mut(),
             ThematicSurfaceKind::ConstructionSurfaceKind(x) => x.abstract_thematic_surface_mut(),
             ThematicSurfaceKind::FillingSurfaceKind(x) => x.abstract_thematic_surface_mut(),
+            ThematicSurfaceKind::GenericThematicSurface(x) => x.abstract_thematic_surface_mut(),
+            ThematicSurfaceKind::LandUse(x) => x.abstract_thematic_surface_mut(),
             ThematicSurfaceKind::Marking(x) => x.abstract_thematic_surface_mut(),
             ThematicSurfaceKind::TrafficArea(x) => x.abstract_thematic_surface_mut(),
+            ThematicSurfaceKind::WaterBoundarySurfaceKind(x) => x.abstract_thematic_surface_mut(),
         }
     }
 }
 
 impl_abstract_thematic_surface_traits!(ThematicSurfaceKind);
+impl_abstract_thematic_surface_mut_traits!(ThematicSurfaceKind);
 
-impl<'a> From<&'a ThematicSurfaceKind> for FeatureRef<'a> {
-    fn from(item: &'a ThematicSurfaceKind) -> Self {
-        match item {
-            ThematicSurfaceKind::AuxiliaryTrafficArea(x) => x.into(),
-            ThematicSurfaceKind::ClosureSurface(x) => x.into(),
-            ThematicSurfaceKind::ConstructionSurfaceKind(x) => x.into(),
-            ThematicSurfaceKind::FillingSurfaceKind(x) => x.into(),
-            ThematicSurfaceKind::Marking(x) => x.into(),
-            ThematicSurfaceKind::TrafficArea(x) => x.into(),
-        }
-    }
-}
-
-impl<'a> TryFrom<&'a ThematicSurfaceKind> for TopLevelFeatureRef<'a> {
-    type Error = ();
-    fn try_from(item: &'a ThematicSurfaceKind) -> Result<Self, ()> {
-        match item {
-            ThematicSurfaceKind::AuxiliaryTrafficArea(_) => Err(()),
-            ThematicSurfaceKind::ClosureSurface(_) => Err(()),
-            ThematicSurfaceKind::ConstructionSurfaceKind(_) => Err(()),
-            ThematicSurfaceKind::FillingSurfaceKind(_) => Err(()),
-            ThematicSurfaceKind::Marking(_) => Err(()),
-            ThematicSurfaceKind::TrafficArea(_) => Err(()),
-            // TODO: GenericThematicSurfaceKind
-        }
-    }
-}
-
-impl<'a> From<&'a mut ThematicSurfaceKind> for FeatureRefMut<'a> {
-    fn from(item: &'a mut ThematicSurfaceKind) -> Self {
-        match item {
-            ThematicSurfaceKind::AuxiliaryTrafficArea(x) => x.into(),
-            ThematicSurfaceKind::ClosureSurface(x) => x.into(),
-            ThematicSurfaceKind::ConstructionSurfaceKind(x) => x.into(),
-            ThematicSurfaceKind::FillingSurfaceKind(x) => x.into(),
-            ThematicSurfaceKind::Marking(x) => x.into(),
-            ThematicSurfaceKind::TrafficArea(x) => x.into(),
+impl HasFeatureType for ThematicSurfaceKind {
+    fn feature_type(&self) -> FeatureType {
+        match self {
+            Self::AuxiliaryTrafficArea(x) => x.feature_type(),
+            Self::ClosureSurface(x) => x.feature_type(),
+            Self::ConstructionSurfaceKind(x) => x.feature_type(),
+            Self::FillingSurfaceKind(x) => x.feature_type(),
+            Self::GenericThematicSurface(x) => x.feature_type(),
+            Self::LandUse(x) => x.feature_type(),
+            Self::Marking(x) => x.feature_type(),
+            Self::TrafficArea(x) => x.feature_type(),
+            Self::WaterBoundarySurfaceKind(x) => x.feature_type(),
         }
     }
 }
@@ -163,7 +169,38 @@ macro_rules! impl_from_for_thematic_surface_kind {
 }
 impl_from_for_thematic_surface_kind!(AuxiliaryTrafficArea);
 impl_from_for_thematic_surface_kind!(ClosureSurface);
-impl_from_for_thematic_surface_kind!(Marking);
-impl_from_for_thematic_surface_kind!(TrafficArea);
 impl_from_for_thematic_surface_kind!(ConstructionSurfaceKind);
 impl_from_for_thematic_surface_kind!(FillingSurfaceKind);
+impl_from_for_thematic_surface_kind!(GenericThematicSurface);
+impl_from_for_thematic_surface_kind!(LandUse);
+impl_from_for_thematic_surface_kind!(Marking);
+impl_from_for_thematic_surface_kind!(TrafficArea);
+impl_from_for_thematic_surface_kind!(WaterBoundarySurfaceKind);
+
+#[macro_export]
+macro_rules! impl_try_from_for_thematic_surface_kind {
+    ($variant:ident, $type:ty) => {
+        impl TryFrom<$crate::model::core::ThematicSurfaceKind> for $type {
+            type Error = ();
+            fn try_from(x: $crate::model::core::ThematicSurfaceKind) -> Result<Self, ()> {
+                match x {
+                    $crate::model::core::ThematicSurfaceKind::$variant(k) => {
+                        k.try_into().map_err(|_| ())
+                    }
+                    #[allow(unreachable_patterns)]
+                    _ => Err(()),
+                }
+            }
+        }
+        $crate::impl_try_from_for_space_boundary_kind!(ThematicSurfaceKind, $type);
+    };
+    ($variant:ident) => {
+        $crate::impl_try_from_for_thematic_surface_kind!($variant, $variant);
+    };
+}
+impl_try_from_for_thematic_surface_kind!(AuxiliaryTrafficArea);
+impl_try_from_for_thematic_surface_kind!(ClosureSurface);
+impl_try_from_for_thematic_surface_kind!(GenericThematicSurface);
+impl_try_from_for_thematic_surface_kind!(LandUse);
+impl_try_from_for_thematic_surface_kind!(Marking);
+impl_try_from_for_thematic_surface_kind!(TrafficArea);

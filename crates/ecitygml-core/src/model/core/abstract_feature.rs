@@ -16,12 +16,6 @@ impl AbstractFeature {
         Self { abstract_feature }
     }
 
-    pub fn with_gml_abstract_feature(
-        abstract_feature: egml::model::feature::AbstractFeature,
-    ) -> Self {
-        Self { abstract_feature }
-    }
-
     pub fn gml_abstract_feature(&self) -> &egml::model::feature::AbstractFeature {
         &self.abstract_feature
     }
@@ -34,12 +28,20 @@ impl AbstractFeature {
             .expect("id must be set for AbstractFeature")
     }
 
-    pub fn name(&self) -> &Vec<String> {
+    pub fn name(&self) -> &[String] {
         &self.abstract_feature.abstract_gml.name
     }
 
     pub fn set_name(&mut self, name: Vec<String>) {
         self.abstract_feature.abstract_gml.name = name;
+    }
+
+    pub fn push_name(&mut self, name: String) {
+        self.abstract_feature.abstract_gml.name.push(name);
+    }
+
+    pub fn extend_names(&mut self, names: impl IntoIterator<Item = String>) {
+        self.abstract_feature.abstract_gml.name.extend(names);
     }
 
     pub fn bounded_by(&self) -> Option<&Envelope> {
@@ -49,7 +51,9 @@ impl AbstractFeature {
     pub fn set_bounding_shape(&mut self, bounding_shape: Option<BoundingShape>) {
         self.abstract_feature.bounded_by = bounding_shape;
     }
+}
 
+impl AbstractFeature {
     pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
         if let Some(bounding_shape) = self.abstract_feature.bounded_by.as_mut()
             && let Some(envelope) = &mut bounding_shape.envelope
@@ -66,7 +70,7 @@ pub trait AsAbstractFeature {
         self.abstract_feature().id()
     }
 
-    fn name(&self) -> &Vec<String> {
+    fn name(&self) -> &[String] {
         self.abstract_feature().name()
     }
 
@@ -82,6 +86,14 @@ pub trait AsAbstractFeatureMut: AsAbstractFeature {
         self.abstract_feature_mut().set_name(name);
     }
 
+    fn push_name(&mut self, name: String) {
+        self.abstract_feature_mut().push_name(name);
+    }
+
+    fn extend_names(&mut self, names: impl IntoIterator<Item = String>) {
+        self.abstract_feature_mut().extend_names(names);
+    }
+
     fn set_bounding_shape_from_envelope(&mut self, envelope: Option<Envelope>) {
         let bounding_shape = envelope.map(BoundingShape::new);
         self.abstract_feature_mut()
@@ -91,6 +103,14 @@ pub trait AsAbstractFeatureMut: AsAbstractFeature {
     fn set_bounding_shape(&mut self, bounding_shape: Option<BoundingShape>) {
         self.abstract_feature_mut()
             .set_bounding_shape(bounding_shape);
+    }
+}
+
+impl AbstractFeature {
+    pub fn from_gml_abstract_feature(
+        abstract_feature: egml::model::feature::AbstractFeature,
+    ) -> Self {
+        Self { abstract_feature }
     }
 }
 

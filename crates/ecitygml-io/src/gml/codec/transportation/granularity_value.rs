@@ -19,3 +19,12 @@ impl From<GmlGranularityValue> for GranularityValue {
         }
     }
 }
+
+impl From<&GranularityValue> for GmlGranularityValue {
+    fn from(item: &GranularityValue) -> Self {
+        match item {
+            GranularityValue::Lane => GmlGranularityValue::Lane,
+            GranularityValue::Way => GmlGranularityValue::Way,
+        }
+    }
+}

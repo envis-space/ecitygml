@@ -1,6 +1,8 @@
 use crate::Error;
-use crate::gml::codec::transportation::deserialize_traffic_space;
-use crate::gml::util::{XmlElement, XmlElementSpans};
+use crate::gml::codec::transportation::{deserialize_traffic_space, serialize_traffic_space};
+use crate::gml::util::xml_element::XmlElement;
+use crate::gml::util::{XmlElementSpans, XmlNode, XmlNodeContent, XmlNodeParts};
+use crate::gml::write::Formatting;
 use ecitygml_core::model::transportation::TrafficSpaceProperty;
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
@@ -19,6 +21,26 @@ pub fn deserialize_traffic_space_property(
     }
 
     Ok(traffic_space_property)
+}
+
+pub fn serialize_traffic_space_property(
+    traffic_space_property: &TrafficSpaceProperty,
+    formatting: Formatting,
+) -> Result<XmlNode, Error> {
+    let mut parts = XmlNodeParts::empty();
+    if let Some(href) = &traffic_space_property.href {
+        parts
+            .attributes
+            .push(("xlink:href".to_string(), href.clone()));
+    }
+    if let Some(object) = &traffic_space_property.object {
+        parts
+            .content
+            .push(XmlNodeContent::Child(serialize_traffic_space(
+                object, formatting,
+            )?));
+    }
+    Ok(XmlNode::new(XmlElement::TrafficSpaceProperty, parts))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]

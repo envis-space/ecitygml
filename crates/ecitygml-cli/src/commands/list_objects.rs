@@ -1,4 +1,5 @@
 use crate::error::Error;
+use ecitygml::model::common::HasFeatureType;
 use ecitygml::model::core::AsAbstractFeature;
 use std::path::Path;
 use std::time::Instant;
@@ -26,7 +27,7 @@ pub fn run(file_path: impl AsRef<Path>) -> Result<(), Error> {
             .map_or_else(String::new, |e| format!(", {}", e));
 
         info!(
-            "   ID: {}, class: {}{}",
+            "   ID: {}, class: {}, envelope: {}",
             current_city_object.id(),
             current_city_object.feature_type(),
             envelope_str,

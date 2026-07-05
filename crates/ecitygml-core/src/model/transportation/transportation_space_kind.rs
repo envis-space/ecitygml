@@ -1,6 +1,9 @@
+use crate::impl_abstract_transportation_space_mut_traits;
 use crate::impl_abstract_transportation_space_traits;
-use crate::model::common::{FeatureRef, FeatureRefMut, TopLevelFeatureRef};
 
+use crate::model::common::{FeatureType, HasFeatureType};
+use crate::model::core::refs::FeatureKindRef;
+use crate::model::core::refs::FeatureKindRefMut;
 use crate::model::transportation::{
     AbstractTransportationSpace, AsAbstractTransportationSpace, AsAbstractTransportationSpaceMut,
     Intersection, Road, Section,
@@ -17,7 +20,7 @@ pub enum TransportationSpaceKind {
 
 impl TransportationSpaceKind {
     #[auto_enums::auto_enum(Iterator)]
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
         match self {
             TransportationSpaceKind::Section(x) => x.iter_features(),
             TransportationSpaceKind::Intersection(x) => x.iter_features(),
@@ -25,7 +28,7 @@ impl TransportationSpaceKind {
         }
     }
 
-    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
         match self {
             TransportationSpaceKind::Section(x) => x.for_each_feature_mut(f),
             TransportationSpaceKind::Intersection(x) => x.for_each_feature_mut(f),
@@ -79,34 +82,14 @@ impl AsAbstractTransportationSpaceMut for TransportationSpaceKind {
 }
 
 impl_abstract_transportation_space_traits!(TransportationSpaceKind);
+impl_abstract_transportation_space_mut_traits!(TransportationSpaceKind);
 
-impl<'a> From<&'a TransportationSpaceKind> for FeatureRef<'a> {
-    fn from(item: &'a TransportationSpaceKind) -> Self {
-        match item {
-            TransportationSpaceKind::Section(x) => x.into(),
-            TransportationSpaceKind::Intersection(x) => x.into(),
-            TransportationSpaceKind::Road(x) => x.into(),
-        }
-    }
-}
-
-impl<'a> TryFrom<&'a TransportationSpaceKind> for TopLevelFeatureRef<'a> {
-    type Error = ();
-    fn try_from(item: &'a TransportationSpaceKind) -> Result<Self, ()> {
-        match item {
-            TransportationSpaceKind::Section(_x) => Err(()),
-            TransportationSpaceKind::Intersection(_x) => Err(()),
-            TransportationSpaceKind::Road(x) => Ok(x.into()),
-        }
-    }
-}
-
-impl<'a> From<&'a mut TransportationSpaceKind> for FeatureRefMut<'a> {
-    fn from(item: &'a mut TransportationSpaceKind) -> Self {
-        match item {
-            TransportationSpaceKind::Section(x) => x.into(),
-            TransportationSpaceKind::Intersection(x) => x.into(),
-            TransportationSpaceKind::Road(x) => x.into(),
+impl HasFeatureType for TransportationSpaceKind {
+    fn feature_type(&self) -> FeatureType {
+        match self {
+            Self::Section(x) => x.feature_type(),
+            Self::Intersection(x) => x.feature_type(),
+            Self::Road(x) => x.feature_type(),
         }
     }
 }
@@ -125,3 +108,27 @@ macro_rules! impl_from_transportation_space_kind {
 impl_from_transportation_space_kind!(Section);
 impl_from_transportation_space_kind!(Intersection);
 impl_from_transportation_space_kind!(Road);
+
+#[macro_export]
+macro_rules! impl_try_from_transportation_space_kind {
+    ($type:ident) => {
+        impl TryFrom<$crate::model::transportation::TransportationSpaceKind> for $type {
+            type Error = ();
+            fn try_from(
+                x: $crate::model::transportation::TransportationSpaceKind,
+            ) -> Result<Self, ()> {
+                match x {
+                    $crate::model::transportation::TransportationSpaceKind::$type(k) => {
+                        k.try_into().map_err(|_| ())
+                    }
+                    #[allow(unreachable_patterns)]
+                    _ => Err(()),
+                }
+            }
+        }
+        $crate::impl_try_from_for_unoccupied_space_kind!(TransportationSpaceKind, $type);
+    };
+}
+impl_try_from_transportation_space_kind!(Section);
+impl_try_from_transportation_space_kind!(Intersection);
+impl_try_from_transportation_space_kind!(Road);

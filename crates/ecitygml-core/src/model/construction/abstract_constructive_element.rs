@@ -1,28 +1,35 @@
-use crate::model::common::{FeatureRef, FeatureRefMut};
 use crate::model::construction::FillingElementProperty;
+use crate::model::core::refs::FeatureKindRef;
+use crate::model::core::refs::FeatureKindRefMut;
 use crate::model::core::{
     AbstractOccupiedSpace, AsAbstractOccupiedSpace, AsAbstractOccupiedSpaceMut,
 };
+use egml::model::base::Id;
 use egml::model::geometry::Envelope;
 use nalgebra::Isometry3;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbstractConstructiveElement {
-    pub abstract_occupied_space: AbstractOccupiedSpace,
+    pub(crate) abstract_occupied_space: AbstractOccupiedSpace,
     is_structural_element: Option<bool>,
     fillings: Vec<FillingElementProperty>,
 }
 
 impl AbstractConstructiveElement {
-    pub fn new(abstract_occupied_space: AbstractOccupiedSpace) -> Self {
+    pub fn new(id: Id) -> Self {
+        Self::from_abstract_occupied_space(AbstractOccupiedSpace::new(id))
+    }
+
+    pub fn from_abstract_occupied_space(abstract_occupied_space: AbstractOccupiedSpace) -> Self {
         Self {
             abstract_occupied_space,
             is_structural_element: None,
             fillings: Vec::new(),
         }
     }
-
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+}
+impl AbstractConstructiveElement {
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
         self.abstract_occupied_space.iter_features().chain(
             self.fillings
                 .iter()
@@ -30,8 +37,7 @@ impl AbstractConstructiveElement {
                 .flat_map(|x| x.iter_features()),
         )
     }
-
-    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
         self.abstract_occupied_space.for_each_feature_mut(f);
         for prop in &mut self.fillings {
             if let Some(x) = prop.object.as_mut() {
@@ -39,11 +45,9 @@ impl AbstractConstructiveElement {
             }
         }
     }
-
     pub fn compute_envelope(&self) -> Option<Envelope> {
         self.abstract_occupied_space.compute_envelope()
     }
-
     pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
         self.abstract_occupied_space.apply_transform(m);
 
@@ -58,11 +62,11 @@ impl AbstractConstructiveElement {
 pub trait AsAbstractConstructiveElement: AsAbstractOccupiedSpace {
     fn abstract_constructive_element(&self) -> &AbstractConstructiveElement;
 
-    fn is_structural_element(&self) -> &Option<bool> {
-        &self.abstract_constructive_element().is_structural_element
+    fn is_structural_element(&self) -> Option<bool> {
+        self.abstract_constructive_element().is_structural_element
     }
 
-    fn fillings(&self) -> &Vec<FillingElementProperty> {
+    fn fillings(&self) -> &[FillingElementProperty] {
         &self.abstract_constructive_element().fillings
     }
 }
@@ -79,6 +83,18 @@ pub trait AsAbstractConstructiveElementMut:
 
     fn set_fillings(&mut self, values: Vec<FillingElementProperty>) {
         self.abstract_constructive_element_mut().fillings = values;
+    }
+
+    fn push_filling(&mut self, filling: FillingElementProperty) {
+        self.abstract_constructive_element_mut()
+            .fillings
+            .push(filling);
+    }
+
+    fn extend_fillings(&mut self, fillings: impl IntoIterator<Item = FillingElementProperty>) {
+        self.abstract_constructive_element_mut()
+            .fillings
+            .extend(fillings);
     }
 }
 
@@ -105,6 +121,13 @@ macro_rules! impl_abstract_constructive_element_traits {
                 &self.abstract_constructive_element().abstract_occupied_space
             }
         }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_abstract_constructive_element_mut_traits {
+    ($type:ty) => {
+        $crate::impl_abstract_occupied_space_mut_traits!($type);
 
         impl $crate::model::core::AsAbstractOccupiedSpaceMut for $type {
             fn abstract_occupied_space_mut(
@@ -120,3 +143,4 @@ macro_rules! impl_abstract_constructive_element_traits {
 }
 
 impl_abstract_constructive_element_traits!(AbstractConstructiveElement);
+impl_abstract_constructive_element_mut_traits!(AbstractConstructiveElement);

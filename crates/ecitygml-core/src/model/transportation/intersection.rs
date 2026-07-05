@@ -1,28 +1,49 @@
-use crate::model::common::{FeatureRef, FeatureRefMut};
 use crate::model::core::AsAbstractFeatureMut;
+use crate::model::core::refs::FeatureKindRef;
+use crate::model::core::refs::FeatureKindRefMut;
 use crate::model::transportation::{
     AbstractTransportationSpace, AsAbstractTransportationSpace, AsAbstractTransportationSpaceMut,
 };
+use egml::model::base::Id;
+use egml::model::basic::Code;
 use egml::model::geometry::Envelope;
 use nalgebra::Isometry3;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Intersection {
     pub(crate) abstract_transportation_space: AbstractTransportationSpace,
+    class: Option<Code>,
 }
 
 impl Intersection {
-    pub fn new(abstract_transportation_space: AbstractTransportationSpace) -> Self {
+    pub fn new(id: Id) -> Self {
+        Self::from_abstract_transportation_space(AbstractTransportationSpace::new(id))
+    }
+
+    pub fn from_abstract_transportation_space(
+        abstract_transportation_space: AbstractTransportationSpace,
+    ) -> Self {
         Self {
             abstract_transportation_space,
+            class: None,
         }
     }
 
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+    pub fn class(&self) -> Option<&Code> {
+        self.class.as_ref()
+    }
+
+    pub fn set_class(&mut self, class: Option<Code>) {
+        self.class = class;
+    }
+}
+
+impl Intersection {
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
         std::iter::once(self.into()).chain(self.abstract_transportation_space.iter_features())
     }
 
-    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
         f((&mut *self).into());
         self.abstract_transportation_space.for_each_feature_mut(f);
     }
@@ -53,15 +74,5 @@ impl AsAbstractTransportationSpaceMut for Intersection {
 }
 
 crate::impl_abstract_transportation_space_traits!(Intersection);
-
-impl<'a> From<&'a Intersection> for FeatureRef<'a> {
-    fn from(item: &'a Intersection) -> Self {
-        FeatureRef::Intersection(item)
-    }
-}
-
-impl<'a> From<&'a mut Intersection> for FeatureRefMut<'a> {
-    fn from(item: &'a mut Intersection) -> Self {
-        FeatureRefMut::Intersection(item)
-    }
-}
+crate::impl_abstract_transportation_space_mut_traits!(Intersection);
+crate::impl_has_feature_type!(Intersection, Intersection);

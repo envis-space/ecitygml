@@ -1,14 +1,70 @@
 use crate::Error;
-use crate::gml::codec::core::deserialize_abstract_occupied_space;
-use crate::gml::util::extract_xml_element_spans;
+use crate::gml::codec::core::{
+    deserialize_abstract_occupied_space, serialize_abstract_occupied_space,
+};
+use crate::gml::util::xml_element::XmlElement;
+use crate::gml::util::{XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner};
+use crate::gml::write::Formatting;
 use ecitygml_core::model::city_furniture::CityFurniture;
+use ecitygml_core::model::core::AsAbstractOccupiedSpace;
+use egml::io::GmlCode;
+use quick_xml::de;
+use serde::{Deserialize, Serialize};
 
 pub fn deserialize_city_furniture(xml_document: &[u8]) -> Result<CityFurniture, Error> {
     let spans = extract_xml_element_spans(xml_document)?;
-    let occupied_space = deserialize_abstract_occupied_space(xml_document, &spans)?;
-    let city_furniture = CityFurniture::new(occupied_space);
+    let (abstract_occupied_space_result, parsed_result) = rayon::join(
+        || deserialize_abstract_occupied_space(xml_document, &spans),
+        || de::from_reader::<_, GmlCityFurniture>(xml_document).map_err(Error::from),
+    );
+    let abstract_occupied_space = abstract_occupied_space_result?;
+    let parsed = parsed_result?;
+    let mut city_furniture = CityFurniture::from_abstract_occupied_space(abstract_occupied_space);
+
+    city_furniture.set_class(parsed.class.map(Into::into));
+    city_furniture.set_functions(parsed.functions.into_iter().map(Into::into).collect());
+    city_furniture.set_usages(parsed.usages.into_iter().map(Into::into).collect());
 
     Ok(city_furniture)
+}
+
+pub fn serialize_city_furniture(
+    city_furniture: &CityFurniture,
+    formatting: Formatting,
+) -> Result<XmlNode, Error> {
+    let mut xml_node_parts =
+        serialize_abstract_occupied_space(city_furniture.abstract_occupied_space(), formatting)?;
+
+    if let Some(raw) = serialize_inner(GmlCityFurniture::from(city_furniture), formatting)? {
+        xml_node_parts.content.push(XmlNodeContent::Raw(raw));
+    }
+
+    Ok(XmlNode::new(XmlElement::CityFurniture, xml_node_parts))
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+pub struct GmlCityFurniture {
+    #[serde(
+        rename(serialize = "frn:class", deserialize = "class"),
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub class: Option<GmlCode>,
+
+    #[serde(rename(serialize = "frn:function", deserialize = "function"), default)]
+    pub functions: Vec<GmlCode>,
+
+    #[serde(rename(serialize = "frn:usage", deserialize = "usage"), default)]
+    pub usages: Vec<GmlCode>,
+}
+
+impl From<&CityFurniture> for GmlCityFurniture {
+    fn from(item: &CityFurniture) -> Self {
+        Self {
+            class: item.class().map(Into::into),
+            functions: item.functions().iter().map(Into::into).collect(),
+            usages: item.usages().iter().map(Into::into).collect(),
+        }
+    }
 }
 
 #[cfg(test)]

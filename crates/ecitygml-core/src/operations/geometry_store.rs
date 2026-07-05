@@ -1,11 +1,14 @@
-use crate::model::common::{FeatureRef, FeatureType, LevelOfDetail};
+use crate::model::common::{FeatureType, HasFeatureType, LevelOfDetail};
+use crate::model::core::refs::{
+    CityObjectKindRef, PhysicalSpaceKindRef, SpaceBoundaryKindRef, SpaceKindRef,
+};
 use crate::model::core::{
     AbstractCityObject, AbstractOccupiedSpace, AbstractSpace, AbstractThematicSurface,
     AsAbstractCityObject, AsAbstractFeature, AsAbstractOccupiedSpace, AsAbstractSpace,
-    ImplicitGeometry,
+    AsAbstractThematicSurface, CityModel, ImplicitGeometry,
 };
-use crate::model::core::{AsAbstractThematicSurface, CityModel};
 use crate::model::relief::AsAbstractReliefComponent;
+use crate::model::relief::refs::ReliefComponentKindRef;
 use egml::model::base::Id;
 use egml::model::geometry::Envelope;
 use egml::model::geometry::aggregates::{MultiCurve, MultiSurface};
@@ -23,8 +26,8 @@ impl CityModelGeometryStore {
         // city_model.refresh_bounded_by_recursive();
 
         let objects: Vec<CityObjectGeometryEntry> = city_model
-            .iter_features()
-            .map(CityObjectGeometryEntry::from_city_object)
+            .iter_city_objects()
+            .map(CityObjectGeometryEntry::from_city_object_ref)
             .collect();
 
         let id_to_index: HashMap<Id, usize> = objects
@@ -84,87 +87,27 @@ impl CityObjectGeometryEntry {
         }
     }
 
-    pub fn from_city_object(feature_ref: FeatureRef) -> Self {
-        let class = feature_ref.feature_type();
-        match feature_ref {
-            FeatureRef::AuxiliaryTrafficArea(x) => {
+    pub fn from_city_object_ref(city_object: CityObjectKindRef<'_>) -> Self {
+        let class = city_object.feature_type();
+        match city_object {
+            CityObjectKindRef::SpaceKind(SpaceKindRef::PhysicalSpaceKind(
+                PhysicalSpaceKindRef::OccupiedSpaceKind(x),
+            )) => Self::from_abstract_occupied_space(class, x.abstract_occupied_space()),
+            CityObjectKindRef::SpaceKind(x) => Self::from_abstract_space(class, x.abstract_space()),
+            CityObjectKindRef::SpaceBoundaryKind(SpaceBoundaryKindRef::ThematicSurfaceKind(x)) => {
                 Self::from_abstract_thematic_surface(class, x.abstract_thematic_surface())
             }
-            FeatureRef::AuxiliaryTrafficSpace(x) => {
-                Self::from_abstract_space(class, x.abstract_space())
+            CityObjectKindRef::SpaceBoundaryKind(SpaceBoundaryKindRef::ReliefFeature(x)) => {
+                Self::new(x.abstract_city_object().clone(), class)
             }
-            FeatureRef::Building(x) => Self::from_abstract_space(class, x.abstract_space()),
-            FeatureRef::BuildingConstructiveElement(x) => {
-                Self::from_abstract_occupied_space(class, x.abstract_occupied_space())
-            }
-            FeatureRef::BuildingInstallation(x) => {
-                Self::from_abstract_occupied_space(class, x.abstract_occupied_space())
-            }
-            FeatureRef::BuildingRoom(x) => Self::from_abstract_space(class, x.abstract_space()),
-            FeatureRef::BuildingUnit(x) => Self::from_abstract_space(class, x.abstract_space()),
-            FeatureRef::CeilingSurface(x) => {
-                Self::from_abstract_thematic_surface(class, x.abstract_thematic_surface())
-            }
-            FeatureRef::CityFurniture(x) => {
-                Self::from_abstract_occupied_space(class, x.abstract_occupied_space())
-            }
-            FeatureRef::ClosureSurface(x) => {
-                Self::from_abstract_thematic_surface(class, x.abstract_thematic_surface())
-            }
-            FeatureRef::Door(x) => {
-                Self::from_abstract_occupied_space(class, x.abstract_occupied_space())
-            }
-            FeatureRef::DoorSurface(x) => {
-                Self::from_abstract_thematic_surface(class, x.abstract_thematic_surface())
-            }
-            FeatureRef::FloorSurface(x) => {
-                Self::from_abstract_thematic_surface(class, x.abstract_thematic_surface())
-            }
-            FeatureRef::GroundSurface(x) => {
-                Self::from_abstract_thematic_surface(class, x.abstract_thematic_surface())
-            }
-            FeatureRef::InteriorWallSurface(x) => {
-                Self::from_abstract_thematic_surface(class, x.abstract_thematic_surface())
-            }
-            FeatureRef::Intersection(x) => Self::from_abstract_space(class, x.abstract_space()),
-            FeatureRef::Marking(x) => {
-                Self::from_abstract_thematic_surface(class, x.abstract_thematic_surface())
-            }
-            FeatureRef::OuterCeilingSurface(x) => {
-                Self::from_abstract_thematic_surface(class, x.abstract_thematic_surface())
-            }
-            FeatureRef::OuterFloorSurface(x) => {
-                Self::from_abstract_thematic_surface(class, x.abstract_thematic_surface())
-            }
-            FeatureRef::ReliefFeature(x) => Self::new(x.abstract_city_object().clone(), class),
-            FeatureRef::Road(x) => Self::from_abstract_space(class, x.abstract_space()),
-            FeatureRef::RoofSurface(x) => {
-                Self::from_abstract_thematic_surface(class, x.abstract_thematic_surface())
-            }
-            FeatureRef::Section(x) => Self::from_abstract_space(class, x.abstract_space()),
-            FeatureRef::SolitaryVegetationObject(x) => {
-                Self::from_abstract_occupied_space(class, x.abstract_occupied_space())
-            }
-            FeatureRef::Storey(x) => Self::from_abstract_space(class, x.abstract_space()),
-            FeatureRef::TinRelief(x) => {
+            CityObjectKindRef::SpaceBoundaryKind(SpaceBoundaryKindRef::ReliefComponentKind(
+                ReliefComponentKindRef::TinRelief(x),
+            )) => {
                 let mut entry = Self::new(x.abstract_city_object().clone(), class);
-                if let Some(geom) = x.tin() {
+                if let Some(geom) = x.tin().as_ref().and_then(|t| t.object.as_ref()) {
                     entry.triangulated_surface.insert(x.lod(), geom.clone());
                 }
                 entry
-            }
-            FeatureRef::TrafficArea(x) => {
-                Self::from_abstract_thematic_surface(class, x.abstract_thematic_surface())
-            }
-            FeatureRef::TrafficSpace(x) => Self::from_abstract_space(class, x.abstract_space()),
-            FeatureRef::WallSurface(x) => {
-                Self::from_abstract_thematic_surface(class, x.abstract_thematic_surface())
-            }
-            FeatureRef::Window(x) => {
-                Self::from_abstract_occupied_space(class, x.abstract_occupied_space())
-            }
-            FeatureRef::WindowSurface(x) => {
-                Self::from_abstract_thematic_surface(class, x.abstract_thematic_surface())
             }
         }
     }
@@ -173,19 +116,19 @@ impl CityObjectGeometryEntry {
         let solids: HashMap<LevelOfDetail, Solid> = space
             .solids_by_lod()
             .into_iter()
-            .map(|(lod, x)| (lod, x.clone()))
+            .flat_map(|(lod, x)| x.object.as_ref().map(|x| (lod, x.clone())))
             .collect();
 
         let multi_surfaces: HashMap<LevelOfDetail, MultiSurface> = space
             .multi_surfaces_by_lod()
             .into_iter()
-            .map(|(lod, x)| (lod, x.clone()))
+            .flat_map(|(lod, x)| x.object.as_ref().map(|x| (lod, x.clone())))
             .collect();
 
         let multi_curves: HashMap<LevelOfDetail, MultiCurve> = space
             .multi_curves_by_lod()
             .into_iter()
-            .map(|(lod, x)| (lod, x.clone()))
+            .flat_map(|(lod, x)| x.object.as_ref().map(|x| (lod, x.clone())))
             .collect();
 
         Self {
@@ -225,7 +168,7 @@ impl CityObjectGeometryEntry {
         let multi_surfaces: HashMap<LevelOfDetail, MultiSurface> = thematic_surface
             .multi_surfaces_by_lod()
             .into_iter()
-            .map(|(lod, x)| (lod, x.clone()))
+            .flat_map(|(lod, x)| x.object.as_ref().map(|x| (lod, x.clone())))
             .collect();
 
         Self {

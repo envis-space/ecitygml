@@ -9,6 +9,6 @@ description = "Library for processing CityGML data."
 
 
 [dependencies]
-ecitygml-core = { version = "0.0.2-alpha.3", path = "../ecitygml-core" }
-ecitygml-io = { version = "0.0.2-alpha.3", path = "../ecitygml-io" }
-ecitygml-transform = { version = "0.0.2-alpha.3", path = "../ecitygml-transform" }
+ecitygml-core = { version = "0.0.2-alpha.4", path = "../ecitygml-core" }
+ecitygml-io = { version = "0.0.2-alpha.4", path = "../ecitygml-io" }
+ecitygml-transform = { version = "0.0.2-alpha.4", path = "../ecitygml-transform" }

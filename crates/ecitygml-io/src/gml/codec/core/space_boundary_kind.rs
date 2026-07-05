@@ -1,7 +1,14 @@
 use crate::Error;
-use crate::gml::codec::core::thematic_surface_kind::deserialize_thematic_surface_kind;
-use crate::gml::codec::relief::deserialize_relief_feature;
-use crate::gml::util::{XmlElement, XmlElementSpans};
+use crate::gml::codec::core::thematic_surface_kind::{
+    deserialize_thematic_surface_kind, serialize_thematic_surface_kind,
+};
+use crate::gml::codec::relief::{
+    deserialize_relief_component_kind, deserialize_relief_feature, serialize_relief_component_kind,
+    serialize_relief_feature,
+};
+use crate::gml::util::xml_element::XmlElement;
+use crate::gml::util::{XmlElementSpans, XmlNode};
+use crate::gml::write::Formatting;
 use ecitygml_core::model::core::SpaceBoundaryKind;
 
 pub fn deserialize_space_boundary_kind(
@@ -9,29 +16,38 @@ pub fn deserialize_space_boundary_kind(
     spans: &XmlElementSpans,
 ) -> Result<Option<SpaceBoundaryKind>, Error> {
     if let Some(x) = deserialize_thematic_surface_kind(xml_document, spans)? {
-        return Ok(Some(SpaceBoundaryKind::ThematicSurfaceKind(x)));
+        return Ok(Some(x.into()));
     }
 
     if let Some(span) = spans.first(XmlElement::ReliefFeature) {
         let relief_feature = deserialize_relief_feature(&xml_document[span.start..span.end])?;
-        return Ok(Some(SpaceBoundaryKind::ReliefFeature(relief_feature)));
+        return Ok(Some(relief_feature.into()));
+    }
+
+    if let Some(x) = deserialize_relief_component_kind(xml_document, spans)? {
+        return Ok(Some(x.into()));
     }
 
     Ok(None)
 }
 
+pub fn serialize_space_boundary_kind(
+    space_boundary_kind: &SpaceBoundaryKind,
+    formatting: Formatting,
+) -> Result<XmlNode, Error> {
+    match space_boundary_kind {
+        SpaceBoundaryKind::ThematicSurfaceKind(x) => serialize_thematic_surface_kind(x, formatting),
+        SpaceBoundaryKind::ReliefFeature(x) => serialize_relief_feature(x, formatting),
+        SpaceBoundaryKind::ReliefComponentKind(x) => serialize_relief_component_kind(x, formatting),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gml::codec::building::deserialize_building;
-    use crate::gml::codec::core::deserialize_abstract_thematic_surface;
     use crate::gml::util::extract_xml_element_spans;
-    use ecitygml_core::model::core::{
-        AsAbstractCityObject, AsAbstractFeature, AsAbstractThematicSurface,
-    };
+    use ecitygml_core::model::core::AsAbstractFeature;
     use egml::model::base::Id;
-    use quick_xml::{DeError, de};
-
     #[test]
     fn test_deserialize_basic_wall_surface_kind() {
         let xml_document = b"

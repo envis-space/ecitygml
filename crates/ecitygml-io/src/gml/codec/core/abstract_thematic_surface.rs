@@ -1,13 +1,20 @@
 use crate::Error;
-use crate::gml::codec::core::abstract_city_object::GmlAbstractCityObject;
-use crate::gml::codec::core::deserialize_abstract_space_boundary;
-use crate::gml::util::XmlElementSpans;
+use crate::gml::codec::core::point_cloud_property::{
+    deserialize_point_cloud_property, serialize_point_cloud_property,
+};
+use crate::gml::codec::core::{
+    deserialize_abstract_space_boundary, serialize_abstract_space_boundary,
+};
+use crate::gml::util::xml_element::XmlElement;
+use crate::gml::util::{XmlElementSpans, XmlNodeContent, XmlNodeParts};
+use crate::gml::util::{collect_child, serialize_inner};
+use crate::gml::write::Formatting;
 use ecitygml_core::model::core::{
-    AbstractThematicSurface, AsAbstractCityObject, AsAbstractFeature, AsAbstractThematicSurface,
+    AbstractThematicSurface, AsAbstractFeature, AsAbstractSpaceBoundary, AsAbstractThematicSurface,
     AsAbstractThematicSurfaceMut,
 };
 use egml::io::aggregates::{GmlMultiCurveProperty, GmlMultiSurfaceProperty};
-use egml::model::geometry::aggregates::{MultiCurve, MultiSurface};
+use egml::model::geometry::aggregates::{MultiCurveProperty, MultiSurfaceProperty};
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 use tracing::debug;
@@ -16,17 +23,41 @@ pub fn deserialize_abstract_thematic_surface(
     xml_document: &[u8],
     spans: &XmlElementSpans,
 ) -> Result<AbstractThematicSurface, Error> {
-    let (abstract_space_boundary_result, parsed_result) = rayon::join(
-        || deserialize_abstract_space_boundary(xml_document, spans),
-        || de::from_reader::<_, GmlAbstractThematicSurface>(xml_document).map_err(Error::from),
-    );
-    let abstract_space_boundary = abstract_space_boundary_result?;
-    let parsed = parsed_result?;
-    let mut abstract_thematic_surface = AbstractThematicSurface::new(abstract_space_boundary);
+    let mut abstract_space_boundary_result = None;
+    let mut parsed_result = None;
+    let mut point_cloud_result = None;
+
+    rayon::scope(|s| {
+        s.spawn(|_| {
+            abstract_space_boundary_result =
+                Some(deserialize_abstract_space_boundary(xml_document, spans));
+        });
+        s.spawn(|_| {
+            parsed_result = Some(
+                de::from_reader::<_, GmlAbstractThematicSurface>(xml_document).map_err(Error::from),
+            );
+        });
+        s.spawn(|_| {
+            point_cloud_result = Some(collect_child(
+                xml_document,
+                spans,
+                XmlElement::PointCloudProperty,
+                deserialize_point_cloud_property,
+            ));
+        });
+    });
+
+    let abstract_space_boundary =
+        abstract_space_boundary_result.expect("rayon::scope guarantees all spawns complete")?;
+    let parsed = parsed_result.expect("rayon::scope guarantees all spawns complete")?;
+    let point_cloud = point_cloud_result.expect("rayon::scope guarantees all spawns complete")?;
+
+    let mut abstract_thematic_surface =
+        AbstractThematicSurface::from_abstract_space_boundary(abstract_space_boundary);
 
     if let Some(gml_multi_surface_property) = parsed.lod0_multi_surface {
-        let multi_surface_result: Result<MultiSurface, egml::io::Error> =
-            gml_multi_surface_property.content.try_into();
+        let multi_surface_result: Result<MultiSurfaceProperty, egml::io::Error> =
+            gml_multi_surface_property.try_into();
 
         match multi_surface_result {
             Ok(x) => {
@@ -43,8 +74,8 @@ pub fn deserialize_abstract_thematic_surface(
     }
 
     if let Some(gml_multi_surface_property) = parsed.lod1_multi_surface {
-        let multi_surface_result: Result<MultiSurface, egml::io::Error> =
-            gml_multi_surface_property.content.try_into();
+        let multi_surface_result: Result<MultiSurfaceProperty, egml::io::Error> =
+            gml_multi_surface_property.try_into();
 
         match multi_surface_result {
             Ok(x) => {
@@ -61,8 +92,8 @@ pub fn deserialize_abstract_thematic_surface(
     }
 
     if let Some(gml_multi_surface_property) = parsed.lod2_multi_surface {
-        let multi_surface_result: Result<MultiSurface, egml::io::Error> =
-            gml_multi_surface_property.content.try_into();
+        let multi_surface_result: Result<MultiSurfaceProperty, egml::io::Error> =
+            gml_multi_surface_property.try_into();
 
         match multi_surface_result {
             Ok(x) => {
@@ -79,8 +110,8 @@ pub fn deserialize_abstract_thematic_surface(
     }
 
     if let Some(gml_multi_surface_property) = parsed.lod3_multi_surface {
-        let multi_surface_result: Result<MultiSurface, egml::io::Error> =
-            gml_multi_surface_property.content.try_into();
+        let multi_surface_result: Result<MultiSurfaceProperty, egml::io::Error> =
+            gml_multi_surface_property.try_into();
 
         match multi_surface_result {
             Ok(x) => {
@@ -97,8 +128,8 @@ pub fn deserialize_abstract_thematic_surface(
     }
 
     if let Some(gml_multi_curve_property) = parsed.lod0_multi_curve {
-        let multi_curve_result: Result<MultiCurve, egml::io::Error> =
-            gml_multi_curve_property.content.try_into();
+        let multi_curve_result: Result<MultiCurveProperty, egml::io::Error> =
+            gml_multi_curve_property.try_into();
 
         match multi_curve_result {
             Ok(x) => {
@@ -114,14 +145,40 @@ pub fn deserialize_abstract_thematic_surface(
         }
     }
 
+    abstract_thematic_surface.set_point_cloud(point_cloud);
+
     Ok(abstract_thematic_surface)
+}
+
+pub fn serialize_abstract_thematic_surface(
+    abstract_thematic_surface: &AbstractThematicSurface,
+    formatting: Formatting,
+) -> Result<XmlNodeParts, Error> {
+    let mut xml_node_parts = serialize_abstract_space_boundary(
+        abstract_thematic_surface.abstract_space_boundary(),
+        formatting,
+    )?;
+
+    if let Some(raw) = serialize_inner(
+        GmlAbstractThematicSurface::from(abstract_thematic_surface),
+        formatting,
+    )? {
+        xml_node_parts.content.push(XmlNodeContent::Raw(raw));
+    }
+
+    xml_node_parts.content.extend(
+        abstract_thematic_surface
+            .point_cloud()
+            .iter()
+            .map(|x| serialize_point_cloud_property(x, formatting).map(XmlNodeContent::from))
+            .collect::<Result<Vec<_>, _>>()?,
+    );
+
+    Ok(xml_node_parts)
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct GmlAbstractThematicSurface {
-    #[serde(flatten, skip_deserializing)]
-    pub abstract_city_object: GmlAbstractCityObject,
-
     #[serde(rename = "lod0MultiSurface", skip_serializing_if = "Option::is_none")]
     pub lod0_multi_surface: Option<GmlMultiSurfaceProperty>,
 
@@ -139,14 +196,13 @@ pub struct GmlAbstractThematicSurface {
 }
 
 impl From<&AbstractThematicSurface> for GmlAbstractThematicSurface {
-    fn from(ats: &AbstractThematicSurface) -> Self {
+    fn from(item: &AbstractThematicSurface) -> Self {
         Self {
-            abstract_city_object: GmlAbstractCityObject::from(ats.abstract_city_object()),
-            lod0_multi_surface: ats.lod0_multi_surface().map(GmlMultiSurfaceProperty::from),
-            lod1_multi_surface: ats.lod1_multi_surface().map(GmlMultiSurfaceProperty::from),
-            lod2_multi_surface: ats.lod2_multi_surface().map(GmlMultiSurfaceProperty::from),
-            lod3_multi_surface: ats.lod3_multi_surface().map(GmlMultiSurfaceProperty::from),
-            lod0_multi_curve: ats.lod0_multi_curve().map(GmlMultiCurveProperty::from),
+            lod0_multi_surface: item.lod0_multi_surface().map(Into::into),
+            lod1_multi_surface: item.lod1_multi_surface().map(Into::into),
+            lod2_multi_surface: item.lod2_multi_surface().map(Into::into),
+            lod3_multi_surface: item.lod3_multi_surface().map(Into::into),
+            lod0_multi_curve: item.lod0_multi_curve().map(Into::into),
         }
     }
 }

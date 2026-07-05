@@ -1,7 +1,11 @@
+pub mod refs;
+
 mod abstract_transportation_space;
 mod auxiliary_traffic_area;
 mod auxiliary_traffic_space;
 mod auxiliary_traffic_space_property;
+mod clearance_space;
+mod clearance_space_property;
 mod granularity_value;
 mod intersection;
 mod intersection_property;
@@ -20,6 +24,8 @@ pub use abstract_transportation_space::*;
 pub use auxiliary_traffic_area::*;
 pub use auxiliary_traffic_space::*;
 pub use auxiliary_traffic_space_property::*;
+pub use clearance_space::*;
+pub use clearance_space_property::*;
 pub use granularity_value::*;
 pub use intersection::*;
 pub use intersection_property::*;

@@ -1,7 +1,8 @@
 use strum_macros::{Display, EnumIter};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter, Display, Ord, PartialOrd)]
 pub enum FeatureType {
+    Appearance,
     AuxiliaryTrafficArea,
     AuxiliaryTrafficSpace,
     Bridge,
@@ -29,17 +30,21 @@ pub enum FeatureType {
     GenericOccupiedSpace,
     GenericThematicSurface,
     GenericUnoccupiedSpace,
+    GeoreferencedTexture,
     GroundSurface,
     Hole,
     HoleSurface,
     HollowSpace,
     InteriorWallSurface,
     Intersection,
+    LandUse,
     Marking,
     OtherConstruction,
     OuterCeilingSurface,
     OuterFloorSurface,
+    ParameterizedTexture,
     PlantCover,
+    PointCloud,
     Railway,
     ReliefFeature,
     Road,
@@ -64,11 +69,13 @@ pub enum FeatureType {
     Waterway,
     Window,
     WindowSurface,
+    X3DMaterial,
 }
 
 impl FeatureType {
     pub fn is_top_level(&self) -> bool {
         match self {
+            FeatureType::Appearance => false,
             FeatureType::AuxiliaryTrafficArea => false,
             FeatureType::AuxiliaryTrafficSpace => false,
             FeatureType::Bridge => true,
@@ -96,17 +103,21 @@ impl FeatureType {
             FeatureType::GenericOccupiedSpace => true,
             FeatureType::GenericThematicSurface => false,
             FeatureType::GenericUnoccupiedSpace => true,
+            FeatureType::GeoreferencedTexture => false,
             FeatureType::GroundSurface => false,
             FeatureType::Hole => false,
             FeatureType::HoleSurface => false,
             FeatureType::HollowSpace => false,
             FeatureType::InteriorWallSurface => false,
             FeatureType::Intersection => false,
+            FeatureType::LandUse => true,
             FeatureType::Marking => false,
             FeatureType::OtherConstruction => true,
             FeatureType::OuterCeilingSurface => false,
             FeatureType::OuterFloorSurface => false,
+            FeatureType::ParameterizedTexture => false,
             FeatureType::PlantCover => true,
+            FeatureType::PointCloud => true,
             FeatureType::Railway => true,
             FeatureType::ReliefFeature => true,
             FeatureType::Road => true,
@@ -131,6 +142,7 @@ impl FeatureType {
             FeatureType::Waterway => true,
             FeatureType::Window => false,
             FeatureType::WindowSurface => false,
+            FeatureType::X3DMaterial => false,
         }
     }
 }

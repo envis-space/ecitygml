@@ -1,8 +1,12 @@
 use crate::Error;
-use crate::gml::codec::core::deserialize_abstract_unoccupied_space;
+use crate::gml::codec::core::{
+    deserialize_abstract_unoccupied_space, serialize_abstract_unoccupied_space,
+};
 use crate::gml::codec::transportation::granularity_value::GmlGranularityValue;
-use crate::gml::codec::transportation::traffic_direction_value::GmlTrafficDirectionValue;
-use crate::gml::util::extract_xml_element_spans;
+use crate::gml::util::xml_element::XmlElement;
+use crate::gml::util::{XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner};
+use crate::gml::write::Formatting;
+use ecitygml_core::model::core::AsAbstractUnoccupiedSpace;
 use ecitygml_core::model::transportation::AuxiliaryTrafficSpace;
 use egml::io::GmlCode;
 use quick_xml::de;
@@ -19,14 +23,38 @@ pub fn deserialize_auxiliary_traffic_space(
     let abstract_unoccupied_space = abstract_unoccupied_space_result?;
     let parsed = parsed_result?;
 
-    let mut traffic_space =
-        AuxiliaryTrafficSpace::new(abstract_unoccupied_space, parsed.granularity.into());
+    let mut traffic_space = AuxiliaryTrafficSpace::from_abstract_unoccupied_space(
+        abstract_unoccupied_space,
+        parsed.granularity.into(),
+    );
 
-    traffic_space.set_class(parsed.class.map(|x| x.into()));
-    traffic_space.set_functions(parsed.functions.into_iter().map(|x| x.into()).collect());
-    traffic_space.set_usages(parsed.usages.into_iter().map(|x| x.into()).collect());
+    traffic_space.set_class(parsed.class.map(Into::into));
+    traffic_space.set_functions(parsed.functions.into_iter().map(Into::into).collect());
+    traffic_space.set_usages(parsed.usages.into_iter().map(Into::into).collect());
 
     Ok(traffic_space)
+}
+
+pub fn serialize_auxiliary_traffic_space(
+    auxiliary_traffic_space: &AuxiliaryTrafficSpace,
+    formatting: Formatting,
+) -> Result<XmlNode, Error> {
+    let mut xml_node_parts = serialize_abstract_unoccupied_space(
+        auxiliary_traffic_space.abstract_unoccupied_space(),
+        formatting,
+    )?;
+
+    if let Some(raw) = serialize_inner(
+        GmlAuxiliaryTrafficSpace::from(auxiliary_traffic_space),
+        formatting,
+    )? {
+        xml_node_parts.content.push(XmlNodeContent::Raw(raw));
+    }
+
+    Ok(XmlNode::new(
+        XmlElement::AuxiliaryTrafficSpace,
+        xml_node_parts,
+    ))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -43,11 +71,22 @@ pub struct GmlAuxiliaryTrafficSpace {
     #[serde(rename(serialize = "tran:usage", deserialize = "usage"), default)]
     pub usages: Vec<GmlCode>,
 
-    #[serde(rename = "granularity", default)]
+    #[serde(
+        rename(serialize = "tran:granularity", deserialize = "granularity"),
+        default
+    )]
     pub granularity: GmlGranularityValue,
+}
 
-    #[serde(rename = "trafficDirection", default)]
-    pub traffic_direction: Option<GmlTrafficDirectionValue>,
+impl From<&AuxiliaryTrafficSpace> for GmlAuxiliaryTrafficSpace {
+    fn from(item: &AuxiliaryTrafficSpace) -> Self {
+        Self {
+            class: item.class().map(Into::into),
+            functions: item.functions().iter().map(Into::into).collect(),
+            usages: item.usages().iter().map(Into::into).collect(),
+            granularity: item.granularity().into(),
+        }
+    }
 }
 
 #[cfg(test)]

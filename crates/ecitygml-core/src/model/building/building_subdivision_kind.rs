@@ -1,10 +1,12 @@
+use crate::impl_abstract_building_subdivision_mut_traits;
 use crate::impl_abstract_building_subdivision_traits;
 use crate::model::building::{
     AbstractBuildingSubdivision, AsAbstractBuildingSubdivision, AsAbstractBuildingSubdivisionMut,
     BuildingUnit, Storey,
 };
-use crate::model::common::{FeatureRef, FeatureRefMut};
-
+use crate::model::common::{FeatureType, HasFeatureType};
+use crate::model::core::refs::FeatureKindRef;
+use crate::model::core::refs::FeatureKindRefMut;
 use nalgebra::Isometry3;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -15,14 +17,14 @@ pub enum BuildingSubdivisionKind {
 
 impl BuildingSubdivisionKind {
     #[auto_enums::auto_enum(Iterator)]
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
         match self {
             BuildingSubdivisionKind::BuildingUnit(x) => x.iter_features(),
             BuildingSubdivisionKind::Storey(x) => x.iter_features(),
         }
     }
 
-    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
         match self {
             BuildingSubdivisionKind::BuildingUnit(x) => x.for_each_feature_mut(f),
             BuildingSubdivisionKind::Storey(x) => x.for_each_feature_mut(f),
@@ -78,21 +80,13 @@ impl AsAbstractBuildingSubdivisionMut for BuildingSubdivisionKind {
 }
 
 impl_abstract_building_subdivision_traits!(BuildingSubdivisionKind);
+impl_abstract_building_subdivision_mut_traits!(BuildingSubdivisionKind);
 
-impl<'a> From<&'a BuildingSubdivisionKind> for FeatureRef<'a> {
-    fn from(item: &'a BuildingSubdivisionKind) -> Self {
-        match item {
-            BuildingSubdivisionKind::BuildingUnit(x) => x.into(),
-            BuildingSubdivisionKind::Storey(x) => x.into(),
-        }
-    }
-}
-
-impl<'a> From<&'a mut BuildingSubdivisionKind> for FeatureRefMut<'a> {
-    fn from(item: &'a mut BuildingSubdivisionKind) -> Self {
-        match item {
-            BuildingSubdivisionKind::BuildingUnit(x) => x.into(),
-            BuildingSubdivisionKind::Storey(x) => x.into(),
+impl HasFeatureType for BuildingSubdivisionKind {
+    fn feature_type(&self) -> FeatureType {
+        match self {
+            Self::BuildingUnit(x) => x.feature_type(),
+            Self::Storey(x) => x.feature_type(),
         }
     }
 }
@@ -110,3 +104,24 @@ macro_rules! impl_from_building_subdivision_kind {
 }
 impl_from_building_subdivision_kind!(BuildingUnit);
 impl_from_building_subdivision_kind!(Storey);
+
+#[macro_export]
+macro_rules! impl_try_from_building_subdivision_kind {
+    ($type:ident) => {
+        impl TryFrom<$crate::model::building::BuildingSubdivisionKind> for $type {
+            type Error = ();
+            fn try_from(x: $crate::model::building::BuildingSubdivisionKind) -> Result<Self, ()> {
+                match x {
+                    $crate::model::building::BuildingSubdivisionKind::$type(k) => {
+                        k.try_into().map_err(|_| ())
+                    }
+                    #[allow(unreachable_patterns)]
+                    _ => Err(()),
+                }
+            }
+        }
+        $crate::impl_try_from_for_logical_space_kind!(BuildingSubdivisionKind, $type);
+    };
+}
+impl_try_from_building_subdivision_kind!(BuildingUnit);
+impl_try_from_building_subdivision_kind!(Storey);

@@ -1,3 +1,5 @@
+pub mod refs;
+
 mod abstract_building;
 mod abstract_building_subdivision;
 mod building;
@@ -6,6 +8,8 @@ mod building_constructive_element_property;
 mod building_installation;
 mod building_installation_property;
 mod building_kind;
+mod building_part;
+mod building_part_property;
 mod building_room;
 mod building_room_property;
 mod building_subdivision_kind;
@@ -21,6 +25,8 @@ pub use building_constructive_element_property::*;
 pub use building_installation::*;
 pub use building_installation_property::*;
 pub use building_kind::*;
+pub use building_part::*;
+pub use building_part_property::*;
 pub use building_room::*;
 pub use building_room_property::*;
 pub use building_subdivision_kind::*;

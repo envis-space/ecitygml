@@ -3,6 +3,6 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct GmlExternalReferenceProperty {
-    #[serde(rename = "$value")]
+    #[serde(rename = "ExternalReference")]
     pub content: GmlExternalReference,
 }

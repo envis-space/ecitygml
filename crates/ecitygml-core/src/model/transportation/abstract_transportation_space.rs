@@ -1,4 +1,5 @@
-use crate::model::common::{FeatureRef, FeatureRefMut};
+use crate::model::core::refs::FeatureKindRef;
+use crate::model::core::refs::FeatureKindRefMut;
 use crate::model::core::{
     AbstractUnoccupiedSpace, AsAbstractUnoccupiedSpace, AsAbstractUnoccupiedSpaceMut,
 };
@@ -6,20 +7,27 @@ use crate::model::transportation::marking_property::MarkingProperty;
 use crate::model::transportation::{
     AuxiliaryTrafficSpaceProperty, TrafficDirectionValue, TrafficSpaceProperty,
 };
+use egml::model::base::Id;
 use egml::model::geometry::Envelope;
 use nalgebra::Isometry3;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbstractTransportationSpace {
     pub(crate) abstract_unoccupied_space: AbstractUnoccupiedSpace,
-    pub traffic_direction: Option<TrafficDirectionValue>,
-    pub traffic_spaces: Vec<TrafficSpaceProperty>,
-    pub auxiliary_traffic_spaces: Vec<AuxiliaryTrafficSpaceProperty>,
-    pub markings: Vec<MarkingProperty>,
+    traffic_direction: Option<TrafficDirectionValue>,
+    traffic_spaces: Vec<TrafficSpaceProperty>,
+    auxiliary_traffic_spaces: Vec<AuxiliaryTrafficSpaceProperty>,
+    markings: Vec<MarkingProperty>,
 }
 
 impl AbstractTransportationSpace {
-    pub fn new(abstract_unoccupied_space: AbstractUnoccupiedSpace) -> Self {
+    pub fn new(id: Id) -> Self {
+        Self::from_abstract_unoccupied_space(AbstractUnoccupiedSpace::new(id))
+    }
+
+    pub fn from_abstract_unoccupied_space(
+        abstract_unoccupied_space: AbstractUnoccupiedSpace,
+    ) -> Self {
         Self {
             abstract_unoccupied_space,
             traffic_direction: None,
@@ -28,8 +36,9 @@ impl AbstractTransportationSpace {
             markings: Vec::new(),
         }
     }
-
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+}
+impl AbstractTransportationSpace {
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
         self.abstract_unoccupied_space
             .iter_features()
             .chain(
@@ -51,8 +60,7 @@ impl AbstractTransportationSpace {
                     .flat_map(|x| x.iter_features()),
             )
     }
-
-    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
         self.abstract_unoccupied_space.for_each_feature_mut(f);
         for prop in &mut self.traffic_spaces {
             if let Some(x) = prop.object.as_mut() {
@@ -70,11 +78,9 @@ impl AbstractTransportationSpace {
             }
         }
     }
-
     pub fn compute_envelope(&self) -> Option<Envelope> {
         self.abstract_unoccupied_space.compute_envelope()
     }
-
     pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
         self.abstract_unoccupied_space.apply_transform(m);
 
@@ -96,21 +102,21 @@ impl AbstractTransportationSpace {
 pub trait AsAbstractTransportationSpace: AsAbstractUnoccupiedSpace {
     fn abstract_transportation_space(&self) -> &AbstractTransportationSpace;
 
-    fn traffic_direction(&self) -> &Option<TrafficDirectionValue> {
-        &self.abstract_transportation_space().traffic_direction
+    fn traffic_direction(&self) -> Option<TrafficDirectionValue> {
+        self.abstract_transportation_space().traffic_direction
     }
 
-    fn traffic_spaces(&self) -> &Vec<TrafficSpaceProperty> {
+    fn traffic_spaces(&self) -> &[TrafficSpaceProperty] {
         &self.abstract_transportation_space().traffic_spaces
     }
 
-    fn auxiliary_traffic_spaces(&self) -> &Vec<AuxiliaryTrafficSpaceProperty> {
+    fn auxiliary_traffic_spaces(&self) -> &[AuxiliaryTrafficSpaceProperty] {
         &self
             .abstract_transportation_space()
             .auxiliary_traffic_spaces
     }
 
-    fn markings(&self) -> &Vec<MarkingProperty> {
+    fn markings(&self) -> &[MarkingProperty] {
         &self.abstract_transportation_space().markings
     }
 }
@@ -128,9 +134,39 @@ pub trait AsAbstractTransportationSpaceMut:
         self.abstract_transportation_space_mut().traffic_spaces = values;
     }
 
+    fn push_traffic_space(&mut self, traffic_space: TrafficSpaceProperty) {
+        self.abstract_transportation_space_mut()
+            .traffic_spaces
+            .push(traffic_space);
+    }
+
+    fn extend_traffic_spaces(
+        &mut self,
+        traffic_spaces: impl IntoIterator<Item = TrafficSpaceProperty>,
+    ) {
+        self.abstract_transportation_space_mut()
+            .traffic_spaces
+            .extend(traffic_spaces);
+    }
+
     fn set_auxiliary_traffic_spaces(&mut self, values: Vec<AuxiliaryTrafficSpaceProperty>) {
         self.abstract_transportation_space_mut()
             .auxiliary_traffic_spaces = values;
+    }
+
+    fn push_auxiliary_traffic_space(&mut self, traffic_space: AuxiliaryTrafficSpaceProperty) {
+        self.abstract_transportation_space_mut()
+            .auxiliary_traffic_spaces
+            .push(traffic_space);
+    }
+
+    fn extend_auxiliary_traffic_spaces(
+        &mut self,
+        traffic_spaces: impl IntoIterator<Item = AuxiliaryTrafficSpaceProperty>,
+    ) {
+        self.abstract_transportation_space_mut()
+            .auxiliary_traffic_spaces
+            .extend(traffic_spaces);
     }
 
     fn markings_mut(&mut self) -> &mut Vec<MarkingProperty> {
@@ -139,6 +175,18 @@ pub trait AsAbstractTransportationSpaceMut:
 
     fn set_markings(&mut self, values: Vec<MarkingProperty>) {
         self.abstract_transportation_space_mut().markings = values;
+    }
+
+    fn push_marking(&mut self, marking: MarkingProperty) {
+        self.abstract_transportation_space_mut()
+            .markings
+            .push(marking);
+    }
+
+    fn extend_markings(&mut self, markings: impl IntoIterator<Item = MarkingProperty>) {
+        self.abstract_transportation_space_mut()
+            .markings
+            .extend(markings);
     }
 }
 
@@ -167,6 +215,13 @@ macro_rules! impl_abstract_transportation_space_traits {
                     .abstract_unoccupied_space
             }
         }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_abstract_transportation_space_mut_traits {
+    ($type:ty) => {
+        $crate::impl_abstract_unoccupied_space_mut_traits!($type);
 
         impl $crate::model::core::AsAbstractUnoccupiedSpaceMut for $type {
             fn abstract_unoccupied_space_mut(
@@ -182,3 +237,4 @@ macro_rules! impl_abstract_transportation_space_traits {
 }
 
 impl_abstract_transportation_space_traits!(AbstractTransportationSpace);
+impl_abstract_transportation_space_mut_traits!(AbstractTransportationSpace);

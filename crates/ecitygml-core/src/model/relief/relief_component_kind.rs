@@ -1,6 +1,9 @@
+use crate::impl_abstract_relief_component_mut_traits;
 use crate::impl_abstract_relief_component_traits;
-use crate::model::common::{FeatureRef, FeatureRefMut};
+use crate::model::common::{FeatureType, HasFeatureType};
 use crate::model::core::AsAbstractFeature;
+use crate::model::core::refs::FeatureKindRef;
+use crate::model::core::refs::FeatureKindRefMut;
 use crate::model::relief::{
     AbstractReliefComponent, AsAbstractReliefComponent, AsAbstractReliefComponentMut, TinRelief,
 };
@@ -21,13 +24,13 @@ impl ReliefComponentKind {
 }
 
 impl ReliefComponentKind {
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
         match self {
             ReliefComponentKind::TinRelief(x) => x.iter_features(),
         }
     }
 
-    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
         match self {
             ReliefComponentKind::TinRelief(x) => x.for_each_feature_mut(f),
         }
@@ -69,19 +72,12 @@ impl AsAbstractReliefComponentMut for ReliefComponentKind {
 }
 
 impl_abstract_relief_component_traits!(ReliefComponentKind);
+impl_abstract_relief_component_mut_traits!(ReliefComponentKind);
 
-impl<'a> From<&'a ReliefComponentKind> for FeatureRef<'a> {
-    fn from(item: &'a ReliefComponentKind) -> Self {
-        match item {
-            ReliefComponentKind::TinRelief(x) => x.into(),
-        }
-    }
-}
-
-impl<'a> From<&'a mut ReliefComponentKind> for FeatureRefMut<'a> {
-    fn from(item: &'a mut ReliefComponentKind) -> Self {
-        match item {
-            ReliefComponentKind::TinRelief(x) => x.into(),
+impl HasFeatureType for ReliefComponentKind {
+    fn feature_type(&self) -> FeatureType {
+        match self {
+            Self::TinRelief(x) => x.feature_type(),
         }
     }
 }
@@ -98,3 +94,23 @@ macro_rules! impl_from_relief_component_kind {
     };
 }
 impl_from_relief_component_kind!(TinRelief);
+
+#[macro_export]
+macro_rules! impl_try_from_relief_component_kind {
+    ($type:ident) => {
+        impl TryFrom<$crate::model::relief::ReliefComponentKind> for $type {
+            type Error = ();
+            fn try_from(x: $crate::model::relief::ReliefComponentKind) -> Result<Self, ()> {
+                match x {
+                    $crate::model::relief::ReliefComponentKind::$type(k) => {
+                        k.try_into().map_err(|_| ())
+                    }
+                    #[allow(unreachable_patterns)]
+                    _ => Err(()),
+                }
+            }
+        }
+        $crate::impl_try_from_for_space_boundary_kind!(ReliefComponentKind, $type);
+    };
+}
+impl_try_from_relief_component_kind!(TinRelief);

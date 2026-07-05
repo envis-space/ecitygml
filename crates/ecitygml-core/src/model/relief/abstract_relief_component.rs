@@ -1,7 +1,10 @@
-use crate::model::common::{FeatureRef, FeatureRefMut, LevelOfDetail};
+use crate::model::common::LevelOfDetail;
+use crate::model::core::refs::FeatureKindRef;
+use crate::model::core::refs::FeatureKindRefMut;
 use crate::model::core::{
     AbstractSpaceBoundary, AsAbstractSpaceBoundary, AsAbstractSpaceBoundaryMut,
 };
+use egml::model::base::Id;
 use egml::model::geometry::Envelope;
 use nalgebra::Isometry3;
 
@@ -12,25 +15,30 @@ pub struct AbstractReliefComponent {
 }
 
 impl AbstractReliefComponent {
-    pub fn new(abstract_space_boundary: AbstractSpaceBoundary, lod: LevelOfDetail) -> Self {
+    pub fn new(id: Id, lod: LevelOfDetail) -> Self {
+        Self::from_abstract_space_boundary(AbstractSpaceBoundary::new(id), lod)
+    }
+
+    pub fn from_abstract_space_boundary(
+        abstract_space_boundary: AbstractSpaceBoundary,
+        lod: LevelOfDetail,
+    ) -> Self {
         Self {
             abstract_space_boundary,
             lod,
         }
     }
-
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+}
+impl AbstractReliefComponent {
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
         self.abstract_space_boundary.iter_features()
     }
-
-    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
         self.abstract_space_boundary.for_each_feature_mut(f);
     }
-
     pub fn compute_envelope(&self) -> Option<Envelope> {
         self.abstract_space_boundary.compute_envelope()
     }
-
     pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
         self.abstract_space_boundary.apply_transform(m);
     }
@@ -73,6 +81,13 @@ macro_rules! impl_abstract_relief_component_traits {
                 &self.abstract_relief_component().abstract_space_boundary
             }
         }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_abstract_relief_component_mut_traits {
+    ($type:ty) => {
+        $crate::impl_abstract_space_boundary_mut_traits!($type);
 
         impl $crate::model::core::AsAbstractSpaceBoundaryMut for $type {
             fn abstract_space_boundary_mut(
@@ -86,3 +101,4 @@ macro_rules! impl_abstract_relief_component_traits {
 }
 
 impl_abstract_relief_component_traits!(AbstractReliefComponent);
+impl_abstract_relief_component_mut_traits!(AbstractReliefComponent);

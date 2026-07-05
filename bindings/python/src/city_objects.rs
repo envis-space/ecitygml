@@ -50,67 +50,67 @@ macro_rules! py_feature_type {
 
 macro_rules! py_lod1_solid {
     ($self:ident) => {
-        $self.inner.lod1_solid().map(PySolid::from)
+        $self.inner.lod1_solid().and_then(|p| p.object.as_ref()).map(PySolid::from)
     };
 }
 
 macro_rules! py_lod2_solid {
     ($self:ident) => {
-        $self.inner.lod2_solid().map(PySolid::from)
+        $self.inner.lod2_solid().and_then(|p| p.object.as_ref()).map(PySolid::from)
     };
 }
 
 macro_rules! py_lod3_solid {
     ($self:ident) => {
-        $self.inner.lod3_solid().map(PySolid::from)
+        $self.inner.lod3_solid().and_then(|p| p.object.as_ref()).map(PySolid::from)
     };
 }
 
 macro_rules! py_lod0_multi_surface {
     ($self:ident) => {
-        $self.inner.lod0_multi_surface().map(PyMultiSurface::from)
+        $self.inner.lod0_multi_surface().and_then(|p| p.object.as_ref()).map(PyMultiSurface::from)
     };
 }
 
 macro_rules! py_lod2_multi_surface {
     ($self:ident) => {
-        $self.inner.lod2_multi_surface().map(PyMultiSurface::from)
+        $self.inner.lod2_multi_surface().and_then(|p| p.object.as_ref()).map(PyMultiSurface::from)
     };
 }
 
 macro_rules! py_lod3_multi_surface {
     ($self:ident) => {
-        $self.inner.lod3_multi_surface().map(PyMultiSurface::from)
+        $self.inner.lod3_multi_surface().and_then(|p| p.object.as_ref()).map(PyMultiSurface::from)
     };
 }
 
 macro_rules! py_lod0_multi_curve {
     ($self:ident) => {
-        $self.inner.lod0_multi_curve().map(PyMultiCurve::from)
+        $self.inner.lod0_multi_curve().and_then(|p| p.object.as_ref()).map(PyMultiCurve::from)
     };
 }
 
 macro_rules! py_lod2_multi_curve {
     ($self:ident) => {
-        $self.inner.lod2_multi_curve().map(PyMultiCurve::from)
+        $self.inner.lod2_multi_curve().and_then(|p| p.object.as_ref()).map(PyMultiCurve::from)
     };
 }
 
 macro_rules! py_ts_lod0_multi_surface {
     ($self:ident) => {
-        $self.inner.lod0_multi_surface().map(PyMultiSurface::from)
+        $self.inner.lod0_multi_surface().and_then(|p| p.object.as_ref()).map(PyMultiSurface::from)
     };
 }
 
 macro_rules! py_ts_lod2_multi_surface {
     ($self:ident) => {
-        $self.inner.lod2_multi_surface().map(PyMultiSurface::from)
+        $self.inner.lod2_multi_surface().and_then(|p| p.object.as_ref()).map(PyMultiSurface::from)
     };
 }
 
 macro_rules! py_ts_lod3_multi_surface {
     ($self:ident) => {
-        $self.inner.lod3_multi_surface().map(PyMultiSurface::from)
+        $self.inner.lod3_multi_surface().and_then(|p| p.object.as_ref()).map(PyMultiSurface::from)
     };
 }
 
@@ -1055,7 +1055,7 @@ impl PyRoad {
     #[getter]
     pub fn section(&self) -> Vec<PySection> {
         self.inner
-            .sections
+            .sections()
             .iter()
             .filter_map(|p| p.object.as_ref())
             .map(PySection::from)
@@ -1065,7 +1065,7 @@ impl PyRoad {
     #[getter]
     pub fn intersection(&self) -> Vec<PyIntersection> {
         self.inner
-            .intersections
+            .intersections()
             .iter()
             .filter_map(|p| p.object.as_ref())
             .map(PyIntersection::from)
@@ -1124,7 +1124,7 @@ impl PyTinRelief {
     pub fn tin(&self) -> Option<PyTriangulatedSurface> {
         self.inner
             .tin()
-            .as_ref()
+            .and_then(|x| x.object.as_ref())
             .map(|x| PyTriangulatedSurface::from(x.clone()))
     }
 
@@ -1255,7 +1255,8 @@ impl PySolitaryVegetationObject {
     pub fn lod1_implicit_representation(&self) -> Option<PyDirectPosition> {
         self.inner
             .lod1_implicit_representation()
-            .map(|ig| PyDirectPosition::from(ig.reference_point.pos()))
+            .and_then(|ig| ig.reference_point.object.as_ref())
+            .map(|p| PyDirectPosition::from(p.pos()))
     }
 
     pub fn __repr__(&self) -> String {

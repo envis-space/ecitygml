@@ -1,10 +1,14 @@
+use crate::impl_abstract_space_boundary_mut_traits;
 use crate::impl_abstract_space_boundary_traits;
-use crate::model::common::{FeatureRef, FeatureRefMut, LevelOfDetail, TopLevelFeatureRef};
+use crate::model::common::LevelOfDetail;
+use crate::model::core::refs::FeatureKindRef;
+use crate::model::core::refs::FeatureKindRefMut;
 use crate::model::core::{
     AbstractSpaceBoundary, AsAbstractFeatureMut, AsAbstractSpaceBoundary,
     AsAbstractSpaceBoundaryMut,
 };
 use crate::model::relief::ReliefComponentProperty;
+use egml::model::base::Id;
 use egml::model::geometry::Envelope;
 use nalgebra::Isometry3;
 
@@ -16,7 +20,14 @@ pub struct ReliefFeature {
 }
 
 impl ReliefFeature {
-    pub fn new(abstract_space_boundary: AbstractSpaceBoundary, lod: LevelOfDetail) -> Self {
+    pub fn new(id: Id, lod: LevelOfDetail) -> Self {
+        Self::from_abstract_space_boundary(AbstractSpaceBoundary::new(id), lod)
+    }
+
+    pub fn from_abstract_space_boundary(
+        abstract_space_boundary: AbstractSpaceBoundary,
+        lod: LevelOfDetail,
+    ) -> Self {
         Self {
             abstract_space_boundary,
             lod,
@@ -24,7 +35,21 @@ impl ReliefFeature {
         }
     }
 
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+    pub fn relief_components(&self) -> &[ReliefComponentProperty] {
+        &self.relief_components
+    }
+
+    pub fn set_relief_components(&mut self, values: Vec<ReliefComponentProperty>) {
+        self.relief_components = values;
+    }
+
+    pub fn lod(&self) -> LevelOfDetail {
+        self.lod
+    }
+}
+
+impl ReliefFeature {
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
         std::iter::once(self.into())
             .chain(self.abstract_space_boundary.iter_features())
             .chain(
@@ -35,7 +60,7 @@ impl ReliefFeature {
             )
     }
 
-    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
         f((&mut *self).into());
         self.abstract_space_boundary.for_each_feature_mut(f);
         for prop in &mut self.relief_components {
@@ -62,24 +87,12 @@ impl ReliefFeature {
             .for_each(|x| x.apply_transform(m));
     }
 
-    pub fn relief_components(&self) -> &[ReliefComponentProperty] {
-        &self.relief_components
-    }
-
     pub fn relief_components_mut(&mut self) -> &mut Vec<ReliefComponentProperty> {
         &mut self.relief_components
     }
 
     pub fn num_relief_components(&self) -> usize {
         self.relief_components.len()
-    }
-
-    pub fn set_relief_components(&mut self, values: Vec<ReliefComponentProperty>) {
-        self.relief_components = values;
-    }
-
-    pub fn lod(&self) -> LevelOfDetail {
-        self.lod
     }
 }
 
@@ -96,21 +109,5 @@ impl AsAbstractSpaceBoundaryMut for ReliefFeature {
 }
 
 impl_abstract_space_boundary_traits!(ReliefFeature);
-
-impl<'a> From<&'a ReliefFeature> for FeatureRef<'a> {
-    fn from(item: &'a ReliefFeature) -> Self {
-        FeatureRef::ReliefFeature(item)
-    }
-}
-
-impl<'a> From<&'a mut ReliefFeature> for FeatureRefMut<'a> {
-    fn from(item: &'a mut ReliefFeature) -> Self {
-        FeatureRefMut::ReliefFeature(item)
-    }
-}
-
-impl<'a> From<&'a ReliefFeature> for TopLevelFeatureRef<'a> {
-    fn from(item: &'a ReliefFeature) -> Self {
-        TopLevelFeatureRef::ReliefFeature(item)
-    }
-}
+impl_abstract_space_boundary_mut_traits!(ReliefFeature);
+crate::impl_has_feature_type!(ReliefFeature, ReliefFeature);

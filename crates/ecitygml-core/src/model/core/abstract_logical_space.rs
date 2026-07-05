@@ -1,5 +1,7 @@
-use crate::model::common::{FeatureRef, FeatureRefMut};
+use crate::model::core::refs::FeatureKindRef;
+use crate::model::core::refs::FeatureKindRefMut;
 use crate::model::core::{AbstractSpace, AsAbstractSpace, AsAbstractSpaceMut};
+use egml::model::base::Id;
 use egml::model::geometry::Envelope;
 use nalgebra::Isometry3;
 
@@ -9,15 +11,21 @@ pub struct AbstractLogicalSpace {
 }
 
 impl AbstractLogicalSpace {
-    pub fn new(abstract_space: AbstractSpace) -> Self {
-        Self { abstract_space }
+    pub fn new(id: Id) -> Self {
+        Self::from_abstract_space(AbstractSpace::new(id))
     }
 
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+    pub fn from_abstract_space(abstract_space: AbstractSpace) -> Self {
+        Self { abstract_space }
+    }
+}
+
+impl AbstractLogicalSpace {
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
         self.abstract_space.iter_features()
     }
 
-    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
         self.abstract_space.for_each_feature_mut(f);
     }
 
@@ -61,6 +69,13 @@ macro_rules! impl_abstract_logical_space_traits {
                 &self.abstract_logical_space().abstract_space
             }
         }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_abstract_logical_space_mut_traits {
+    ($type:ty) => {
+        $crate::impl_abstract_space_mut_traits!($type);
 
         impl $crate::model::core::AsAbstractSpaceMut for $type {
             fn abstract_space_mut(&mut self) -> &mut $crate::model::core::AbstractSpace {
@@ -72,3 +87,4 @@ macro_rules! impl_abstract_logical_space_traits {
 }
 
 impl_abstract_logical_space_traits!(AbstractLogicalSpace);
+impl_abstract_logical_space_mut_traits!(AbstractLogicalSpace);

@@ -6,6 +6,12 @@ pub mod gml;
 pub use crate::gml::read::GmlReader;
 
 #[doc(inline)]
+pub use crate::gml::write::Formatting;
+
+#[doc(inline)]
+pub use crate::gml::write::GmlWriter;
+
+#[doc(inline)]
 pub use crate::error::Error;
 
 #[doc(inline)]

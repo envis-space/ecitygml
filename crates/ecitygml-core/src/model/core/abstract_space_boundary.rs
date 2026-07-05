@@ -1,5 +1,7 @@
-use crate::model::common::{FeatureRef, FeatureRefMut};
+use crate::model::core::refs::FeatureKindRef;
+use crate::model::core::refs::FeatureKindRefMut;
 use crate::model::core::{AbstractCityObject, AsAbstractCityObject, AsAbstractCityObjectMut};
+use egml::model::base::Id;
 use egml::model::geometry::Envelope;
 use nalgebra::Isometry3;
 
@@ -9,24 +11,26 @@ pub struct AbstractSpaceBoundary {
 }
 
 impl AbstractSpaceBoundary {
-    pub fn new(abstract_city_object: AbstractCityObject) -> Self {
+    pub fn new(id: Id) -> Self {
+        Self::from_abstract_city_object(AbstractCityObject::new(id))
+    }
+
+    pub fn from_abstract_city_object(abstract_city_object: AbstractCityObject) -> Self {
         Self {
             abstract_city_object,
         }
     }
-
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+}
+impl AbstractSpaceBoundary {
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
         self.abstract_city_object.iter_features()
     }
-
-    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
         self.abstract_city_object.for_each_feature_mut(f);
     }
-
     pub fn compute_envelope(&self) -> Option<Envelope> {
         self.abstract_city_object.compute_envelope()
     }
-
     pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
         self.abstract_city_object.apply_transform(m);
     }
@@ -63,6 +67,13 @@ macro_rules! impl_abstract_space_boundary_traits {
                 &self.abstract_space_boundary().abstract_city_object
             }
         }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_abstract_space_boundary_mut_traits {
+    ($type:ty) => {
+        $crate::impl_abstract_city_object_mut_traits!($type);
 
         impl $crate::model::core::AsAbstractCityObjectMut for $type {
             fn abstract_city_object_mut(&mut self) -> &mut $crate::model::core::AbstractCityObject {
@@ -74,3 +85,4 @@ macro_rules! impl_abstract_space_boundary_traits {
 }
 
 impl_abstract_space_boundary_traits!(AbstractSpaceBoundary);
+impl_abstract_space_boundary_mut_traits!(AbstractSpaceBoundary);

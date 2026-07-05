@@ -1,3 +1,4 @@
+use ecitygml_core::model::core::AsAbstractFeature;
 use ecitygml_core::operations::CityModelGeometryStore;
 use ecitygml_io::GmlReader;
 use egml::model::base::Id;
@@ -12,7 +13,7 @@ fn test_lod2_building_model_fzk() {
 
     let mut city_model_geometry_store = CityModelGeometryStore::from_city_model(city_model);
 
-    assert_eq!(city_model_geometry_store.objects_len(), 8);
+    assert_eq!(city_model_geometry_store.objects_len(), 9);
 
     let id: Id = "GML_5856d7ad-5e34-498a-817b-9544bfbb1475"
         .try_into()

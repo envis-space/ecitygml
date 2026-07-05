@@ -1,12 +1,36 @@
 use crate::Error;
-use crate::gml::codec::core::deserialize_abstract_filling_surface;
-use crate::gml::util::extract_xml_element_spans;
-use ecitygml_core::model::construction::DoorSurface;
+use crate::gml::codec::core::{
+    deserialize_abstract_filling_surface, serialize_abstract_filling_surface,
+};
+use crate::gml::util::xml_element::XmlElement;
+use crate::gml::util::{XmlNode, extract_xml_element_spans};
+use crate::gml::write::Formatting;
+use ecitygml_core::model::construction::{AsAbstractFillingSurface, DoorSurface};
+use serde::{Deserialize, Serialize};
 
 pub fn deserialize_door_surface(xml_document: &[u8]) -> Result<DoorSurface, Error> {
     let spans = extract_xml_element_spans(xml_document)?;
     let abstract_filling_surface = deserialize_abstract_filling_surface(xml_document, &spans)?;
-    let door_surface = DoorSurface::new(abstract_filling_surface);
+    let door_surface = DoorSurface::from_abstract_filling_surface(abstract_filling_surface);
 
     Ok(door_surface)
+}
+
+pub fn serialize_door_surface(
+    door_surface: &DoorSurface,
+    formatting: Formatting,
+) -> Result<XmlNode, Error> {
+    let xml_node_parts =
+        serialize_abstract_filling_surface(door_surface.abstract_filling_surface(), formatting)?;
+
+    Ok(XmlNode::new(XmlElement::DoorSurface, xml_node_parts))
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+pub struct GmlDoorSurface {}
+
+impl From<&DoorSurface> for GmlDoorSurface {
+    fn from(_item: &DoorSurface) -> Self {
+        Self {}
+    }
 }

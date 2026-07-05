@@ -23,3 +23,13 @@ impl From<GmlTrafficDirectionValue> for TrafficDirectionValue {
         }
     }
 }
+
+impl From<&TrafficDirectionValue> for GmlTrafficDirectionValue {
+    fn from(item: &TrafficDirectionValue) -> Self {
+        match item {
+            TrafficDirectionValue::Forwards => GmlTrafficDirectionValue::Forwards,
+            TrafficDirectionValue::Backwards => GmlTrafficDirectionValue::Backwards,
+            TrafficDirectionValue::Both => GmlTrafficDirectionValue::Both,
+        }
+    }
+}

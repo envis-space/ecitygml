@@ -1,14 +1,25 @@
 use crate::Error;
-use crate::gml::codec::construction::abstract_filling_element::deserialize_abstract_filling_element;
-use crate::gml::util::extract_xml_element_spans;
-use ecitygml_core::model::construction::Window;
+use crate::gml::codec::construction::abstract_filling_element::{
+    deserialize_abstract_filling_element, serialize_abstract_filling_element,
+};
+use crate::gml::util::xml_element::XmlElement;
+use crate::gml::util::{XmlNode, extract_xml_element_spans};
+use crate::gml::write::Formatting;
+use ecitygml_core::model::construction::{AsAbstractFillingElement, Window};
 
 pub fn deserialize_window(xml_document: &[u8]) -> Result<Window, Error> {
     let spans = extract_xml_element_spans(xml_document)?;
     let abstract_filling_element = deserialize_abstract_filling_element(xml_document, &spans)?;
-    let window = Window::new(abstract_filling_element);
+    let window = Window::from_abstract_filling_element(abstract_filling_element);
 
     Ok(window)
+}
+
+pub fn serialize_window(window: &Window, formatting: Formatting) -> Result<XmlNode, Error> {
+    let xml_node_parts =
+        serialize_abstract_filling_element(window.abstract_filling_element(), formatting)?;
+
+    Ok(XmlNode::new(XmlElement::Window, xml_node_parts))
 }
 
 #[cfg(test)]

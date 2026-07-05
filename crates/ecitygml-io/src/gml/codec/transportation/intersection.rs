@@ -1,15 +1,62 @@
 use crate::Error;
-use crate::gml::codec::transportation::abstract_transportation_space::deserialize_abstract_transportation_space;
-use crate::gml::util::extract_xml_element_spans;
-use ecitygml_core::model::transportation::Intersection;
+use crate::gml::codec::transportation::abstract_transportation_space::{
+    deserialize_abstract_transportation_space, serialize_abstract_transportation_space,
+};
+use crate::gml::util::xml_element::XmlElement;
+use crate::gml::util::{XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner};
+use crate::gml::write::Formatting;
+use ecitygml_core::model::transportation::{AsAbstractTransportationSpace, Intersection};
+use egml::io::GmlCode;
+use quick_xml::de;
+use serde::{Deserialize, Serialize};
 
 pub fn deserialize_intersection(xml_document: &[u8]) -> Result<Intersection, Error> {
     let spans = extract_xml_element_spans(xml_document)?;
-    let abstract_transportation_space =
-        deserialize_abstract_transportation_space(xml_document, &spans)?;
-    let intersection = Intersection::new(abstract_transportation_space);
+    let (abstract_transportation_space_result, parsed_result) = rayon::join(
+        || deserialize_abstract_transportation_space(xml_document, &spans),
+        || de::from_reader::<_, GmlIntersection>(xml_document).map_err(Error::from),
+    );
+    let abstract_transportation_space = abstract_transportation_space_result?;
+    let parsed = parsed_result?;
+
+    let mut intersection =
+        Intersection::from_abstract_transportation_space(abstract_transportation_space);
+    intersection.set_class(parsed.class.map(Into::into));
 
     Ok(intersection)
+}
+
+pub fn serialize_intersection(
+    intersection: &Intersection,
+    formatting: Formatting,
+) -> Result<XmlNode, Error> {
+    let mut xml_node_parts = serialize_abstract_transportation_space(
+        intersection.abstract_transportation_space(),
+        formatting,
+    )?;
+
+    if let Some(raw) = serialize_inner(GmlIntersection::from(intersection), formatting)? {
+        xml_node_parts.content.push(XmlNodeContent::Raw(raw));
+    }
+
+    Ok(XmlNode::new(XmlElement::Intersection, xml_node_parts))
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+pub struct GmlIntersection {
+    #[serde(
+        rename(serialize = "tran:class", deserialize = "class"),
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub class: Option<GmlCode>,
+}
+
+impl From<&Intersection> for GmlIntersection {
+    fn from(item: &Intersection) -> Self {
+        Self {
+            class: item.class().map(Into::into),
+        }
+    }
 }
 
 #[cfg(test)]

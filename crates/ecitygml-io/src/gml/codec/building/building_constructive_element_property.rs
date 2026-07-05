@@ -1,6 +1,10 @@
 use crate::Error;
-use crate::gml::codec::building::deserialize_building_constructive_element;
-use crate::gml::util::{XmlElement, XmlElementSpans};
+use crate::gml::codec::building::{
+    deserialize_building_constructive_element, serialize_building_constructive_element,
+};
+use crate::gml::util::xml_element::XmlElement;
+use crate::gml::util::{XmlElementSpans, XmlNode, XmlNodeContent, XmlNodeParts};
+use crate::gml::write::Formatting;
 use ecitygml_core::model::building::BuildingConstructiveElementProperty;
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
@@ -21,6 +25,27 @@ pub fn deserialize_building_constructive_element_property(
     }
 
     Ok(building_constructive_element_property)
+}
+
+pub fn serialize_building_constructive_element_property(
+    building_constructive_element_property: &BuildingConstructiveElementProperty,
+    formatting: Formatting,
+) -> Result<XmlNode, Error> {
+    let mut parts = XmlNodeParts::empty();
+    if let Some(href) = &building_constructive_element_property.href {
+        parts
+            .attributes
+            .push(("xlink:href".to_string(), href.clone()));
+    }
+    if let Some(object) = &building_constructive_element_property.object {
+        parts.content.push(XmlNodeContent::Child(
+            serialize_building_constructive_element(object, formatting)?,
+        ));
+    }
+    Ok(XmlNode::new(
+        XmlElement::BuildingConstructiveElementProperty,
+        parts,
+    ))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]

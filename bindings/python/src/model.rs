@@ -1,7 +1,12 @@
 use crate::city_objects::{
     PyBuilding, PyCityFurniture, PyReliefFeature, PyRoad, PySolitaryVegetationObject, PyTinRelief,
 };
-use ecitygml_rs::model::common::{FeatureRef, TopLevelFeatureRef};
+use ecitygml_rs::model::building::Building as RustBuilding;
+use ecitygml_rs::model::city_furniture::CityFurniture as RustCityFurniture;
+use ecitygml_rs::model::core::refs::FeatureKindRef;
+use ecitygml_rs::model::relief::{ReliefFeature as RustReliefFeature, TinRelief as RustTinRelief};
+use ecitygml_rs::model::transportation::Road as RustRoad;
+use ecitygml_rs::model::vegetation::SolitaryVegetationObject as RustSolitaryVegetationObject;
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::*;
 
@@ -80,52 +85,47 @@ impl PyCityModel {
 
     pub fn buildings(&self) -> Vec<PyBuilding> {
         self.inner
-            .iter_top_level_features()
-            .filter_map(|x| match x {
-                TopLevelFeatureRef::Building(b) => Some(PyBuilding::from(b)),
-                _ => None,
-            })
+            .iter_features()
+            .filter_map(|x: FeatureKindRef| <&RustBuilding>::try_from(x).ok().map(PyBuilding::from))
             .collect()
     }
 
     pub fn roads(&self) -> Vec<PyRoad> {
         self.inner
-            .iter_top_level_features()
-            .filter_map(|x| match x {
-                TopLevelFeatureRef::Road(r) => Some(PyRoad::from(r)),
-                _ => None,
-            })
+            .iter_features()
+            .filter_map(|x: FeatureKindRef| <&RustRoad>::try_from(x).ok().map(PyRoad::from))
             .collect()
     }
 
     pub fn solitary_vegetation_objects(&self) -> Vec<PySolitaryVegetationObject> {
         self.inner
-            .iter_top_level_features()
-            .filter_map(|x| match x {
-                TopLevelFeatureRef::SolitaryVegetationObject(v) => {
-                    Some(PySolitaryVegetationObject::from(v))
-                }
-                _ => None,
+            .iter_features()
+            .filter_map(|x: FeatureKindRef| {
+                <&RustSolitaryVegetationObject>::try_from(x)
+                    .ok()
+                    .map(PySolitaryVegetationObject::from)
             })
             .collect()
     }
 
     pub fn city_furniture_objects(&self) -> Vec<PyCityFurniture> {
         self.inner
-            .iter_top_level_features()
-            .filter_map(|x| match x {
-                TopLevelFeatureRef::CityFurniture(cf) => Some(PyCityFurniture::from(cf)),
-                _ => None,
+            .iter_features()
+            .filter_map(|x: FeatureKindRef| {
+                <&RustCityFurniture>::try_from(x)
+                    .ok()
+                    .map(PyCityFurniture::from)
             })
             .collect()
     }
 
     pub fn relief_features(&self) -> Vec<PyReliefFeature> {
         self.inner
-            .iter_top_level_features()
-            .filter_map(|x| match x {
-                TopLevelFeatureRef::ReliefFeature(rf) => Some(PyReliefFeature::from(rf)),
-                _ => None,
+            .iter_features()
+            .filter_map(|x: FeatureKindRef| {
+                <&RustReliefFeature>::try_from(x)
+                    .ok()
+                    .map(PyReliefFeature::from)
             })
             .collect()
     }
@@ -133,9 +133,8 @@ impl PyCityModel {
     pub fn tin_reliefs(&self) -> Vec<PyTinRelief> {
         self.inner
             .iter_features()
-            .filter_map(|x| match x {
-                FeatureRef::TinRelief(tr) => Some(PyTinRelief::from(tr)),
-                _ => None,
+            .filter_map(|x: FeatureKindRef| {
+                <&RustTinRelief>::try_from(x).ok().map(PyTinRelief::from)
             })
             .collect()
     }
@@ -145,6 +144,9 @@ impl PyCityModel {
     }
 
     pub fn __repr__(&self) -> String {
-        format!("CityModel({} city objects)", self.inner.city_object_members_len())
+        format!(
+            "CityModel({} city objects)",
+            self.inner.city_object_members_len()
+        )
     }
 }

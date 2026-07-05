@@ -1,13 +1,14 @@
-use ecitygml_core::model::common::TopLevelFeatureRef;
+use ecitygml_core::model::building::Building;
 use ecitygml_core::model::construction::{
     AsAbstractConstructionSurface, DoorSurface, FillingSurfaceKind, GroundSurface, WindowSurface,
 };
 use ecitygml_core::model::construction::{ConstructionSurfaceKind, RoofSurface, WallSurface};
+use ecitygml_core::model::core::enums::RelativeToTerrain;
 use ecitygml_core::model::core::{
-    AsAbstractCityObject, AsAbstractFeature, AsAbstractSpace, RelativeToTerrain, SpaceBoundaryKind,
+    AsAbstractCityObject, AsAbstractFeature, AsAbstractSpace, SpaceBoundaryKind,
     ThematicSurfaceKind,
 };
-use ecitygml_core::model::transportation::AsAbstractTransportationSpace;
+use ecitygml_core::model::transportation::{AsAbstractTransportationSpace, Road};
 use ecitygml_io::GmlReader;
 
 fn collect_wall_surfaces(building: &ecitygml_core::model::building::Building) -> Vec<&WallSurface> {
@@ -70,12 +71,9 @@ fn test_lod1_building_model_fzk() {
 
     assert_eq!(city_model.city_object_members_len(), 1);
 
-    let buildings: Vec<_> = city_model
-        .iter_top_level_features()
-        .filter_map(|x| match x {
-            TopLevelFeatureRef::Building(building) => Some(building),
-            _ => None,
-        })
+    let buildings: Vec<&Building> = city_model
+        .iter_features()
+        .flat_map(|x| x.try_into())
         .collect();
     assert_eq!(buildings.len(), 1);
     let building = buildings.first().expect("should work");
@@ -97,12 +95,9 @@ fn test_lod2_building_model_fzk() {
 
     assert_eq!(city_model.city_object_members_len(), 1);
 
-    let buildings: Vec<_> = city_model
-        .iter_top_level_features()
-        .filter_map(|x| match x {
-            TopLevelFeatureRef::Building(building) => Some(building),
-            _ => None,
-        })
+    let buildings: Vec<&Building> = city_model
+        .iter_features()
+        .flat_map(|x| x.try_into())
         .collect();
     assert_eq!(buildings.len(), 1);
     let building = buildings.first().expect("should work");
@@ -125,12 +120,9 @@ fn test_lod3_building_model_fzk() {
             .expect("should work");
 
     assert_eq!(city_model.city_object_members_len(), 1);
-    let buildings: Vec<_> = city_model
-        .iter_top_level_features()
-        .filter_map(|x| match x {
-            TopLevelFeatureRef::Building(building) => Some(building),
-            _ => None,
-        })
+    let buildings: Vec<&Building> = city_model
+        .iter_features()
+        .flat_map(|x| x.try_into())
         .collect();
     assert_eq!(buildings.len(), 1);
 
@@ -140,7 +132,7 @@ fn test_lod3_building_model_fzk() {
         "UUID_d281adfc-4901-0f52-540b-4cc1a9325f82"
     );
     assert_eq!(
-        *building.relative_to_terrain().expect("should work"),
+        building.relative_to_terrain().expect("should work"),
         RelativeToTerrain::EntirelyAboveTerrain
     );
 
@@ -171,12 +163,9 @@ fn test_lod2_building_model_tum() {
 
     assert_eq!(city_model.city_object_members_len(), 1);
 
-    let buildings: Vec<_> = city_model
-        .iter_top_level_features()
-        .filter_map(|x| match x {
-            TopLevelFeatureRef::Building(building) => Some(building),
-            _ => None,
-        })
+    let buildings: Vec<&Building> = city_model
+        .iter_features()
+        .flat_map(|x| x.try_into())
         .collect();
     let building = buildings.first().expect("should work");
     assert_eq!(building.id().to_string(), "DEBY_LOD2_4959457");
@@ -196,20 +185,17 @@ fn test_road_model_asam_junction() {
 
     assert_eq!(city_model.city_object_members_len(), 1);
 
-    let roads: Vec<_> = city_model
-        .iter_top_level_features()
-        .filter_map(|x| match x {
-            TopLevelFeatureRef::Road(road) => Some(road),
-            _ => None,
-        })
+    let roads: Vec<&Road> = city_model
+        .iter_features()
+        .flat_map(|x| x.try_into())
         .collect();
     assert_eq!(roads.len(), 1);
     let road = roads.first().expect("should work");
-    assert_eq!(road.sections.len(), 3);
-    assert_eq!(road.intersections.len(), 1);
+    assert_eq!(road.sections().len(), 3);
+    assert_eq!(road.intersections().len(), 1);
 
     let intersection = road
-        .intersections
+        .intersections()
         .first()
         .expect("should work")
         .object
@@ -227,19 +213,16 @@ fn test_road_model_asam_road_shape() {
 
     assert_eq!(city_model.city_object_members_len(), 1);
 
-    let roads: Vec<_> = city_model
-        .iter_top_level_features()
-        .filter_map(|x| match x {
-            TopLevelFeatureRef::Road(road) => Some(road),
-            _ => None,
-        })
+    let roads: Vec<&Road> = city_model
+        .iter_features()
+        .flat_map(|x| x.try_into())
         .collect();
     assert_eq!(roads.len(), 1);
     let road = roads.first().expect("should work");
-    assert_eq!(road.sections.len(), 1);
+    assert_eq!(road.sections().len(), 1);
 
     let section = road
-        .sections
+        .sections()
         .first()
         .expect("should work")
         .object

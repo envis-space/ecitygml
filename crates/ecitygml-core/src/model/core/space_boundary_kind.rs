@@ -1,5 +1,8 @@
+use crate::impl_abstract_space_boundary_mut_traits;
 use crate::impl_abstract_space_boundary_traits;
-use crate::model::common::{FeatureRef, FeatureRefMut, TopLevelFeatureRef};
+use crate::model::common::{FeatureType, HasFeatureType};
+use crate::model::core::refs::FeatureKindRef;
+use crate::model::core::refs::FeatureKindRefMut;
 use crate::model::core::{
     AbstractSpaceBoundary, AsAbstractSpaceBoundary, AsAbstractSpaceBoundaryMut, ThematicSurfaceKind,
 };
@@ -17,7 +20,7 @@ pub enum SpaceBoundaryKind {
 
 impl SpaceBoundaryKind {
     #[auto_enum(Iterator)]
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
         match self {
             SpaceBoundaryKind::ThematicSurfaceKind(x) => x.iter_features(),
             SpaceBoundaryKind::ReliefFeature(x) => x.iter_features(),
@@ -25,7 +28,7 @@ impl SpaceBoundaryKind {
         }
     }
 
-    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
         match self {
             SpaceBoundaryKind::ThematicSurfaceKind(x) => x.for_each_feature_mut(f),
             SpaceBoundaryKind::ReliefFeature(x) => x.for_each_feature_mut(f),
@@ -79,34 +82,14 @@ impl AsAbstractSpaceBoundaryMut for SpaceBoundaryKind {
 }
 
 impl_abstract_space_boundary_traits!(SpaceBoundaryKind);
+impl_abstract_space_boundary_mut_traits!(SpaceBoundaryKind);
 
-impl<'a> From<&'a SpaceBoundaryKind> for FeatureRef<'a> {
-    fn from(item: &'a SpaceBoundaryKind) -> Self {
-        match item {
-            SpaceBoundaryKind::ThematicSurfaceKind(x) => x.into(),
-            SpaceBoundaryKind::ReliefFeature(x) => x.into(),
-            SpaceBoundaryKind::ReliefComponentKind(x) => x.into(),
-        }
-    }
-}
-
-impl<'a> TryFrom<&'a SpaceBoundaryKind> for TopLevelFeatureRef<'a> {
-    type Error = ();
-    fn try_from(item: &'a SpaceBoundaryKind) -> Result<Self, ()> {
-        match item {
-            SpaceBoundaryKind::ThematicSurfaceKind(x) => x.try_into(),
-            SpaceBoundaryKind::ReliefFeature(x) => Ok(x.into()),
-            SpaceBoundaryKind::ReliefComponentKind(_) => Err(()),
-        }
-    }
-}
-
-impl<'a> From<&'a mut SpaceBoundaryKind> for FeatureRefMut<'a> {
-    fn from(item: &'a mut SpaceBoundaryKind) -> Self {
-        match item {
-            SpaceBoundaryKind::ThematicSurfaceKind(x) => x.into(),
-            SpaceBoundaryKind::ReliefFeature(x) => x.into(),
-            SpaceBoundaryKind::ReliefComponentKind(x) => x.into(),
+impl HasFeatureType for SpaceBoundaryKind {
+    fn feature_type(&self) -> FeatureType {
+        match self {
+            Self::ThematicSurfaceKind(x) => x.feature_type(),
+            Self::ReliefFeature(x) => x.feature_type(),
+            Self::ReliefComponentKind(x) => x.feature_type(),
         }
     }
 }
@@ -128,3 +111,26 @@ macro_rules! impl_from_for_space_boundary_kind {
 impl_from_for_space_boundary_kind!(ReliefFeature);
 impl_from_for_space_boundary_kind!(ThematicSurfaceKind);
 impl_from_for_space_boundary_kind!(ReliefComponentKind);
+
+#[macro_export]
+macro_rules! impl_try_from_for_space_boundary_kind {
+    ($variant:ident, $type:ty) => {
+        impl TryFrom<$crate::model::core::SpaceBoundaryKind> for $type {
+            type Error = ();
+            fn try_from(x: $crate::model::core::SpaceBoundaryKind) -> Result<Self, ()> {
+                match x {
+                    $crate::model::core::SpaceBoundaryKind::$variant(k) => {
+                        k.try_into().map_err(|_| ())
+                    }
+                    #[allow(unreachable_patterns)]
+                    _ => Err(()),
+                }
+            }
+        }
+        $crate::impl_try_from_for_city_object_kind!(SpaceBoundaryKind, $type);
+    };
+    ($variant:ident) => {
+        $crate::impl_try_from_for_space_boundary_kind!($variant, $variant);
+    };
+}
+impl_try_from_for_space_boundary_kind!(ReliefFeature);

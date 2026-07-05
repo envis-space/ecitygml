@@ -1,9 +1,12 @@
+use crate::impl_abstract_construction_mut_traits;
 use crate::impl_abstract_construction_traits;
 use crate::model::building::BuildingKind;
-use crate::model::common::{FeatureRef, FeatureRefMut, TopLevelFeatureRef};
+use crate::model::common::{FeatureType, HasFeatureType};
 use crate::model::construction::{
     AbstractConstruction, AsAbstractConstruction, AsAbstractConstructionMut,
 };
+use crate::model::core::refs::FeatureKindRef;
+use crate::model::core::refs::FeatureKindRefMut;
 use egml::model::geometry::Envelope;
 use nalgebra::Isometry3;
 
@@ -13,13 +16,13 @@ pub enum ConstructionKind {
 }
 
 impl ConstructionKind {
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
         match self {
             ConstructionKind::BuildingKind(x) => x.iter_features(),
         }
     }
 
-    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
         match self {
             ConstructionKind::BuildingKind(x) => x.for_each_feature_mut(f),
         }
@@ -61,28 +64,12 @@ impl AsAbstractConstructionMut for ConstructionKind {
 }
 
 impl_abstract_construction_traits!(ConstructionKind);
+impl_abstract_construction_mut_traits!(ConstructionKind);
 
-impl<'a> From<&'a ConstructionKind> for FeatureRef<'a> {
-    fn from(item: &'a ConstructionKind) -> Self {
-        match item {
-            ConstructionKind::BuildingKind(x) => x.into(),
-        }
-    }
-}
-
-impl<'a> TryFrom<&'a ConstructionKind> for TopLevelFeatureRef<'a> {
-    type Error = ();
-    fn try_from(item: &'a ConstructionKind) -> Result<Self, ()> {
-        match item {
-            ConstructionKind::BuildingKind(x) => x.try_into(),
-        }
-    }
-}
-
-impl<'a> From<&'a mut ConstructionKind> for FeatureRefMut<'a> {
-    fn from(item: &'a mut ConstructionKind) -> Self {
-        match item {
-            ConstructionKind::BuildingKind(x) => x.into(),
+impl HasFeatureType for ConstructionKind {
+    fn feature_type(&self) -> FeatureType {
+        match self {
+            Self::BuildingKind(x) => x.feature_type(),
         }
     }
 }
@@ -102,3 +89,26 @@ macro_rules! impl_from_for_construction_kind {
     };
 }
 impl_from_for_construction_kind!(BuildingKind);
+
+#[macro_export]
+macro_rules! impl_try_from_for_construction_kind {
+    ($variant:ident, $type:ty) => {
+        impl TryFrom<$crate::model::construction::ConstructionKind> for $type {
+            type Error = ();
+            fn try_from(x: $crate::model::construction::ConstructionKind) -> Result<Self, ()> {
+                match x {
+                    $crate::model::construction::ConstructionKind::$variant(k) => {
+                        k.try_into().map_err(|_| ())
+                    }
+                    #[allow(unreachable_patterns)]
+                    _ => Err(()),
+                }
+            }
+        }
+        $crate::impl_try_from_for_occupied_space_kind!(ConstructionKind, $type);
+    };
+    ($variant:ident) => {
+        $crate::impl_try_from_for_construction_kind!($variant, $variant);
+    };
+}
+impl_try_from_for_construction_kind!(BuildingKind);

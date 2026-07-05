@@ -1,15 +1,42 @@
 use crate::Error;
-use crate::gml::codec::construction::abstract_construction_surface::deserialize_abstract_construction_surface;
-use crate::gml::util::extract_xml_element_spans;
-use ecitygml_core::model::construction::WallSurface;
+use crate::gml::codec::construction::abstract_construction_surface::{
+    deserialize_abstract_construction_surface, serialize_abstract_construction_surface,
+};
+use crate::gml::util::xml_element::XmlElement;
+use crate::gml::util::{XmlNode, extract_xml_element_spans};
+use crate::gml::write::Formatting;
+use ecitygml_core::model::construction::{AsAbstractConstructionSurface, WallSurface};
+use serde::{Deserialize, Serialize};
 
 pub fn deserialize_wall_surface(xml_document: &[u8]) -> Result<WallSurface, Error> {
     let spans = extract_xml_element_spans(xml_document)?;
     let abstract_construction_surface =
         deserialize_abstract_construction_surface(xml_document, &spans)?;
-    let wall_surface = WallSurface::new(abstract_construction_surface);
+    let wall_surface =
+        WallSurface::from_abstract_construction_surface(abstract_construction_surface);
 
     Ok(wall_surface)
+}
+
+pub fn serialize_wall_surface(
+    wall_surface: &WallSurface,
+    formatting: Formatting,
+) -> Result<XmlNode, Error> {
+    let xml_node_parts = serialize_abstract_construction_surface(
+        wall_surface.abstract_construction_surface(),
+        formatting,
+    )?;
+
+    Ok(XmlNode::new(XmlElement::WallSurface, xml_node_parts))
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
+pub struct GmlWallSurface {}
+
+impl From<&WallSurface> for GmlWallSurface {
+    fn from(_item: &WallSurface) -> Self {
+        Self {}
+    }
 }
 
 #[cfg(test)]

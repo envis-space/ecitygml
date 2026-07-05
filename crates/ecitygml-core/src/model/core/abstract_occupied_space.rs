@@ -1,7 +1,10 @@
-use crate::model::common::{FeatureRef, FeatureRefMut, LevelOfDetail};
+use crate::model::common::LevelOfDetail;
+use crate::model::core::refs::FeatureKindRef;
+use crate::model::core::refs::FeatureKindRefMut;
 use crate::model::core::{
     AbstractPhysicalSpace, AsAbstractSpace, AsAbstractSpaceMut, ImplicitGeometry,
 };
+use egml::model::base::Id;
 use egml::model::geometry::Envelope;
 use nalgebra::Isometry3;
 use std::collections::HashMap;
@@ -9,13 +12,17 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbstractOccupiedSpace {
     pub(crate) abstract_physical_space: AbstractPhysicalSpace,
-    pub(crate) lod1_implicit_representation: Option<ImplicitGeometry>,
-    pub(crate) lod2_implicit_representation: Option<ImplicitGeometry>,
-    pub(crate) lod3_implicit_representation: Option<ImplicitGeometry>,
+    lod1_implicit_representation: Option<ImplicitGeometry>,
+    lod2_implicit_representation: Option<ImplicitGeometry>,
+    lod3_implicit_representation: Option<ImplicitGeometry>,
 }
 
 impl AbstractOccupiedSpace {
-    pub fn new(abstract_physical_space: AbstractPhysicalSpace) -> Self {
+    pub fn new(id: Id) -> Self {
+        Self::from_abstract_physical_space(AbstractPhysicalSpace::new(id))
+    }
+
+    pub fn from_abstract_physical_space(abstract_physical_space: AbstractPhysicalSpace) -> Self {
         Self {
             abstract_physical_space,
             lod1_implicit_representation: None,
@@ -23,15 +30,14 @@ impl AbstractOccupiedSpace {
             lod3_implicit_representation: None,
         }
     }
-
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureRef<'a>> + 'a {
+}
+impl AbstractOccupiedSpace {
+    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
         self.abstract_physical_space.iter_features()
     }
-
-    pub fn for_each_feature_mut<F: FnMut(FeatureRefMut<'_>)>(&mut self, f: &mut F) {
+    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
         self.abstract_physical_space.for_each_feature_mut(f);
     }
-
     pub fn compute_envelope(&self) -> Option<Envelope> {
         let envelopes: Vec<Envelope> = vec![
             self.abstract_physical_space.compute_envelope(),
@@ -48,7 +54,6 @@ impl AbstractOccupiedSpace {
 
         Envelope::from_envelopes(&envelopes)
     }
-
     pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
         self.abstract_physical_space.apply_transform(m);
 
@@ -126,6 +131,24 @@ pub trait AsAbstractOccupiedSpaceMut: AsAbstractSpaceMut + AsAbstractOccupiedSpa
         self.abstract_occupied_space_mut()
             .lod3_implicit_representation = value;
     }
+
+    fn lod1_implicit_representation_mut(&mut self) -> Option<&mut ImplicitGeometry> {
+        self.abstract_occupied_space_mut()
+            .lod1_implicit_representation
+            .as_mut()
+    }
+
+    fn lod2_implicit_representation_mut(&mut self) -> Option<&mut ImplicitGeometry> {
+        self.abstract_occupied_space_mut()
+            .lod2_implicit_representation
+            .as_mut()
+    }
+
+    fn lod3_implicit_representation_mut(&mut self) -> Option<&mut ImplicitGeometry> {
+        self.abstract_occupied_space_mut()
+            .lod3_implicit_representation
+            .as_mut()
+    }
 }
 
 impl AsAbstractOccupiedSpace for AbstractOccupiedSpace {
@@ -151,6 +174,13 @@ macro_rules! impl_abstract_occupied_space_traits {
                 &self.abstract_occupied_space().abstract_physical_space
             }
         }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_abstract_occupied_space_mut_traits {
+    ($type:ty) => {
+        $crate::impl_abstract_physical_space_mut_traits!($type);
 
         impl $crate::model::core::AsAbstractPhysicalSpaceMut for $type {
             fn abstract_physical_space_mut(
@@ -164,3 +194,4 @@ macro_rules! impl_abstract_occupied_space_traits {
 }
 
 impl_abstract_occupied_space_traits!(AbstractOccupiedSpace);
+impl_abstract_occupied_space_mut_traits!(AbstractOccupiedSpace);

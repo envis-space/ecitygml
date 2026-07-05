@@ -1,6 +1,10 @@
 use crate::Error;
-use crate::gml::codec::construction::filling_surface_kind::deserialize_filling_surface_kind;
-use crate::gml::util::XmlElementSpans;
+use crate::gml::codec::construction::filling_surface_kind::{
+    deserialize_filling_surface_kind, serialize_filling_surface_kind,
+};
+use crate::gml::util::xml_element::XmlElement;
+use crate::gml::util::{XmlElementSpans, XmlNode, XmlNodeContent, XmlNodeParts};
+use crate::gml::write::Formatting;
 use ecitygml_core::model::construction::FillingSurfaceProperty;
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
@@ -15,6 +19,29 @@ pub fn deserialize_filling_surface_property(
     filling_surface_property.object = deserialize_filling_surface_kind(xml_document, spans)?;
 
     Ok(filling_surface_property)
+}
+
+pub fn serialize_filling_surface_property(
+    filling_surface_property: &FillingSurfaceProperty,
+    formatting: Formatting,
+) -> Result<XmlNode, Error> {
+    let mut parts = XmlNodeParts::empty();
+
+    if let Some(href) = &filling_surface_property.href {
+        parts
+            .attributes
+            .push(("xlink:href".to_string(), href.clone()));
+    }
+
+    if let Some(object) = &filling_surface_property.object {
+        parts
+            .content
+            .push(XmlNodeContent::Child(serialize_filling_surface_kind(
+                object, formatting,
+            )?));
+    }
+
+    Ok(XmlNode::new(XmlElement::FillingSurfaceProperty, parts))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]

@@ -8,7 +8,8 @@ pub fn deserialize_abstract_filling_element(
     spans: &XmlElementSpans,
 ) -> Result<AbstractFillingElement, Error> {
     let abstract_occupied_space = deserialize_abstract_occupied_space(xml_document, spans)?;
-    let abstract_filling_element = AbstractFillingElement::new(abstract_occupied_space);
+    let abstract_filling_element =
+        AbstractFillingElement::from_abstract_occupied_space(abstract_occupied_space);
 
     Ok(abstract_filling_element)
 }
