@@ -1,30 +1,37 @@
 use crate::Error;
-use crate::gml::codec::core::point_cloud_property::{
-    deserialize_point_cloud_property, serialize_point_cloud_property,
+use crate::gml::codec::core::abstract_point_cloud_property::{
+    deserialize_abstract_point_cloud_property, serialize_abstract_point_cloud_property,
 };
+use crate::gml::codec::core::qualified_area_property::GmlAreaProperty;
 use crate::gml::codec::core::{
     deserialize_abstract_space_boundary, serialize_abstract_space_boundary,
 };
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{XmlElementSpans, XmlNodeContent, XmlNodeParts};
-use crate::gml::util::{collect_child, serialize_inner};
-use crate::gml::write::Formatting;
+use crate::gml::util::{CityGmlElement, CombinedCityGmlElement, collect_gml_child_lenient};
 use ecitygml_core::model::core::{
-    AbstractThematicSurface, AsAbstractFeature, AsAbstractSpaceBoundary, AsAbstractThematicSurface,
+    AbstractThematicSurface, AsAbstractSpaceBoundary, AsAbstractThematicSurface,
     AsAbstractThematicSurfaceMut,
 };
-use egml::io::aggregates::{GmlMultiCurveProperty, GmlMultiSurfaceProperty};
-use egml::model::geometry::aggregates::{MultiCurveProperty, MultiSurfaceProperty};
+use egml::io::codec::geometry::aggregates::{
+    deserialize_multi_curve_property, deserialize_multi_surface_property,
+    serialize_multi_curve_property, serialize_multi_surface_property,
+};
+use egml::io::util::{
+    Formatting, XmlElementSpans, XmlNodeContent, XmlNodeParts, collect_child, serialize_inner,
+};
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
-use tracing::debug;
 
 pub fn deserialize_abstract_thematic_surface(
     xml_document: &[u8],
-    spans: &XmlElementSpans,
+    spans: &XmlElementSpans<CombinedCityGmlElement>,
 ) -> Result<AbstractThematicSurface, Error> {
     let mut abstract_space_boundary_result = None;
     let mut parsed_result = None;
+    let mut lod0_multi_surface_result = None;
+    let mut lod1_multi_surface_result = None;
+    let mut lod2_multi_surface_result = None;
+    let mut lod3_multi_surface_result = None;
+    let mut lod0_multi_curve_result = None;
     let mut point_cloud_result = None;
 
     rayon::scope(|s| {
@@ -38,11 +45,51 @@ pub fn deserialize_abstract_thematic_surface(
             );
         });
         s.spawn(|_| {
+            lod0_multi_surface_result = Some(collect_gml_child_lenient(
+                xml_document,
+                spans,
+                CityGmlElement::Lod0MultiSurfaceProperty.into(),
+                deserialize_multi_surface_property,
+            ));
+        });
+        s.spawn(|_| {
+            lod1_multi_surface_result = Some(collect_gml_child_lenient(
+                xml_document,
+                spans,
+                CityGmlElement::Lod1MultiSurfaceProperty.into(),
+                deserialize_multi_surface_property,
+            ));
+        });
+        s.spawn(|_| {
+            lod2_multi_surface_result = Some(collect_gml_child_lenient(
+                xml_document,
+                spans,
+                CityGmlElement::Lod2MultiSurfaceProperty.into(),
+                deserialize_multi_surface_property,
+            ));
+        });
+        s.spawn(|_| {
+            lod3_multi_surface_result = Some(collect_gml_child_lenient(
+                xml_document,
+                spans,
+                CityGmlElement::Lod3MultiSurfaceProperty.into(),
+                deserialize_multi_surface_property,
+            ));
+        });
+        s.spawn(|_| {
+            lod0_multi_curve_result = Some(collect_gml_child_lenient(
+                xml_document,
+                spans,
+                CityGmlElement::Lod0MultiCurveProperty.into(),
+                deserialize_multi_curve_property,
+            ));
+        });
+        s.spawn(|_| {
             point_cloud_result = Some(collect_child(
                 xml_document,
                 spans,
-                XmlElement::PointCloudProperty,
-                deserialize_point_cloud_property,
+                CityGmlElement::AbstractPointCloudProperty.into(),
+                deserialize_abstract_point_cloud_property,
             ));
         });
     });
@@ -50,101 +97,26 @@ pub fn deserialize_abstract_thematic_surface(
     let abstract_space_boundary =
         abstract_space_boundary_result.expect("rayon::scope guarantees all spawns complete")?;
     let parsed = parsed_result.expect("rayon::scope guarantees all spawns complete")?;
+    let lod0_multi_surface =
+        lod0_multi_surface_result.expect("rayon::scope guarantees all spawns complete");
+    let lod1_multi_surface =
+        lod1_multi_surface_result.expect("rayon::scope guarantees all spawns complete");
+    let lod2_multi_surface =
+        lod2_multi_surface_result.expect("rayon::scope guarantees all spawns complete");
+    let lod3_multi_surface =
+        lod3_multi_surface_result.expect("rayon::scope guarantees all spawns complete");
+    let lod0_multi_curve =
+        lod0_multi_curve_result.expect("rayon::scope guarantees all spawns complete");
     let point_cloud = point_cloud_result.expect("rayon::scope guarantees all spawns complete")?;
 
     let mut abstract_thematic_surface =
         AbstractThematicSurface::from_abstract_space_boundary(abstract_space_boundary);
-
-    if let Some(gml_multi_surface_property) = parsed.lod0_multi_surface {
-        let multi_surface_result: Result<MultiSurfaceProperty, egml::io::Error> =
-            gml_multi_surface_property.try_into();
-
-        match multi_surface_result {
-            Ok(x) => {
-                abstract_thematic_surface.set_lod0_multi_surface(Some(x));
-            }
-            Err(e) => {
-                debug!(
-                    "lod0_multi_surface of feature (id={}) contains invalid geometry: {}",
-                    &abstract_thematic_surface.id(),
-                    e.to_string()
-                );
-            }
-        }
-    }
-
-    if let Some(gml_multi_surface_property) = parsed.lod1_multi_surface {
-        let multi_surface_result: Result<MultiSurfaceProperty, egml::io::Error> =
-            gml_multi_surface_property.try_into();
-
-        match multi_surface_result {
-            Ok(x) => {
-                abstract_thematic_surface.set_lod1_multi_surface(Some(x));
-            }
-            Err(e) => {
-                debug!(
-                    "lod1_multi_surface of feature (id={}) contains invalid geometry: {}",
-                    &abstract_thematic_surface.id(),
-                    e.to_string()
-                );
-            }
-        }
-    }
-
-    if let Some(gml_multi_surface_property) = parsed.lod2_multi_surface {
-        let multi_surface_result: Result<MultiSurfaceProperty, egml::io::Error> =
-            gml_multi_surface_property.try_into();
-
-        match multi_surface_result {
-            Ok(x) => {
-                abstract_thematic_surface.set_lod2_multi_surface(Some(x));
-            }
-            Err(e) => {
-                debug!(
-                    "lod2_multi_surface of feature (id={}) contains invalid geometry: {}",
-                    &abstract_thematic_surface.id(),
-                    e.to_string()
-                );
-            }
-        }
-    }
-
-    if let Some(gml_multi_surface_property) = parsed.lod3_multi_surface {
-        let multi_surface_result: Result<MultiSurfaceProperty, egml::io::Error> =
-            gml_multi_surface_property.try_into();
-
-        match multi_surface_result {
-            Ok(x) => {
-                abstract_thematic_surface.set_lod3_multi_surface(Some(x));
-            }
-            Err(e) => {
-                debug!(
-                    "lod3_multi_surface of feature (id={}) contains invalid geometry: {}",
-                    &abstract_thematic_surface.id(),
-                    e.to_string()
-                );
-            }
-        }
-    }
-
-    if let Some(gml_multi_curve_property) = parsed.lod0_multi_curve {
-        let multi_curve_result: Result<MultiCurveProperty, egml::io::Error> =
-            gml_multi_curve_property.try_into();
-
-        match multi_curve_result {
-            Ok(x) => {
-                abstract_thematic_surface.set_lod0_multi_curve(Some(x));
-            }
-            Err(e) => {
-                debug!(
-                    "lod0_multi_curve of feature (id={}) contains invalid geometry: {}",
-                    &abstract_thematic_surface.id(),
-                    e.to_string()
-                );
-            }
-        }
-    }
-
+    abstract_thematic_surface.set_areas(parsed.areas.into_iter().map(Into::into).collect());
+    abstract_thematic_surface.set_lod0_multi_surface(lod0_multi_surface);
+    abstract_thematic_surface.set_lod1_multi_surface(lod1_multi_surface);
+    abstract_thematic_surface.set_lod2_multi_surface(lod2_multi_surface);
+    abstract_thematic_surface.set_lod3_multi_surface(lod3_multi_surface);
+    abstract_thematic_surface.set_lod0_multi_curve(lod0_multi_curve);
     abstract_thematic_surface.set_point_cloud(point_cloud);
 
     Ok(abstract_thematic_surface)
@@ -166,11 +138,68 @@ pub fn serialize_abstract_thematic_surface(
         xml_node_parts.content.push(XmlNodeContent::Raw(raw));
     }
 
+    if let Some(prop) = abstract_thematic_surface.lod0_multi_surface() {
+        xml_node_parts.content.push(
+            serialize_multi_surface_property(
+                prop,
+                formatting,
+                CityGmlElement::Lod0MultiSurfaceProperty.into(),
+            )
+            .map_err(Error::from)?
+            .into(),
+        );
+    }
+    if let Some(prop) = abstract_thematic_surface.lod1_multi_surface() {
+        xml_node_parts.content.push(
+            serialize_multi_surface_property(
+                prop,
+                formatting,
+                CityGmlElement::Lod1MultiSurfaceProperty.into(),
+            )
+            .map_err(Error::from)?
+            .into(),
+        );
+    }
+    if let Some(prop) = abstract_thematic_surface.lod2_multi_surface() {
+        xml_node_parts.content.push(
+            serialize_multi_surface_property(
+                prop,
+                formatting,
+                CityGmlElement::Lod2MultiSurfaceProperty.into(),
+            )
+            .map_err(Error::from)?
+            .into(),
+        );
+    }
+    if let Some(prop) = abstract_thematic_surface.lod3_multi_surface() {
+        xml_node_parts.content.push(
+            serialize_multi_surface_property(
+                prop,
+                formatting,
+                CityGmlElement::Lod3MultiSurfaceProperty.into(),
+            )
+            .map_err(Error::from)?
+            .into(),
+        );
+    }
+    if let Some(prop) = abstract_thematic_surface.lod0_multi_curve() {
+        xml_node_parts.content.push(
+            serialize_multi_curve_property(
+                prop,
+                formatting,
+                CityGmlElement::Lod0MultiCurveProperty.into(),
+            )
+            .map_err(Error::from)?
+            .into(),
+        );
+    }
     xml_node_parts.content.extend(
         abstract_thematic_surface
             .point_cloud()
             .iter()
-            .map(|x| serialize_point_cloud_property(x, formatting).map(XmlNodeContent::from))
+            .map(|x| {
+                serialize_abstract_point_cloud_property(x, formatting).map(XmlNodeContent::from)
+            })
             .collect::<Result<Vec<_>, _>>()?,
     );
 
@@ -179,30 +208,14 @@ pub fn serialize_abstract_thematic_surface(
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct GmlAbstractThematicSurface {
-    #[serde(rename = "lod0MultiSurface", skip_serializing_if = "Option::is_none")]
-    pub lod0_multi_surface: Option<GmlMultiSurfaceProperty>,
-
-    #[serde(rename = "lod1MultiSurface", skip_serializing_if = "Option::is_none")]
-    pub lod1_multi_surface: Option<GmlMultiSurfaceProperty>,
-
-    #[serde(rename = "lod2MultiSurface", skip_serializing_if = "Option::is_none")]
-    pub lod2_multi_surface: Option<GmlMultiSurfaceProperty>,
-
-    #[serde(rename = "lod3MultiSurface", skip_serializing_if = "Option::is_none")]
-    pub lod3_multi_surface: Option<GmlMultiSurfaceProperty>,
-
-    #[serde(rename = "lod0MultiCurve", skip_serializing_if = "Option::is_none")]
-    pub lod0_multi_curve: Option<GmlMultiCurveProperty>,
+    #[serde(rename = "area", default)]
+    pub areas: Vec<GmlAreaProperty>,
 }
 
 impl From<&AbstractThematicSurface> for GmlAbstractThematicSurface {
     fn from(item: &AbstractThematicSurface) -> Self {
         Self {
-            lod0_multi_surface: item.lod0_multi_surface().map(Into::into),
-            lod1_multi_surface: item.lod1_multi_surface().map(Into::into),
-            lod2_multi_surface: item.lod2_multi_surface().map(Into::into),
-            lod3_multi_surface: item.lod3_multi_surface().map(Into::into),
-            lod0_multi_curve: item.lod0_multi_curve().map(Into::into),
+            areas: item.areas().iter().map(GmlAreaProperty::from).collect(),
         }
     }
 }
@@ -210,12 +223,11 @@ impl From<&AbstractThematicSurface> for GmlAbstractThematicSurface {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gml::util::extract_xml_element_spans;
     use ecitygml_core::model::core::{
         AsAbstractCityObject, AsAbstractFeature, AsAbstractThematicSurface,
     };
+    use egml::io::util::extract_xml_element_spans;
     use egml::model::base::Id;
-    use quick_xml::{DeError, de};
 
     #[test]
     fn test_deserialize_with_lod2_multi_surface() {
@@ -247,10 +259,96 @@ mod tests {
             deserialize_abstract_thematic_surface(xml_document, &spans).expect("should work");
 
         assert_eq!(
-            abstract_thematic_surface.id(),
+            abstract_thematic_surface.feature_id(),
             &Id::try_from("test-id-123").expect("should work")
         );
         assert!(abstract_thematic_surface.lod2_multi_surface().is_some());
         assert_eq!(abstract_thematic_surface.generic_attributes().len(), 0);
+    }
+
+    #[test]
+    fn test_deserialize_abstract_thematic_surface_with_area() {
+        let xml_document = b"\
+<con:WallSurface gml:id=\"test-id-123\">
+  <area>
+    <QualifiedArea>
+      <area uom=\"m2\">5.0</area>
+      <typeOfArea>RoadArea</typeOfArea>
+    </QualifiedArea>
+  </area>
+</con:WallSurface>";
+
+        let spans = extract_xml_element_spans(xml_document).expect("should work");
+        let abstract_thematic_surface =
+            deserialize_abstract_thematic_surface(xml_document, &spans).expect("should work");
+
+        assert_eq!(abstract_thematic_surface.areas().len(), 1);
+
+        let area = &abstract_thematic_surface.areas()[0];
+        assert_eq!(area.area().value(), 5.0);
+        assert_eq!(area.area().uom(), "m2");
+        assert_eq!(area.type_of_area().code().value(), "RoadArea");
+    }
+
+    #[test]
+    fn test_serialize_abstract_thematic_surface_with_area() {
+        let xml_document = b"\
+<con:WallSurface gml:id=\"test-id-123\">
+  <area>
+    <QualifiedArea>
+      <area uom=\"m2\">5.0</area>
+      <typeOfArea>WallAreaMeasured</typeOfArea>
+    </QualifiedArea>
+  </area>
+</con:WallSurface>";
+
+        let spans = extract_xml_element_spans(xml_document).expect("should work");
+        let abstract_thematic_surface =
+            deserialize_abstract_thematic_surface(xml_document, &spans).expect("should work");
+
+        let xml_node_parts =
+            serialize_abstract_thematic_surface(&abstract_thematic_surface, Formatting::Compact)
+                .expect("should serialize");
+        let xml = egml::io::util::XmlNode::new("con:WallSurface", xml_node_parts)
+            .to_string(Formatting::Compact)
+            .expect("should convert to string");
+
+        assert!(xml.contains("<area>") || xml.contains("<area "));
+        assert!(xml.contains("QualifiedArea"));
+        assert!(xml.contains("uom=\"m2\""));
+        assert!(xml.contains('5'));
+        assert!(xml.contains("typeOfArea"));
+        assert!(xml.contains("WallAreaMeasured"));
+    }
+
+    #[test]
+    fn test_round_trip_abstract_thematic_surface_with_area() {
+        let xml_document = b"\
+<con:WallSurface gml:id=\"test-id-123\">
+  <area>
+    <QualifiedArea>
+      <area uom=\"m2\">5.0</area>
+      <typeOfArea>WallAreaMeasured</typeOfArea>
+    </QualifiedArea>
+  </area>
+</con:WallSurface>";
+
+        let spans = extract_xml_element_spans(xml_document).expect("should work");
+        let abstract_thematic_surface =
+            deserialize_abstract_thematic_surface(xml_document, &spans).expect("should work");
+
+        let xml_node_parts =
+            serialize_abstract_thematic_surface(&abstract_thematic_surface, Formatting::Compact)
+                .expect("should serialize");
+        let xml = egml::io::util::XmlNode::new("con:WallSurface", xml_node_parts)
+            .to_string(Formatting::Compact)
+            .expect("should convert to string");
+
+        let round_tripped_spans = extract_xml_element_spans(xml.as_bytes()).expect("should work");
+        let round_tripped =
+            deserialize_abstract_thematic_surface(xml.as_bytes(), &round_tripped_spans)
+                .expect("should work");
+
+        assert_eq!(abstract_thematic_surface.areas(), round_tripped.areas());
     }
 }

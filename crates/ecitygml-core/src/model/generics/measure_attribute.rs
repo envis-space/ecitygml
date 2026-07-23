@@ -1,4 +1,4 @@
-use egml::model::basic::Measure;
+use egml::model::basic_types::Measure;
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct MeasureAttribute {

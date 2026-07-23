@@ -1,6 +1,8 @@
 use crate::cli::FormattingArg;
 use crate::error::Error;
-use ecitygml::io::{Formatting, GmlWriter};
+use ecitygml::io::GmlWriter;
+use egml::io::util::Formatting;
+use egml::model::common::ApplyTransform;
 use nalgebra::{Isometry3, Translation3, UnitQuaternion};
 use std::path::Path;
 use std::time::Instant;
@@ -20,7 +22,9 @@ pub fn run(
 ) -> Result<(), Error> {
     info!("Reading: {}", input.as_ref().display());
     let read_start = Instant::now();
-    let mut city_model = ecitygml::io::GmlReader::from_path(input.as_ref())?.finish()?;
+    let mut city_model = ecitygml::io::GmlReader::from_path(input.as_ref())?
+        .with_rebuild_object_bounds(false)
+        .finish()?;
     info!("Read in {:.3?}", read_start.elapsed());
 
     let is_identity =
@@ -36,14 +40,14 @@ pub fn run(
             rz_deg.to_radians(),
         );
         let isometry = Isometry3::from_parts(translation, rotation);
-        city_model.apply_transform(&isometry);
+        city_model.apply_isometry(isometry);
     }
 
     let formatting = match formatting_arg {
         FormattingArg::Compact => Formatting::Compact,
         FormattingArg::Newline => Formatting::NewLine,
         FormattingArg::Indent => Formatting::Indent {
-            char: ' ',
+            char: '\t',
             size: indent_size,
         },
     };

@@ -2,10 +2,9 @@ use crate::Error;
 use crate::gml::codec::water_body::abstract_water_boundary_surface::{
     deserialize_abstract_water_boundary_surface, serialize_abstract_water_boundary_surface,
 };
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{XmlNode, extract_xml_element_spans};
-use crate::gml::write::Formatting;
+use crate::gml::util::CityGmlElement;
 use ecitygml_core::model::water_body::{AsAbstractWaterBoundarySurface, WaterGroundSurface};
+use egml::io::util::{Formatting, XmlNode, extract_xml_element_spans};
 use serde::{Deserialize, Serialize};
 
 pub fn deserialize_water_ground_surface(xml_document: &[u8]) -> Result<WaterGroundSurface, Error> {
@@ -27,7 +26,10 @@ pub fn serialize_water_ground_surface(
         formatting,
     )?;
 
-    Ok(XmlNode::new(XmlElement::WaterGroundSurface, xml_node_parts))
+    Ok(XmlNode::new(
+        CityGmlElement::WaterGroundSurface.into(),
+        xml_node_parts,
+    ))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]

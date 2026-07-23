@@ -3,27 +3,27 @@ use crate::gml::codec::core::basic_types::GmlIntegerBetween0And3;
 use crate::gml::codec::core::{
     deserialize_abstract_space_boundary, serialize_abstract_space_boundary,
 };
-use crate::gml::util::{XmlElementSpans, XmlNodeContent, XmlNodeParts, serialize_inner};
-use crate::gml::write::Formatting;
+use crate::gml::util::CombinedCityGmlElement;
 use ecitygml_core::model::core::AsAbstractSpaceBoundary;
 use ecitygml_core::model::relief::{AbstractReliefComponent, AsAbstractReliefComponent};
+use egml::io::util::{Formatting, XmlElementSpans, XmlNodeContent, XmlNodeParts, serialize_inner};
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
 pub fn deserialize_abstract_relief_component(
     xml_document: &[u8],
-    spans: &XmlElementSpans,
+    spans: &XmlElementSpans<CombinedCityGmlElement>,
 ) -> Result<AbstractReliefComponent, Error> {
-    let (abstract_space_boundary_result, gml_result) = rayon::join(
+    let (abstract_space_boundary_result, parsed_result) = rayon::join(
         || deserialize_abstract_space_boundary(xml_document, spans),
         || de::from_reader::<_, GmlAbstractReliefComponent>(xml_document).map_err(Error::from),
     );
     let abstract_space_boundary = abstract_space_boundary_result?;
-    let gml = gml_result?;
+    let parsed = parsed_result?;
 
     let abstract_relief_component = AbstractReliefComponent::from_abstract_space_boundary(
         abstract_space_boundary,
-        gml.lod.into(),
+        parsed.lod.into(),
     );
     Ok(abstract_relief_component)
 }
@@ -64,10 +64,10 @@ impl From<&AbstractReliefComponent> for GmlAbstractReliefComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gml::util::extract_xml_element_spans;
     use ecitygml_core::model::common::LevelOfDetail;
     use ecitygml_core::model::core::AsAbstractFeature;
     use ecitygml_core::model::relief::AsAbstractReliefComponent;
+    use egml::io::util::extract_xml_element_spans;
     use egml::model::base::Id;
 
     #[test]
@@ -83,7 +83,7 @@ mod tests {
                 .expect("should work");
 
         assert_eq!(
-            abstract_relief_component.id(),
+            abstract_relief_component.feature_id(),
             &Id::try_from("abc").unwrap()
         );
         assert_eq!(abstract_relief_component.lod(), LevelOfDetail::Two);

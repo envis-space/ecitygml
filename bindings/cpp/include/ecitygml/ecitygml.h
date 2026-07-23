@@ -14,9 +14,7 @@ typedef enum CErrorCode {
 
 typedef struct CCityModel CCityModel;
 
-typedef struct CCityModelGeometryStore CCityModelGeometryStore;
-
-typedef struct CCityObjectGeometry CCityObjectGeometry;
+typedef struct CCityModelArena CCityModelArena;
 
 typedef struct CEnvelope CEnvelope;
 
@@ -24,28 +22,22 @@ typedef struct CGmlReader CGmlReader;
 
 enum CErrorCode city_model_destroy(struct CCityModel *handle);
 
-enum CErrorCode city_model_geometry_store_create(struct CCityModel *city_model,
-                                                 struct CCityModelGeometryStore **out);
+enum CErrorCode city_model_arena_create(struct CCityModel *city_model,
+                                        struct CCityModelArena **out);
 
-enum CErrorCode city_model_geometry_store_destroy(struct CCityModelGeometryStore *handle);
+enum CErrorCode city_model_arena_destroy(struct CCityModelArena *handle);
 
-enum CErrorCode city_model_geometry_store_objects_len(struct CCityModelGeometryStore *handle,
-                                                      uintptr_t *out);
+enum CErrorCode city_model_arena_objects_len(struct CCityModelArena *handle, uintptr_t *out);
 
-enum CErrorCode city_model_geometry_store_get_object_ids(struct CCityModelGeometryStore *handle,
-                                                         char ***out_ptr,
-                                                         uintptr_t *out_len);
+enum CErrorCode city_model_arena_get_object_ids(struct CCityModelArena *handle,
+                                                char ***out_ptr,
+                                                uintptr_t *out_len);
 
-enum CErrorCode city_model_geometry_store_free_object_ids(char **ptr, uintptr_t len);
+enum CErrorCode city_model_arena_free_object_ids(char **ptr, uintptr_t len);
 
-enum CErrorCode city_model_geometry_store_get(struct CCityModelGeometryStore *handle,
+enum CErrorCode city_model_arena_get_envelope(struct CCityModelArena *handle,
                                               const char *id,
-                                              struct CCityObjectGeometry **out);
-
-enum CErrorCode city_object_geometry_envelope(struct CCityObjectGeometry *handle,
                                               struct CEnvelope **out);
-
-enum CErrorCode city_object_geometry_destroy(struct CCityObjectGeometry *handle);
 
 enum CErrorCode gml_reader_create(const char *file_path, struct CGmlReader **out);
 

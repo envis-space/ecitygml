@@ -1,11 +1,12 @@
+use crate::Error;
 use crate::gml::codec::core::{deserialize_abstract_feature, serialize_abstract_feature};
-use crate::gml::util::{XmlElementSpans, XmlNodeParts};
-use crate::{Error, Formatting};
+use crate::gml::util::CombinedCityGmlElement;
 use ecitygml_core::model::core::{AbstractPointCloud, AsAbstractFeature};
+use egml::io::util::{Formatting, XmlElementSpans, XmlNodeParts};
 
 pub fn deserialize_abstract_point_cloud(
     xml_document: &[u8],
-    spans: &XmlElementSpans,
+    spans: &XmlElementSpans<CombinedCityGmlElement>,
 ) -> Result<AbstractPointCloud, Error> {
     let abstract_feature = deserialize_abstract_feature(xml_document, spans)?;
     let abstract_point_cloud = AbstractPointCloud::from_abstract_feature(abstract_feature);

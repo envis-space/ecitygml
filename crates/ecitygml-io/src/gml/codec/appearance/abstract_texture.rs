@@ -1,13 +1,13 @@
 use crate::Error;
 
-use crate::gml::util::{XmlElementSpans, XmlNodeContent, XmlNodeParts, serialize_inner};
-use crate::gml::write::Formatting;
+use egml::io::util::{Formatting, XmlElementSpans, XmlNodeContent, XmlNodeParts, serialize_inner};
 
 use crate::gml::codec::appearance::abstract_surface_data::{
     deserialize_abstract_surface_data, serialize_abstract_surface_data,
 };
 use crate::gml::codec::appearance::basic_types::GmlColorPlusOpacity;
 use crate::gml::codec::appearance::enums::{GmlTextureType, GmlWrapMode};
+use crate::gml::util::CombinedCityGmlElement;
 use ecitygml_core::model::appearance::{
     AbstractTexture, AsAbstractSurfaceData, AsAbstractTexture, AsAbstractTextureMut,
 };
@@ -16,20 +16,20 @@ use serde::{Deserialize, Serialize};
 
 pub fn deserialize_abstract_texture(
     xml_document: &[u8],
-    spans: &XmlElementSpans,
+    spans: &XmlElementSpans<CombinedCityGmlElement>,
 ) -> Result<AbstractTexture, Error> {
     let (abstract_surface_data_result, gml_result) = rayon::join(
         || deserialize_abstract_surface_data(xml_document, spans),
         || de::from_reader::<_, GmlAbstractTexture>(xml_document).map_err(Error::from),
     );
     let abstract_feature = abstract_surface_data_result?;
-    let gml = gml_result?;
+    let parsed = gml_result?;
 
     let mut abstract_texture = AbstractTexture::from_abstract_surface_data(abstract_feature);
-    abstract_texture.set_image_uri(gml.image_uri);
-    abstract_texture.set_texture_type(gml.texture_type.map(Into::into));
-    abstract_texture.set_wrap_mode(gml.wrap_mode.map(Into::into));
-    abstract_texture.set_border_color(gml.border_color.map(TryInto::try_into).transpose()?);
+    abstract_texture.set_image_uri(parsed.image_uri);
+    abstract_texture.set_texture_type(parsed.texture_type.map(Into::into));
+    abstract_texture.set_wrap_mode(parsed.wrap_mode.map(Into::into));
+    abstract_texture.set_border_color(parsed.border_color.map(TryInto::try_into).transpose()?);
 
     Ok(abstract_texture)
 }

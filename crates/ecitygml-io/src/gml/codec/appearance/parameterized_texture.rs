@@ -2,10 +2,9 @@ use crate::Error;
 use crate::gml::codec::appearance::abstract_texture::{
     deserialize_abstract_texture, serialize_abstract_texture,
 };
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{XmlNode, extract_xml_element_spans};
-use crate::gml::write::Formatting;
+use crate::gml::util::CityGmlElement;
 use ecitygml_core::model::appearance::{AsAbstractTexture, ParameterizedTexture};
+use egml::io::util::{Formatting, XmlNode, extract_xml_element_spans};
 
 pub fn deserialize_parameterized_texture(
     xml_document: &[u8],
@@ -25,7 +24,7 @@ pub fn serialize_parameterized_texture(
         serialize_abstract_texture(parameterized_texture.abstract_texture(), formatting)?;
 
     Ok(XmlNode::new(
-        XmlElement::ParameterizedTexture,
+        CityGmlElement::ParameterizedTexture.into(),
         xml_node_parts,
     ))
 }

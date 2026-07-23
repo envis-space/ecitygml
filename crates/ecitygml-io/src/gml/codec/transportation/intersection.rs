@@ -2,11 +2,14 @@ use crate::Error;
 use crate::gml::codec::transportation::abstract_transportation_space::{
     deserialize_abstract_transportation_space, serialize_abstract_transportation_space,
 };
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner};
-use crate::gml::write::Formatting;
+use crate::gml::util::CityGmlElement;
+use ecitygml_core::model::transportation::values::IntersectionClassValue;
 use ecitygml_core::model::transportation::{AsAbstractTransportationSpace, Intersection};
-use egml::io::GmlCode;
+use egml::io::codec::basic::GmlCode;
+use egml::io::util::{
+    Formatting, XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner,
+};
+use egml::model::basic_types::Code;
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
@@ -21,7 +24,12 @@ pub fn deserialize_intersection(xml_document: &[u8]) -> Result<Intersection, Err
 
     let mut intersection =
         Intersection::from_abstract_transportation_space(abstract_transportation_space);
-    intersection.set_class(parsed.class.map(Into::into));
+    intersection.set_class_opt(
+        parsed
+            .class
+            .map(Code::from)
+            .map(IntersectionClassValue::from),
+    );
 
     Ok(intersection)
 }
@@ -39,7 +47,10 @@ pub fn serialize_intersection(
         xml_node_parts.content.push(XmlNodeContent::Raw(raw));
     }
 
-    Ok(XmlNode::new(XmlElement::Intersection, xml_node_parts))
+    Ok(XmlNode::new(
+        CityGmlElement::Intersection.into(),
+        xml_node_parts,
+    ))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -54,7 +65,10 @@ pub struct GmlIntersection {
 impl From<&Intersection> for GmlIntersection {
     fn from(item: &Intersection) -> Self {
         Self {
-            class: item.class().map(Into::into),
+            class: item
+                .class()
+                .map(IntersectionClassValue::code)
+                .map(Into::into),
         }
     }
 }
@@ -63,8 +77,8 @@ impl From<&Intersection> for GmlIntersection {
 mod tests {
     use super::*;
     use ecitygml_core::model::core::{
-        AsAbstractCityObject, AsAbstractFeature, AsAbstractSpace, SpaceBoundaryKind,
-        ThematicSurfaceKind,
+        AbstractSpaceBoundaryKind, AbstractThematicSurfaceKind, AsAbstractCityObject,
+        AsAbstractFeature, AsAbstractSpace,
     };
     use ecitygml_core::model::transportation::{
         AsAbstractTransportationSpace, AuxiliaryTrafficArea, GranularityValue, TrafficArea,
@@ -102,7 +116,7 @@ mod tests {
         let intersection = deserialize_intersection(xml_document).expect("should work");
 
         assert_eq!(
-            intersection.id(),
+            intersection.feature_id(),
             &Id::try_from("UUID_9a9fc5a0-b252-3d63-ac79-b3141175f152").expect("should work")
         );
 
@@ -114,12 +128,11 @@ mod tests {
             .traffic_spaces()
             .first()
             .unwrap()
-            .object
-            .as_ref()
+            .object()
             .unwrap();
 
         assert_eq!(
-            traffic_space.id(),
+            traffic_space.feature_id(),
             &Id::try_from("UUID_ff91145b-98e8-388b-b4d1-b94624f806db").expect("should work")
         );
         assert_eq!(traffic_space.granularity(), &GranularityValue::Lane);
@@ -127,11 +140,11 @@ mod tests {
         let traffic_areas: Vec<&TrafficArea> = traffic_space
             .boundaries()
             .iter()
-            .flat_map(|x| &x.object)
+            .flat_map(|x| x.object())
             .filter_map(|x| match x {
-                SpaceBoundaryKind::ThematicSurfaceKind(ThematicSurfaceKind::TrafficArea(x)) => {
-                    Some(x)
-                }
+                AbstractSpaceBoundaryKind::AbstractThematicSurfaceKind(
+                    AbstractThematicSurfaceKind::TrafficArea(x),
+                ) => Some(x),
                 _ => None,
             })
             .collect();

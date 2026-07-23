@@ -2,26 +2,32 @@ use crate::Error;
 use crate::gml::codec::relief::abstract_relief_component::{
     deserialize_abstract_relief_component, serialize_abstract_relief_component,
 };
-use crate::gml::codec::relief::tin_property::GmlTinProperty;
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner};
-use crate::gml::write::Formatting;
-use ecitygml_core::model::relief::{AsAbstractReliefComponent, TinProperty, TinRelief};
-use quick_xml::de;
+use crate::gml::codec::relief::tin_property::{deserialize_tin_property, serialize_tin_property};
+use crate::gml::util::CityGmlElement;
+use ecitygml_core::model::relief::{AsAbstractReliefComponent, TinRelief};
+use egml::io::util::{
+    Formatting, XmlNode, XmlNodeContent, collect_child, extract_xml_element_spans, serialize_inner,
+};
 use serde::{Deserialize, Serialize};
 
 pub fn deserialize_tin_relief(xml_document: &[u8]) -> Result<TinRelief, Error> {
     let spans = extract_xml_element_spans(xml_document)?;
-    let (abstract_relief_component_result, parsed_result) = rayon::join(
+    let (abstract_relief_component_result, tin_result) = rayon::join(
         || deserialize_abstract_relief_component(xml_document, &spans),
-        || de::from_reader::<_, GmlTinRelief>(xml_document).map_err(Error::from),
+        || {
+            collect_child(
+                xml_document,
+                &spans,
+                CityGmlElement::TinProperty.into(),
+                deserialize_tin_property,
+            )
+        },
     );
     let abstract_relief_component = abstract_relief_component_result?;
-    let parsed = parsed_result?;
+    let tin = tin_result?;
 
     let mut tin_relief = TinRelief::from_abstract_relief_component(abstract_relief_component);
-    let tin: Option<TinProperty> = parsed.tin.map(|x| x.try_into()).transpose()?;
-    tin_relief.set_tin(tin);
+    tin_relief.set_tin_opt(tin);
 
     Ok(tin_relief)
 }
@@ -30,30 +36,31 @@ pub fn serialize_tin_relief(
     tin_relief: &TinRelief,
     formatting: Formatting,
 ) -> Result<XmlNode, Error> {
-    let mut parts =
+    let mut xml_node_parts =
         serialize_abstract_relief_component(tin_relief.abstract_relief_component(), formatting)?;
 
     if let Some(raw) = serialize_inner(GmlTinRelief::from(tin_relief), formatting)? {
-        parts.content.push(XmlNodeContent::Raw(raw));
+        xml_node_parts.content.push(XmlNodeContent::Raw(raw));
     }
 
-    Ok(XmlNode::new(XmlElement::TINRelief, parts))
+    if let Some(prop) = tin_relief.tin() {
+        xml_node_parts
+            .content
+            .push(serialize_tin_property(prop, formatting)?.into());
+    }
+
+    Ok(XmlNode::new(
+        CityGmlElement::TINRelief.into(),
+        xml_node_parts,
+    ))
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct GmlTinRelief {
-    #[serde(
-        rename(serialize = "dem:tin", deserialize = "tin"),
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub tin: Option<GmlTinProperty>,
-}
+pub struct GmlTinRelief {}
 
 impl From<&TinRelief> for GmlTinRelief {
-    fn from(item: &TinRelief) -> Self {
-        Self {
-            tin: item.tin().map(Into::into),
-        }
+    fn from(_item: &TinRelief) -> Self {
+        Self {}
     }
 }
 
@@ -88,19 +95,9 @@ mod tests {
 
         let tin_relief = deserialize_tin_relief(xml_document.as_bytes()).expect("should work");
 
-        assert_eq!(tin_relief.id(), &Id::try_from("abc").unwrap());
+        assert_eq!(tin_relief.feature_id(), &Id::try_from("abc").unwrap());
         assert_eq!(tin_relief.lod(), LevelOfDetail::Three);
-        assert_eq!(
-            tin_relief
-                .tin()
-                .unwrap()
-                .object
-                .as_ref()
-                .unwrap()
-                .patches()
-                .patches_len(),
-            1
-        );
+        assert_eq!(tin_relief.tin().unwrap().object().unwrap().patches_len(), 1);
     }
 
     #[test]
@@ -132,16 +129,6 @@ mod tests {
         let tin_relief = deserialize_tin_relief(xml_document.as_bytes()).expect("should work");
 
         assert_eq!(tin_relief.lod(), LevelOfDetail::Two);
-        assert_eq!(
-            tin_relief
-                .tin()
-                .unwrap()
-                .object
-                .as_ref()
-                .unwrap()
-                .patches()
-                .patches_len(),
-            2
-        );
+        assert_eq!(tin_relief.tin().unwrap().object().unwrap().patches_len(), 2);
     }
 }

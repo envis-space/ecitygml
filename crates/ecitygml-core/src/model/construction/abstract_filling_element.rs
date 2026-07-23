@@ -1,11 +1,13 @@
-use crate::model::core::refs::FeatureKindRef;
-use crate::model::core::refs::FeatureKindRefMut;
+use crate::model::common::{ForEachFeatureMut, IterFeatures};
+use crate::model::core::refs::AbstractFeatureKindRef;
+use crate::model::core::refs::AbstractFeatureKindRefMut;
 use crate::model::core::{
     AbstractOccupiedSpace, AsAbstractOccupiedSpace, AsAbstractOccupiedSpaceMut,
 };
 use egml::model::base::Id;
+use egml::model::common::{ApplyTransform, ComputeEnvelope};
 use egml::model::geometry::Envelope;
-use nalgebra::Isometry3;
+use nalgebra::{Isometry3, Rotation3, Scale3, Transform3, Vector3};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbstractFillingElement {
@@ -21,20 +23,6 @@ impl AbstractFillingElement {
         Self {
             abstract_occupied_space,
         }
-    }
-}
-impl AbstractFillingElement {
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
-        self.abstract_occupied_space.iter_features()
-    }
-    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
-        self.abstract_occupied_space.for_each_feature_mut(f);
-    }
-    pub fn compute_envelope(&self) -> Option<Envelope> {
-        self.abstract_occupied_space.compute_envelope()
-    }
-    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
-        self.abstract_occupied_space.apply_transform(m);
     }
 }
 
@@ -67,8 +55,7 @@ macro_rules! impl_abstract_filling_element_traits {
 
         impl $crate::model::core::AsAbstractOccupiedSpace for $type {
             fn abstract_occupied_space(&self) -> &$crate::model::core::AbstractOccupiedSpace {
-                use $crate::model::construction::AsAbstractFillingElement;
-                &self.abstract_filling_element().abstract_occupied_space
+                &<$type as $crate::model::construction::AsAbstractFillingElement>::abstract_filling_element(self).abstract_occupied_space
             }
         }
     };
@@ -83,8 +70,7 @@ macro_rules! impl_abstract_filling_element_mut_traits {
             fn abstract_occupied_space_mut(
                 &mut self,
             ) -> &mut $crate::model::core::AbstractOccupiedSpace {
-                use $crate::model::construction::AsAbstractFillingElementMut;
-                &mut self.abstract_filling_element_mut().abstract_occupied_space
+                &mut <$type as $crate::model::construction::AsAbstractFillingElementMut>::abstract_filling_element_mut(self).abstract_occupied_space
             }
         }
     };
@@ -92,3 +78,43 @@ macro_rules! impl_abstract_filling_element_mut_traits {
 
 impl_abstract_filling_element_traits!(AbstractFillingElement);
 impl_abstract_filling_element_mut_traits!(AbstractFillingElement);
+
+impl IterFeatures for AbstractFillingElement {
+    fn iter_features(&self) -> Box<dyn Iterator<Item = AbstractFeatureKindRef<'_>> + '_> {
+        self.abstract_occupied_space.iter_features()
+    }
+}
+
+impl ForEachFeatureMut for AbstractFillingElement {
+    fn for_each_feature_mut<F: FnMut(AbstractFeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
+        self.abstract_occupied_space.for_each_feature_mut(f);
+    }
+}
+
+impl ComputeEnvelope for AbstractFillingElement {
+    fn compute_envelope(&self) -> Option<Envelope> {
+        self.abstract_occupied_space.compute_envelope()
+    }
+}
+
+impl ApplyTransform for AbstractFillingElement {
+    fn apply_transform(&mut self, m: Transform3<f64>) {
+        self.abstract_occupied_space.apply_transform(m);
+    }
+
+    fn apply_isometry(&mut self, isometry: Isometry3<f64>) {
+        self.abstract_occupied_space.apply_isometry(isometry);
+    }
+
+    fn apply_translation(&mut self, vector: Vector3<f64>) {
+        self.abstract_occupied_space.apply_translation(vector);
+    }
+
+    fn apply_rotation(&mut self, rotation: Rotation3<f64>) {
+        self.abstract_occupied_space.apply_rotation(rotation);
+    }
+
+    fn apply_scale(&mut self, scale: Scale3<f64>) {
+        self.abstract_occupied_space.apply_scale(scale);
+    }
+}

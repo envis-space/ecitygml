@@ -94,7 +94,7 @@ pub fn serialize_generic_attribute(attr: &GenericAttributeKind) -> Result<String
 #[cfg(test)]
 mod tests {
     use super::*;
-    use egml::model::basic::Measure;
+    use egml::model::basic_types::Measure;
     // --- Serialization tests ---
 
     #[test]

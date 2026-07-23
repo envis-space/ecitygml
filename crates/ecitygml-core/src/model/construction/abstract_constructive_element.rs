@@ -1,18 +1,20 @@
-use crate::model::construction::FillingElementProperty;
-use crate::model::core::refs::FeatureKindRef;
-use crate::model::core::refs::FeatureKindRefMut;
+use crate::model::common::{ForEachFeatureMut, IterFeatures};
+use crate::model::construction::AbstractFillingElementProperty;
+use crate::model::core::refs::AbstractFeatureKindRef;
+use crate::model::core::refs::AbstractFeatureKindRefMut;
 use crate::model::core::{
     AbstractOccupiedSpace, AsAbstractOccupiedSpace, AsAbstractOccupiedSpaceMut,
 };
 use egml::model::base::Id;
+use egml::model::common::{ApplyTransform, ComputeEnvelope};
 use egml::model::geometry::Envelope;
-use nalgebra::Isometry3;
+use nalgebra::{Isometry3, Rotation3, Scale3, Transform3, Vector3};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbstractConstructiveElement {
     pub(crate) abstract_occupied_space: AbstractOccupiedSpace,
     is_structural_element: Option<bool>,
-    fillings: Vec<FillingElementProperty>,
+    fillings: Vec<AbstractFillingElementProperty>,
 }
 
 impl AbstractConstructiveElement {
@@ -28,36 +30,6 @@ impl AbstractConstructiveElement {
         }
     }
 }
-impl AbstractConstructiveElement {
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
-        self.abstract_occupied_space.iter_features().chain(
-            self.fillings
-                .iter()
-                .filter_map(|x| x.object.as_ref())
-                .flat_map(|x| x.iter_features()),
-        )
-    }
-    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
-        self.abstract_occupied_space.for_each_feature_mut(f);
-        for prop in &mut self.fillings {
-            if let Some(x) = prop.object.as_mut() {
-                x.for_each_feature_mut(f);
-            }
-        }
-    }
-    pub fn compute_envelope(&self) -> Option<Envelope> {
-        self.abstract_occupied_space.compute_envelope()
-    }
-    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
-        self.abstract_occupied_space.apply_transform(m);
-
-        for prop in &mut self.fillings {
-            if let Some(x) = prop.object.as_mut() {
-                x.apply_transform(m);
-            }
-        }
-    }
-}
 
 pub trait AsAbstractConstructiveElement: AsAbstractOccupiedSpace {
     fn abstract_constructive_element(&self) -> &AbstractConstructiveElement;
@@ -66,7 +38,7 @@ pub trait AsAbstractConstructiveElement: AsAbstractOccupiedSpace {
         self.abstract_constructive_element().is_structural_element
     }
 
-    fn fillings(&self) -> &[FillingElementProperty] {
+    fn fillings(&self) -> &[AbstractFillingElementProperty] {
         &self.abstract_constructive_element().fillings
     }
 }
@@ -81,17 +53,24 @@ pub trait AsAbstractConstructiveElementMut:
             .is_structural_element = is_structural_element;
     }
 
-    fn set_fillings(&mut self, values: Vec<FillingElementProperty>) {
+    fn fillings_mut(&mut self) -> &mut [AbstractFillingElementProperty] {
+        &mut self.abstract_constructive_element_mut().fillings
+    }
+
+    fn set_fillings(&mut self, values: Vec<AbstractFillingElementProperty>) {
         self.abstract_constructive_element_mut().fillings = values;
     }
 
-    fn push_filling(&mut self, filling: FillingElementProperty) {
+    fn push_filling(&mut self, filling: AbstractFillingElementProperty) {
         self.abstract_constructive_element_mut()
             .fillings
             .push(filling);
     }
 
-    fn extend_fillings(&mut self, fillings: impl IntoIterator<Item = FillingElementProperty>) {
+    fn extend_fillings(
+        &mut self,
+        fillings: impl IntoIterator<Item = AbstractFillingElementProperty>,
+    ) {
         self.abstract_constructive_element_mut()
             .fillings
             .extend(fillings);
@@ -117,8 +96,7 @@ macro_rules! impl_abstract_constructive_element_traits {
 
         impl $crate::model::core::AsAbstractOccupiedSpace for $type {
             fn abstract_occupied_space(&self) -> &$crate::model::core::AbstractOccupiedSpace {
-                use $crate::model::construction::AsAbstractConstructiveElement;
-                &self.abstract_constructive_element().abstract_occupied_space
+                &<$type as $crate::model::construction::AsAbstractConstructiveElement>::abstract_constructive_element(self).abstract_occupied_space
             }
         }
     };
@@ -133,10 +111,7 @@ macro_rules! impl_abstract_constructive_element_mut_traits {
             fn abstract_occupied_space_mut(
                 &mut self,
             ) -> &mut $crate::model::core::AbstractOccupiedSpace {
-                use $crate::model::construction::AsAbstractConstructiveElementMut;
-                &mut self
-                    .abstract_constructive_element_mut()
-                    .abstract_occupied_space
+                &mut <$type as $crate::model::construction::AsAbstractConstructiveElementMut>::abstract_constructive_element_mut(self).abstract_occupied_space
             }
         }
     };
@@ -144,3 +119,85 @@ macro_rules! impl_abstract_constructive_element_mut_traits {
 
 impl_abstract_constructive_element_traits!(AbstractConstructiveElement);
 impl_abstract_constructive_element_mut_traits!(AbstractConstructiveElement);
+
+impl IterFeatures for AbstractConstructiveElement {
+    fn iter_features(&self) -> Box<dyn Iterator<Item = AbstractFeatureKindRef<'_>> + '_> {
+        Box::new(
+            self.abstract_occupied_space.iter_features().chain(
+                self.fillings
+                    .iter()
+                    .filter_map(|x| x.object())
+                    .flat_map(|x| x.iter_features()),
+            ),
+        )
+    }
+}
+
+impl ForEachFeatureMut for AbstractConstructiveElement {
+    fn for_each_feature_mut<F: FnMut(AbstractFeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
+        self.abstract_occupied_space.for_each_feature_mut(f);
+        for prop in &mut self.fillings {
+            if let Some(x) = prop.object_mut() {
+                x.for_each_feature_mut(f);
+            }
+        }
+    }
+}
+
+impl ComputeEnvelope for AbstractConstructiveElement {
+    fn compute_envelope(&self) -> Option<Envelope> {
+        self.abstract_occupied_space.compute_envelope()
+    }
+}
+
+impl ApplyTransform for AbstractConstructiveElement {
+    fn apply_transform(&mut self, m: Transform3<f64>) {
+        self.abstract_occupied_space.apply_transform(m);
+
+        for prop in &mut self.fillings {
+            if let Some(x) = prop.object_mut() {
+                x.apply_transform(m);
+            }
+        }
+    }
+
+    fn apply_isometry(&mut self, isometry: Isometry3<f64>) {
+        self.abstract_occupied_space.apply_isometry(isometry);
+
+        for prop in &mut self.fillings {
+            if let Some(x) = prop.object_mut() {
+                x.apply_isometry(isometry);
+            }
+        }
+    }
+
+    fn apply_translation(&mut self, vector: Vector3<f64>) {
+        self.abstract_occupied_space.apply_translation(vector);
+
+        for prop in &mut self.fillings {
+            if let Some(x) = prop.object_mut() {
+                x.apply_translation(vector);
+            }
+        }
+    }
+
+    fn apply_rotation(&mut self, rotation: Rotation3<f64>) {
+        self.abstract_occupied_space.apply_rotation(rotation);
+
+        for prop in &mut self.fillings {
+            if let Some(x) = prop.object_mut() {
+                x.apply_rotation(rotation);
+            }
+        }
+    }
+
+    fn apply_scale(&mut self, scale: Scale3<f64>) {
+        self.abstract_occupied_space.apply_scale(scale);
+
+        for prop in &mut self.fillings {
+            if let Some(x) = prop.object_mut() {
+                x.apply_scale(scale);
+            }
+        }
+    }
+}

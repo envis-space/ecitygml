@@ -2,10 +2,9 @@ use crate::Error;
 use crate::gml::codec::construction::abstract_filling_element::{
     deserialize_abstract_filling_element, serialize_abstract_filling_element,
 };
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{XmlNode, extract_xml_element_spans};
-use crate::gml::write::Formatting;
+use crate::gml::util::CityGmlElement;
 use ecitygml_core::model::construction::{AsAbstractFillingElement, Window};
+use egml::io::util::{Formatting, XmlNode, extract_xml_element_spans};
 
 pub fn deserialize_window(xml_document: &[u8]) -> Result<Window, Error> {
     let spans = extract_xml_element_spans(xml_document)?;
@@ -19,7 +18,7 @@ pub fn serialize_window(window: &Window, formatting: Formatting) -> Result<XmlNo
     let xml_node_parts =
         serialize_abstract_filling_element(window.abstract_filling_element(), formatting)?;
 
-    Ok(XmlNode::new(XmlElement::Window, xml_node_parts))
+    Ok(XmlNode::new(CityGmlElement::Window.into(), xml_node_parts))
 }
 
 #[cfg(test)]
@@ -27,12 +26,12 @@ mod tests {
     use super::*;
     use crate::gml::codec::core::deserialize_abstract_thematic_surface;
     use ecitygml_core::model::construction::{
-        AsAbstractConstructionSurface, ConstructionSurfaceKind, Door, DoorSurface,
-        FillingSurfaceKind, WindowSurface,
+        AbstractConstructionSurfaceKind, AbstractFillingSurfaceKind, AsAbstractConstructionSurface,
+        Door, DoorSurface, WindowSurface,
     };
     use ecitygml_core::model::core::{
-        AsAbstractCityObject, AsAbstractFeature, AsAbstractSpace, AsAbstractThematicSurface,
-        SpaceBoundaryKind, ThematicSurfaceKind,
+        AbstractSpaceBoundaryKind, AbstractThematicSurfaceKind, AsAbstractCityObject,
+        AsAbstractFeature, AsAbstractSpace, AsAbstractThematicSurface,
     };
     use egml::model::base::Id;
     use quick_xml::{DeError, de};
@@ -52,7 +51,7 @@ mod tests {
         let window = deserialize_window(xml_document).expect("should work");
 
         assert_eq!(
-            window.id(),
+            window.feature_id(),
             &Id::try_from("GML_d38cf762-c29d-4491-88c9-bdc89e141978").expect("should work")
         );
         //assert!(window.lod3_multi_surface().is_some());

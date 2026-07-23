@@ -1,10 +1,11 @@
 use crate::model::building::{AbstractBuilding, AsAbstractBuilding, AsAbstractBuildingMut};
-use crate::model::core::AsAbstractFeatureMut;
-use crate::model::core::refs::FeatureKindRef;
-use crate::model::core::refs::FeatureKindRefMut;
+use crate::model::common::{ForEachFeatureMut, IterFeatures};
+use crate::model::core::refs::AbstractFeatureKindRef;
+use crate::model::core::refs::AbstractFeatureKindRefMut;
 use egml::model::base::Id;
+use egml::model::common::{ApplyTransform, ComputeEnvelope};
 use egml::model::geometry::Envelope;
-use nalgebra::Isometry3;
+use nalgebra::{Isometry3, Rotation3, Scale3, Transform3, Vector3};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct BuildingPart {
@@ -18,24 +19,6 @@ impl BuildingPart {
 
     pub fn from_abstract_building(abstract_building: AbstractBuilding) -> Self {
         Self { abstract_building }
-    }
-}
-impl BuildingPart {
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
-        std::iter::once(self.into()).chain(self.abstract_building.iter_features())
-    }
-    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
-        f((&mut *self).into());
-        self.abstract_building.for_each_feature_mut(f);
-    }
-    pub fn compute_envelope(&self) -> Option<Envelope> {
-        self.abstract_building.compute_envelope()
-    }
-    pub fn recompute_bounding_shape(&mut self) {
-        self.set_bounding_shape_from_envelope(self.compute_envelope());
-    }
-    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
-        self.abstract_building.apply_transform(m);
     }
 }
 
@@ -54,3 +37,44 @@ impl AsAbstractBuildingMut for BuildingPart {
 crate::impl_abstract_building_traits!(BuildingPart);
 crate::impl_abstract_building_mut_traits!(BuildingPart);
 crate::impl_has_feature_type!(BuildingPart, BuildingPart);
+
+impl IterFeatures for BuildingPart {
+    fn iter_features(&self) -> Box<dyn Iterator<Item = AbstractFeatureKindRef<'_>> + '_> {
+        Box::new(std::iter::once(self.into()).chain(self.abstract_building.iter_features()))
+    }
+}
+
+impl ForEachFeatureMut for BuildingPart {
+    fn for_each_feature_mut<F: FnMut(AbstractFeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
+        f((&mut *self).into());
+        self.abstract_building.for_each_feature_mut(f);
+    }
+}
+
+impl ComputeEnvelope for BuildingPart {
+    fn compute_envelope(&self) -> Option<Envelope> {
+        self.abstract_building.compute_envelope()
+    }
+}
+
+impl ApplyTransform for BuildingPart {
+    fn apply_transform(&mut self, m: Transform3<f64>) {
+        self.abstract_building.apply_transform(m);
+    }
+
+    fn apply_isometry(&mut self, isometry: Isometry3<f64>) {
+        self.abstract_building.apply_isometry(isometry);
+    }
+
+    fn apply_translation(&mut self, vector: Vector3<f64>) {
+        self.abstract_building.apply_translation(vector);
+    }
+
+    fn apply_rotation(&mut self, rotation: Rotation3<f64>) {
+        self.abstract_building.apply_rotation(rotation);
+    }
+
+    fn apply_scale(&mut self, scale: Scale3<f64>) {
+        self.abstract_building.apply_scale(scale);
+    }
+}

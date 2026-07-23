@@ -2,11 +2,12 @@ use crate::Error;
 use crate::gml::codec::water_body::abstract_water_boundary_surface::{
     deserialize_abstract_water_boundary_surface, serialize_abstract_water_boundary_surface,
 };
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{XmlNode, extract_xml_element_spans};
-use crate::gml::write::Formatting;
+use crate::gml::util::CityGmlElement;
+use ecitygml_core::model::water_body::values::WaterLevelValue;
 use ecitygml_core::model::water_body::{AsAbstractWaterBoundarySurface, WaterSurface};
-use egml::io::GmlCode;
+use egml::io::codec::basic::GmlCode;
+use egml::io::util::{Formatting, XmlNode, extract_xml_element_spans};
+use egml::model::basic_types::Code;
 use serde::{Deserialize, Serialize};
 
 pub fn deserialize_water_surface(xml_document: &[u8]) -> Result<WaterSurface, Error> {
@@ -18,7 +19,12 @@ pub fn deserialize_water_surface(xml_document: &[u8]) -> Result<WaterSurface, Er
 
     let mut water_surface =
         WaterSurface::from_abstract_water_boundary_surface(abstract_water_boundary_surface);
-    water_surface.set_water_level(parsed.water_level.map(Into::into));
+    water_surface.set_water_level_opt(
+        parsed
+            .water_level
+            .map(Code::from)
+            .map(WaterLevelValue::from),
+    );
 
     Ok(water_surface)
 }
@@ -32,7 +38,10 @@ pub fn serialize_water_surface(
         formatting,
     )?;
 
-    Ok(XmlNode::new(XmlElement::WaterSurface, xml_node_parts))
+    Ok(XmlNode::new(
+        CityGmlElement::WaterSurface.into(),
+        xml_node_parts,
+    ))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -47,7 +56,10 @@ pub struct GmlWaterSurface {
 impl From<&WaterSurface> for GmlWaterSurface {
     fn from(item: &WaterSurface) -> Self {
         Self {
-            water_level: item.water_level().map(Into::into),
+            water_level: item
+                .water_level()
+                .map(WaterLevelValue::code)
+                .map(Into::into),
         }
     }
 }

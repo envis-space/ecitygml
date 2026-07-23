@@ -7,6 +7,7 @@
 //! ```no_run
 //! use std::path::PathBuf;
 //! use ecitygml_io::GmlReader;
+//! use crate::ecitygml::model::common::IterFeatures;
 //! use crate::ecitygml::model::core::AsAbstractFeature;
 //!
 //! // read the CityGML dataset
@@ -18,12 +19,12 @@
 //!
 //! // iterate over all features
 //! for current_feature_ref in city_model.iter_features() {
-//!     println!("GML ID of the current feature: {}", current_feature_ref.id());
+//!     println!("GML ID of the current feature: {}", current_feature_ref.feature_id());
 //! }
 //! ```
 //!
 
-pub use ecitygml_core::{Error, model, operations};
+pub use ecitygml_core::{Error, arena, index, model, resolver, store};
 pub use ecitygml_io as io;
 
 pub use ecitygml_transform as transform;

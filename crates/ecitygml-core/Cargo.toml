@@ -17,4 +17,5 @@ rayon = { workspace = true }
 strum = { workspace = true }
 strum_macros = { workspace = true }
 chrono = { workspace = true }
-auto_enums = { workspace = true }
+bvh = { workspace = true }
+slotmap = { workspace = true }

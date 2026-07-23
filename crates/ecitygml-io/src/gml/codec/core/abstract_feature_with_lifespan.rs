@@ -2,26 +2,23 @@ use crate::Error;
 use crate::gml::codec::core::abstract_feature::{
     deserialize_abstract_feature, serialize_abstract_feature,
 };
-use crate::gml::util::{XmlElementSpans, XmlNodeContent, XmlNodeParts, serialize_inner};
-use crate::gml::write::Formatting;
+use crate::gml::util::CombinedCityGmlElement;
 use chrono::{DateTime, FixedOffset};
 use ecitygml_core::model::core::{
     AbstractFeatureWithLifespan, AsAbstractFeature, AsAbstractFeatureWithLifespan,
     AsAbstractFeatureWithLifespanMut,
 };
+use egml::io::util::{Formatting, XmlElementSpans, XmlNodeContent, XmlNodeParts, serialize_inner};
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
 pub fn deserialize_abstract_feature_with_lifespan(
     xml_document: &[u8],
-    spans: &XmlElementSpans,
+    spans: &XmlElementSpans<CombinedCityGmlElement>,
 ) -> Result<AbstractFeatureWithLifespan, Error> {
-    let (abstract_feature_result, gml_result) = rayon::join(
-        || deserialize_abstract_feature(xml_document, spans),
-        || de::from_reader::<_, GmlAbstractFeatureWithLifespan>(xml_document).map_err(Error::from),
-    );
-    let abstract_feature = abstract_feature_result?;
-    let gml = gml_result?;
+    let abstract_feature = deserialize_abstract_feature(xml_document, spans)?;
+    let gml =
+        de::from_reader::<_, GmlAbstractFeatureWithLifespan>(xml_document).map_err(Error::from)?;
 
     let mut abstract_feature_with_lifespan =
         AbstractFeatureWithLifespan::from_abstract_feature(abstract_feature);

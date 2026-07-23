@@ -2,12 +2,17 @@ use crate::Error;
 use crate::gml::codec::core::{
     deserialize_abstract_thematic_surface, serialize_abstract_thematic_surface,
 };
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner};
-use crate::gml::write::Formatting;
+use crate::gml::util::CityGmlElement;
 use ecitygml_core::model::core::AsAbstractThematicSurface;
 use ecitygml_core::model::land_use::LandUse;
-use egml::io::GmlCode;
+use ecitygml_core::model::land_use::values::{
+    LandUseClassValue, LandUseFunctionValue, LandUseUsageValue,
+};
+use egml::io::codec::basic::GmlCode;
+use egml::io::util::{
+    Formatting, XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner,
+};
+use egml::model::basic_types::Code;
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
@@ -21,9 +26,23 @@ pub fn deserialize_land_use(xml_document: &[u8]) -> Result<LandUse, Error> {
     let parsed = parsed_result?;
 
     let mut land_use = LandUse::from_abstract_thematic_surface(abstract_thematic_surface);
-    land_use.set_class(parsed.class.map(Into::into));
-    land_use.set_functions(parsed.functions.into_iter().map(Into::into).collect());
-    land_use.set_usages(parsed.usages.into_iter().map(Into::into).collect());
+    land_use.set_class_opt(parsed.class.map(Code::from).map(LandUseClassValue::from));
+    land_use.set_functions(
+        parsed
+            .functions
+            .into_iter()
+            .map(Code::from)
+            .map(LandUseFunctionValue::from)
+            .collect(),
+    );
+    land_use.set_usages(
+        parsed
+            .usages
+            .into_iter()
+            .map(Code::from)
+            .map(LandUseUsageValue::from)
+            .collect(),
+    );
 
     Ok(land_use)
 }
@@ -36,7 +55,7 @@ pub fn serialize_land_use(land_use: &LandUse, formatting: Formatting) -> Result<
         parts.content.push(XmlNodeContent::Raw(raw));
     }
 
-    Ok(XmlNode::new(XmlElement::LandUse, parts))
+    Ok(XmlNode::new(CityGmlElement::LandUse.into(), parts))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -57,9 +76,19 @@ pub struct GmlLandUse {
 impl From<&LandUse> for GmlLandUse {
     fn from(item: &LandUse) -> Self {
         Self {
-            class: item.class().map(Into::into),
-            functions: item.functions().iter().map(Into::into).collect(),
-            usages: item.usages().iter().map(Into::into).collect(),
+            class: item.class().map(LandUseClassValue::code).map(Into::into),
+            functions: item
+                .functions()
+                .iter()
+                .map(LandUseFunctionValue::code)
+                .map(Into::into)
+                .collect(),
+            usages: item
+                .usages()
+                .iter()
+                .map(LandUseUsageValue::code)
+                .map(Into::into)
+                .collect(),
         }
     }
 }

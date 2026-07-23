@@ -3,12 +3,18 @@ use crate::gml::codec::core::{
     deserialize_abstract_unoccupied_space, serialize_abstract_unoccupied_space,
 };
 use crate::gml::codec::transportation::granularity_value::GmlGranularityValue;
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner};
-use crate::gml::write::Formatting;
+use crate::gml::util::CityGmlElement;
 use ecitygml_core::model::core::AsAbstractUnoccupiedSpace;
 use ecitygml_core::model::transportation::AuxiliaryTrafficSpace;
-use egml::io::GmlCode;
+use ecitygml_core::model::transportation::values::{
+    AuxiliaryTrafficSpaceClassValue, AuxiliaryTrafficSpaceFunctionValue,
+    AuxiliaryTrafficSpaceUsageValue,
+};
+use egml::io::codec::basic::GmlCode;
+use egml::io::util::{
+    Formatting, XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner,
+};
+use egml::model::basic_types::Code;
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
@@ -16,21 +22,37 @@ pub fn deserialize_auxiliary_traffic_space(
     xml_document: &[u8],
 ) -> Result<AuxiliaryTrafficSpace, Error> {
     let spans = extract_xml_element_spans(xml_document)?;
-    let (abstract_unoccupied_space_result, parsed_result) = rayon::join(
-        || deserialize_abstract_unoccupied_space(xml_document, &spans),
-        || de::from_reader::<_, GmlAuxiliaryTrafficSpace>(xml_document).map_err(Error::from),
-    );
-    let abstract_unoccupied_space = abstract_unoccupied_space_result?;
-    let parsed = parsed_result?;
+    let abstract_unoccupied_space = deserialize_abstract_unoccupied_space(xml_document, &spans)?;
+    let parsed =
+        de::from_reader::<_, GmlAuxiliaryTrafficSpace>(xml_document).map_err(Error::from)?;
 
     let mut traffic_space = AuxiliaryTrafficSpace::from_abstract_unoccupied_space(
         abstract_unoccupied_space,
         parsed.granularity.into(),
     );
 
-    traffic_space.set_class(parsed.class.map(Into::into));
-    traffic_space.set_functions(parsed.functions.into_iter().map(Into::into).collect());
-    traffic_space.set_usages(parsed.usages.into_iter().map(Into::into).collect());
+    traffic_space.set_class_opt(
+        parsed
+            .class
+            .map(Code::from)
+            .map(AuxiliaryTrafficSpaceClassValue::from),
+    );
+    traffic_space.set_functions(
+        parsed
+            .functions
+            .into_iter()
+            .map(Code::from)
+            .map(AuxiliaryTrafficSpaceFunctionValue::from)
+            .collect(),
+    );
+    traffic_space.set_usages(
+        parsed
+            .usages
+            .into_iter()
+            .map(Code::from)
+            .map(AuxiliaryTrafficSpaceUsageValue::from)
+            .collect(),
+    );
 
     Ok(traffic_space)
 }
@@ -52,7 +74,7 @@ pub fn serialize_auxiliary_traffic_space(
     }
 
     Ok(XmlNode::new(
-        XmlElement::AuxiliaryTrafficSpace,
+        CityGmlElement::AuxiliaryTrafficSpace.into(),
         xml_node_parts,
     ))
 }
@@ -81,9 +103,22 @@ pub struct GmlAuxiliaryTrafficSpace {
 impl From<&AuxiliaryTrafficSpace> for GmlAuxiliaryTrafficSpace {
     fn from(item: &AuxiliaryTrafficSpace) -> Self {
         Self {
-            class: item.class().map(Into::into),
-            functions: item.functions().iter().map(Into::into).collect(),
-            usages: item.usages().iter().map(Into::into).collect(),
+            class: item
+                .class()
+                .map(AuxiliaryTrafficSpaceClassValue::code)
+                .map(Into::into),
+            functions: item
+                .functions()
+                .iter()
+                .map(AuxiliaryTrafficSpaceFunctionValue::code)
+                .map(Into::into)
+                .collect(),
+            usages: item
+                .usages()
+                .iter()
+                .map(AuxiliaryTrafficSpaceUsageValue::code)
+                .map(Into::into)
+                .collect(),
             granularity: item.granularity().into(),
         }
     }
@@ -92,10 +127,10 @@ impl From<&AuxiliaryTrafficSpace> for GmlAuxiliaryTrafficSpace {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ecitygml_core::model::construction::{FillingSurfaceKind, WindowSurface};
+    use ecitygml_core::model::construction::{AbstractFillingSurfaceKind, WindowSurface};
     use ecitygml_core::model::core::{
-        AsAbstractCityObject, AsAbstractFeature, AsAbstractSpace, SpaceBoundaryKind,
-        ThematicSurfaceKind,
+        AbstractSpaceBoundaryKind, AbstractThematicSurfaceKind, AsAbstractCityObject,
+        AsAbstractFeature, AsAbstractSpace,
     };
     use ecitygml_core::model::transportation::{
         AuxiliaryTrafficArea, GranularityValue, TrafficDirectionValue,
@@ -146,7 +181,7 @@ mod tests {
             deserialize_auxiliary_traffic_space(xml_document).expect("should work");
 
         assert_eq!(
-            auxiliary_traffic_space.id(),
+            auxiliary_traffic_space.feature_id(),
             &Id::try_from("UUID_24f88e8d-34c8-3a4f-8889-dff3a82f5121").expect("should work")
         );
         assert!(auxiliary_traffic_space.lod2_multi_surface().is_none());
@@ -158,10 +193,10 @@ mod tests {
         let auxiliary_traffic_areas: Vec<&AuxiliaryTrafficArea> = auxiliary_traffic_space
             .boundaries()
             .iter()
-            .flat_map(|x| &x.object)
+            .flat_map(|x| x.object())
             .filter_map(|x| match x {
-                SpaceBoundaryKind::ThematicSurfaceKind(
-                    ThematicSurfaceKind::AuxiliaryTrafficArea(x),
+                AbstractSpaceBoundaryKind::AbstractThematicSurfaceKind(
+                    AbstractThematicSurfaceKind::AuxiliaryTrafficArea(x),
                 ) => Some(x),
                 _ => None,
             })
@@ -170,7 +205,7 @@ mod tests {
 
         let traffic_area = auxiliary_traffic_areas.first().unwrap();
         assert_eq!(
-            traffic_area.id(),
+            traffic_area.feature_id(),
             &Id::try_from("UUID_caa7268d-8c82-3595-837f-0584a6c261ec").expect("should work")
         );
         assert_eq!(traffic_area.generic_attributes().len(), 2);

@@ -6,9 +6,6 @@ pub mod gml;
 pub use crate::gml::read::GmlReader;
 
 #[doc(inline)]
-pub use crate::gml::write::Formatting;
-
-#[doc(inline)]
 pub use crate::gml::write::GmlWriter;
 
 #[doc(inline)]
@@ -16,6 +13,9 @@ pub use crate::error::Error;
 
 #[doc(inline)]
 pub use crate::format::CitygmlFormat;
+
+#[doc(inline)]
+pub use crate::gml::util::CitygmlVersion;
 
 #[doc(inline)]
 pub use crate::gml::FILE_EXTENSION_GML_FORMAT;

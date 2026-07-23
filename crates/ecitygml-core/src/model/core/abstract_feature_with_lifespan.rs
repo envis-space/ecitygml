@@ -1,7 +1,8 @@
 use crate::model::core::{AbstractFeature, AsAbstractFeature, AsAbstractFeatureMut};
 use chrono::{DateTime, FixedOffset};
 use egml::model::base::Id;
-use nalgebra::Isometry3;
+use egml::model::common::ApplyTransform;
+use nalgebra::{Isometry3, Rotation3, Scale3, Transform3, Vector3};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbstractFeatureWithLifespan {
@@ -25,11 +26,6 @@ impl AbstractFeatureWithLifespan {
             valid_from: None,
             valid_to: None,
         }
-    }
-}
-impl AbstractFeatureWithLifespan {
-    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
-        self.abstract_feature.apply_transform(m);
     }
 }
 
@@ -92,10 +88,11 @@ impl AsAbstractFeatureWithLifespanMut for AbstractFeatureWithLifespan {
 #[macro_export]
 macro_rules! impl_abstract_feature_with_lifespan_traits {
     ($type:ty) => {
+        $crate::impl_abstract_feature_traits!($type);
+
         impl $crate::model::core::AsAbstractFeature for $type {
             fn abstract_feature(&self) -> &$crate::model::core::AbstractFeature {
-                use $crate::model::core::AsAbstractFeatureWithLifespan;
-                &self.abstract_feature_with_lifespan().abstract_feature
+                &<$type as $crate::model::core::AsAbstractFeatureWithLifespan>::abstract_feature_with_lifespan(self).abstract_feature
             }
         }
     };
@@ -104,14 +101,37 @@ macro_rules! impl_abstract_feature_with_lifespan_traits {
 #[macro_export]
 macro_rules! impl_abstract_feature_with_lifespan_mut_traits {
     ($type:ty) => {
+        $crate::impl_abstract_feature_mut_traits!($type);
+
         impl $crate::model::core::AsAbstractFeatureMut for $type {
             fn abstract_feature_mut(&mut self) -> &mut $crate::model::core::AbstractFeature {
-                use $crate::model::core::AsAbstractFeatureWithLifespanMut;
-                &mut self.abstract_feature_with_lifespan_mut().abstract_feature
+                &mut <$type as $crate::model::core::AsAbstractFeatureWithLifespanMut>::abstract_feature_with_lifespan_mut(self).abstract_feature
             }
         }
     };
 }
 
-impl_abstract_feature_with_lifespan_traits!(AbstractFeatureWithLifespan);
-impl_abstract_feature_with_lifespan_mut_traits!(AbstractFeatureWithLifespan);
+crate::impl_abstract_feature_with_lifespan_traits!(AbstractFeatureWithLifespan);
+crate::impl_abstract_feature_with_lifespan_mut_traits!(AbstractFeatureWithLifespan);
+
+impl ApplyTransform for AbstractFeatureWithLifespan {
+    fn apply_transform(&mut self, m: Transform3<f64>) {
+        self.abstract_feature.apply_transform(m);
+    }
+
+    fn apply_isometry(&mut self, isometry: Isometry3<f64>) {
+        self.abstract_feature.apply_isometry(isometry);
+    }
+
+    fn apply_translation(&mut self, vector: Vector3<f64>) {
+        self.abstract_feature.apply_translation(vector);
+    }
+
+    fn apply_rotation(&mut self, rotation: Rotation3<f64>) {
+        self.abstract_feature.apply_rotation(rotation);
+    }
+
+    fn apply_scale(&mut self, scale: Scale3<f64>) {
+        self.abstract_feature.apply_scale(scale);
+    }
+}

@@ -1,26 +1,35 @@
 use crate::Error;
 use crate::gml::codec::transportation::{deserialize_intersection, serialize_intersection};
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{XmlElementSpans, XmlNode, XmlNodeContent, XmlNodeParts};
-use crate::gml::write::Formatting;
+use crate::gml::util::{CityGmlElement, CombinedCityGmlElement};
 use ecitygml_core::model::transportation::IntersectionProperty;
+use egml::io::codec::base::{
+    GmlAssociationAttributes, GmlOwnershipAttributes, serialize_association_attributes,
+    serialize_ownership_attributes,
+};
+use egml::io::util::{Formatting, XmlElementSpans, XmlNode, XmlNodeContent, XmlNodeParts};
+use egml::model::base::{HasAssociationAttributes, HasOwnershipAttributes};
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
 pub fn deserialize_intersection_property(
     xml_document: &[u8],
-    spans: &XmlElementSpans,
+    spans: &XmlElementSpans<CombinedCityGmlElement>,
 ) -> Result<IntersectionProperty, Error> {
-    let gml_intersection_property: GmlIntersectionProperty = de::from_reader(xml_document)?;
-    let mut intersection_property: IntersectionProperty = gml_intersection_property.into();
+    let parsed: GmlIntersectionProperty = de::from_reader(xml_document)?;
 
-    if let Some(span) = spans.first(XmlElement::Intersection) {
-        intersection_property.object = Some(deserialize_intersection(
+    let mut object = None;
+
+    if let Some(span) = spans.first(CityGmlElement::Intersection.into()) {
+        object = Some(deserialize_intersection(
             &xml_document[span.start..span.end],
         )?);
     }
 
-    Ok(intersection_property)
+    Ok(IntersectionProperty::new(
+        object,
+        parsed.association.try_into()?,
+        parsed.ownership.into(),
+    ))
 }
 
 pub fn serialize_intersection_property(
@@ -28,35 +37,29 @@ pub fn serialize_intersection_property(
     formatting: Formatting,
 ) -> Result<XmlNode, Error> {
     let mut parts = XmlNodeParts::empty();
-    if let Some(href) = &intersection_property.href {
-        parts
-            .attributes
-            .push(("xlink:href".to_string(), href.clone()));
-    }
-    if let Some(object) = &intersection_property.object {
+    parts.attributes.extend(serialize_association_attributes(
+        intersection_property.association(),
+    ));
+    parts.attributes.extend(serialize_ownership_attributes(
+        intersection_property.ownership(),
+    ));
+    if let Some(object) = intersection_property.object() {
         parts
             .content
             .push(XmlNodeContent::Child(serialize_intersection(
                 object, formatting,
             )?));
     }
-    Ok(XmlNode::new(XmlElement::IntersectionProperty, parts))
+    Ok(XmlNode::new(
+        CityGmlElement::IntersectionProperty.into(),
+        parts,
+    ))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct GmlIntersectionProperty {
-    #[serde(
-        rename(serialize = "@xlink:href", deserialize = "@href"),
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub href: Option<String>,
-}
-
-impl From<GmlIntersectionProperty> for IntersectionProperty {
-    fn from(item: GmlIntersectionProperty) -> Self {
-        Self {
-            object: None,
-            href: item.href,
-        }
-    }
+    #[serde(flatten)]
+    pub association: GmlAssociationAttributes,
+    #[serde(flatten)]
+    pub ownership: GmlOwnershipAttributes,
 }

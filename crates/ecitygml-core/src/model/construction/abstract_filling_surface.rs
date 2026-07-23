@@ -1,11 +1,13 @@
-use crate::model::core::refs::FeatureKindRef;
-use crate::model::core::refs::FeatureKindRefMut;
+use crate::model::common::{ForEachFeatureMut, IterFeatures};
+use crate::model::core::refs::AbstractFeatureKindRef;
+use crate::model::core::refs::AbstractFeatureKindRefMut;
 use crate::model::core::{
     AbstractThematicSurface, AsAbstractThematicSurface, AsAbstractThematicSurfaceMut,
 };
 use egml::model::base::Id;
+use egml::model::common::{ApplyTransform, ComputeEnvelope};
 use egml::model::geometry::Envelope;
-use nalgebra::Isometry3;
+use nalgebra::{Isometry3, Rotation3, Scale3, Transform3, Vector3};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbstractFillingSurface {
@@ -23,20 +25,6 @@ impl AbstractFillingSurface {
         Self {
             abstract_thematic_surface,
         }
-    }
-}
-impl AbstractFillingSurface {
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
-        self.abstract_thematic_surface.iter_features()
-    }
-    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
-        self.abstract_thematic_surface.for_each_feature_mut(f);
-    }
-    pub fn compute_envelope(&self) -> Option<Envelope> {
-        self.abstract_thematic_surface.compute_envelope()
-    }
-    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
-        self.abstract_thematic_surface.apply_transform(m);
     }
 }
 
@@ -69,8 +57,7 @@ macro_rules! impl_abstract_filling_surface_traits {
 
         impl $crate::model::core::AsAbstractThematicSurface for $type {
             fn abstract_thematic_surface(&self) -> &$crate::model::core::AbstractThematicSurface {
-                use $crate::model::construction::AsAbstractFillingSurface;
-                &self.abstract_filling_surface().abstract_thematic_surface
+                &<$type as $crate::model::construction::AsAbstractFillingSurface>::abstract_filling_surface(self).abstract_thematic_surface
             }
         }
     };
@@ -85,10 +72,7 @@ macro_rules! impl_abstract_filling_surface_mut_traits {
             fn abstract_thematic_surface_mut(
                 &mut self,
             ) -> &mut $crate::model::core::AbstractThematicSurface {
-                use $crate::model::construction::AsAbstractFillingSurfaceMut;
-                &mut self
-                    .abstract_filling_surface_mut()
-                    .abstract_thematic_surface
+                &mut <$type as $crate::model::construction::AsAbstractFillingSurfaceMut>::abstract_filling_surface_mut(self).abstract_thematic_surface
             }
         }
     };
@@ -96,3 +80,43 @@ macro_rules! impl_abstract_filling_surface_mut_traits {
 
 impl_abstract_filling_surface_traits!(AbstractFillingSurface);
 impl_abstract_filling_surface_mut_traits!(AbstractFillingSurface);
+
+impl IterFeatures for AbstractFillingSurface {
+    fn iter_features(&self) -> Box<dyn Iterator<Item = AbstractFeatureKindRef<'_>> + '_> {
+        self.abstract_thematic_surface.iter_features()
+    }
+}
+
+impl ForEachFeatureMut for AbstractFillingSurface {
+    fn for_each_feature_mut<F: FnMut(AbstractFeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
+        self.abstract_thematic_surface.for_each_feature_mut(f);
+    }
+}
+
+impl ComputeEnvelope for AbstractFillingSurface {
+    fn compute_envelope(&self) -> Option<Envelope> {
+        self.abstract_thematic_surface.compute_envelope()
+    }
+}
+
+impl ApplyTransform for AbstractFillingSurface {
+    fn apply_transform(&mut self, m: Transform3<f64>) {
+        self.abstract_thematic_surface.apply_transform(m);
+    }
+
+    fn apply_isometry(&mut self, isometry: Isometry3<f64>) {
+        self.abstract_thematic_surface.apply_isometry(isometry);
+    }
+
+    fn apply_translation(&mut self, vector: Vector3<f64>) {
+        self.abstract_thematic_surface.apply_translation(vector);
+    }
+
+    fn apply_rotation(&mut self, rotation: Rotation3<f64>) {
+        self.abstract_thematic_surface.apply_rotation(rotation);
+    }
+
+    fn apply_scale(&mut self, scale: Scale3<f64>) {
+        self.abstract_thematic_surface.apply_scale(scale);
+    }
+}

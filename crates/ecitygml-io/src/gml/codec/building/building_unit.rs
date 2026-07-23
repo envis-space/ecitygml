@@ -2,9 +2,10 @@ use crate::Error;
 use crate::gml::codec::building::abstract_building_subdivision::{
     deserialize_abstract_building_subdivision, serialize_abstract_building_subdivision,
 };
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{XmlNode, extract_xml_element_spans};
-use crate::gml::write::Formatting;
+use egml::io::util::extract_xml_element_spans;
+use egml::io::util::{Formatting, XmlNode};
+
+use crate::gml::util::CityGmlElement;
 use ecitygml_core::model::building::{AsAbstractBuildingSubdivision, BuildingUnit};
 
 pub fn deserialize_building_unit(xml_document: &[u8]) -> Result<BuildingUnit, Error> {
@@ -25,5 +26,8 @@ pub fn serialize_building_unit(
         building_unit.abstract_building_subdivision(),
         formatting,
     )?;
-    Ok(XmlNode::new(XmlElement::BuildingUnit, xml_node_parts))
+    Ok(XmlNode::new(
+        CityGmlElement::BuildingUnit.into(),
+        xml_node_parts,
+    ))
 }

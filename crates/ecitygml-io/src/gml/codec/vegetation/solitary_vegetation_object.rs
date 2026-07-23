@@ -2,11 +2,17 @@ use crate::Error;
 use crate::gml::codec::vegetation::abstract_vegetation_object::{
     deserialize_abstract_vegetation_object, serialize_abstract_vegetation_object,
 };
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner};
-use crate::gml::write::Formatting;
+use crate::gml::util::CityGmlElement;
+use ecitygml_core::model::vegetation::values::{
+    SolitaryVegetationObjectClassValue, SolitaryVegetationObjectFunctionValue,
+    SolitaryVegetationObjectUsageValue, SpeciesValue,
+};
 use ecitygml_core::model::vegetation::{AsAbstractVegetationObject, SolitaryVegetationObject};
-use egml::io::{GmlCode, GmlMeasure};
+use egml::io::codec::basic::{GmlCode, GmlMeasure};
+use egml::io::util::{
+    Formatting, XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner,
+};
+use egml::model::basic_types::Code;
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
@@ -14,25 +20,43 @@ pub fn deserialize_solitary_vegetation_object(
     xml_document: &[u8],
 ) -> Result<SolitaryVegetationObject, Error> {
     let spans = extract_xml_element_spans(xml_document)?;
-    let (abstract_vegetation_object_result, parsed_result) = rayon::join(
-        || deserialize_abstract_vegetation_object(xml_document, &spans),
-        || de::from_reader::<_, GmlSolitaryVegetationObject>(xml_document).map_err(Error::from),
-    );
-    let abstract_vegetation_object = abstract_vegetation_object_result?;
-    let parsed = parsed_result?;
+    let abstract_vegetation_object = deserialize_abstract_vegetation_object(xml_document, &spans)?;
+    let parsed =
+        de::from_reader::<_, GmlSolitaryVegetationObject>(xml_document).map_err(Error::from)?;
     let mut solitary_vegetation_object =
         SolitaryVegetationObject::from_abstract_vegetation_object(abstract_vegetation_object);
 
-    solitary_vegetation_object.set_class(parsed.class.map(Into::into));
+    solitary_vegetation_object.set_class_opt(
+        parsed
+            .class
+            .map(Code::from)
+            .map(SolitaryVegetationObjectClassValue::from),
+    );
+    solitary_vegetation_object.set_functions(
+        parsed
+            .functions
+            .into_iter()
+            .map(Code::from)
+            .map(SolitaryVegetationObjectFunctionValue::from)
+            .collect(),
+    );
+    solitary_vegetation_object.set_usages(
+        parsed
+            .usages
+            .into_iter()
+            .map(Code::from)
+            .map(SolitaryVegetationObjectUsageValue::from)
+            .collect(),
+    );
     solitary_vegetation_object
-        .set_functions(parsed.functions.into_iter().map(Into::into).collect());
-    solitary_vegetation_object.set_usages(parsed.usages.into_iter().map(Into::into).collect());
-    solitary_vegetation_object.set_species(parsed.species.map(Into::into));
-    solitary_vegetation_object.set_height(parsed.height.map(Into::into));
-    solitary_vegetation_object.set_trunk_diameter(parsed.trunk_diameter.map(Into::into));
-    solitary_vegetation_object.set_crown_diameter(parsed.crown_diameter.map(Into::into));
-    solitary_vegetation_object.set_root_ball_diameter(parsed.root_ball_diameter.map(Into::into));
-    solitary_vegetation_object.set_max_root_ball_depth(parsed.max_root_ball_depth.map(Into::into));
+        .set_species_opt(parsed.species.map(Code::from).map(SpeciesValue::from));
+    solitary_vegetation_object.set_height_opt(parsed.height.map(Into::into));
+    solitary_vegetation_object.set_trunk_diameter_opt(parsed.trunk_diameter.map(Into::into));
+    solitary_vegetation_object.set_crown_diameter_opt(parsed.crown_diameter.map(Into::into));
+    solitary_vegetation_object
+        .set_root_ball_diameter_opt(parsed.root_ball_diameter.map(Into::into));
+    solitary_vegetation_object
+        .set_max_root_ball_depth_opt(parsed.max_root_ball_depth.map(Into::into));
 
     Ok(solitary_vegetation_object)
 }
@@ -53,7 +77,10 @@ pub fn serialize_solitary_vegetation_object(
         parts.content.push(XmlNodeContent::Raw(raw));
     }
 
-    Ok(XmlNode::new(XmlElement::SolitaryVegetationObject, parts))
+    Ok(XmlNode::new(
+        CityGmlElement::SolitaryVegetationObject.into(),
+        parts,
+    ))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -110,10 +137,23 @@ pub struct GmlSolitaryVegetationObject {
 impl From<&SolitaryVegetationObject> for GmlSolitaryVegetationObject {
     fn from(item: &SolitaryVegetationObject) -> Self {
         Self {
-            class: item.class().map(Into::into),
-            functions: item.functions().iter().map(Into::into).collect(),
-            usages: item.usages().iter().map(Into::into).collect(),
-            species: item.species().map(Into::into),
+            class: item
+                .class()
+                .map(SolitaryVegetationObjectClassValue::code)
+                .map(Into::into),
+            functions: item
+                .functions()
+                .iter()
+                .map(SolitaryVegetationObjectFunctionValue::code)
+                .map(Into::into)
+                .collect(),
+            usages: item
+                .usages()
+                .iter()
+                .map(SolitaryVegetationObjectUsageValue::code)
+                .map(Into::into)
+                .collect(),
+            species: item.species().map(SpeciesValue::code).map(Into::into),
             height: item.height().map(Into::into),
             trunk_diameter: item.trunk_diameter().map(Into::into),
             crown_diameter: item.crown_diameter().map(Into::into),
@@ -158,7 +198,7 @@ mod tests {
             deserialize_solitary_vegetation_object(xml_document).expect("should work");
 
         assert_eq!(
-            solitary_vegetation_object.id(),
+            solitary_vegetation_object.feature_id(),
             &Id::try_from("UUID_cd516eff-0302-379f-a635-791ebe618098").expect("should work")
         );
         assert!(

@@ -1,20 +1,20 @@
 use crate::Error;
 use crate::gml::codec::core::{
-    deserialize_abstract_occupied_space, serialize_abstract_occupied_space,
+    GmlOccupancyProperty, deserialize_abstract_occupied_space, serialize_abstract_occupied_space,
 };
-use crate::gml::util::{XmlElementSpans, XmlNodeContent, XmlNodeParts, serialize_inner};
-use crate::gml::write::Formatting;
+use crate::gml::util::CombinedCityGmlElement;
 use chrono::NaiveDate;
 use ecitygml_core::model::construction::{
     AbstractConstruction, AsAbstractConstruction, AsAbstractConstructionMut,
 };
 use ecitygml_core::model::core::AsAbstractOccupiedSpace;
+use egml::io::util::{Formatting, XmlElementSpans, XmlNodeContent, XmlNodeParts, serialize_inner};
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
 pub fn deserialize_abstract_construction(
     xml_document: &[u8],
-    spans: &XmlElementSpans,
+    spans: &XmlElementSpans<CombinedCityGmlElement>,
 ) -> Result<AbstractConstruction, Error> {
     let (abstract_occupied_space_result, parsed_result) = rayon::join(
         || deserialize_abstract_occupied_space(xml_document, spans),
@@ -27,6 +27,7 @@ pub fn deserialize_abstract_construction(
 
     abstract_construction.set_date_of_construction(parsed.date_of_construction);
     abstract_construction.set_date_of_demolition(parsed.date_of_demolition);
+    abstract_construction.set_occupancies(parsed.occupancies.into_iter().map(Into::into).collect());
 
     Ok(abstract_construction)
 }
@@ -66,6 +67,12 @@ pub struct GmlAbstractConstruction {
         skip_serializing_if = "Option::is_none"
     )]
     pub date_of_demolition: Option<NaiveDate>,
+
+    #[serde(
+        rename(serialize = "con:occupancy", deserialize = "occupancy"),
+        default
+    )]
+    pub occupancies: Vec<GmlOccupancyProperty>,
 }
 
 impl From<&AbstractConstruction> for GmlAbstractConstruction {
@@ -73,6 +80,11 @@ impl From<&AbstractConstruction> for GmlAbstractConstruction {
         Self {
             date_of_construction: item.date_of_construction().copied(),
             date_of_demolition: item.date_of_demolition().copied(),
+            occupancies: item
+                .occupancies()
+                .iter()
+                .map(GmlOccupancyProperty::from)
+                .collect(),
         }
     }
 }
@@ -82,13 +94,13 @@ mod tests {
     use super::*;
     use crate::gml::codec::building::deserialize_building;
     use crate::gml::codec::core::deserialize_abstract_thematic_surface;
-    use crate::gml::util::extract_xml_element_spans;
     use chrono::{Datelike, Timelike};
     use ecitygml_core::model::construction::AsAbstractConstruction;
     use ecitygml_core::model::core::{
         AsAbstractCityObject, AsAbstractFeature, AsAbstractFeatureWithLifespan,
         AsAbstractThematicSurface,
     };
+    use egml::io::util::extract_xml_element_spans;
     use egml::model::base::Id;
     use quick_xml::{DeError, de};
 
@@ -131,5 +143,106 @@ mod tests {
         assert_eq!(creation_date.hour(), 15);
         assert_eq!(creation_date.minute(), 16);
         assert_eq!(creation_date.second(), 17);
+    }
+
+    #[test]
+    fn test_deserialize_abstract_construction_with_occupancy() {
+        let xml_document = b"\
+<bldg:Building gml:id=\"DEBY_LOD2_4959457\">
+    <con:occupancy>
+        <Occupancy>
+            <numberOfOccupants>123</numberOfOccupants>
+            <interval>myInterval</interval>
+            <occupantType>myOccupantType</occupantType>
+        </Occupancy>
+    </con:occupancy>
+</bldg:Building>";
+
+        let spans = extract_xml_element_spans(xml_document).expect("should work");
+        let abstract_construction =
+            deserialize_abstract_construction(xml_document, &spans).expect("should work");
+
+        assert_eq!(abstract_construction.occupancies().len(), 1);
+
+        let occupancy = &abstract_construction.occupancies()[0];
+        assert_eq!(occupancy.number_of_occupants(), 123);
+        assert_eq!(
+            occupancy.interval().expect("must exist").code().value(),
+            "myInterval"
+        );
+        assert_eq!(
+            occupancy
+                .occupant_type()
+                .expect("must exist")
+                .code()
+                .value(),
+            "myOccupantType"
+        );
+    }
+
+    #[test]
+    fn test_serialize_abstract_construction_with_occupancy() {
+        let xml_document = b"\
+<bldg:Building gml:id=\"DEBY_LOD2_4959457\">
+    <con:occupancy>
+        <Occupancy>
+            <numberOfOccupants>123</numberOfOccupants>
+            <interval>myInterval</interval>
+            <occupantType>myOccupantType</occupantType>
+        </Occupancy>
+    </con:occupancy>
+</bldg:Building>";
+
+        let spans = extract_xml_element_spans(xml_document).expect("should work");
+        let abstract_construction =
+            deserialize_abstract_construction(xml_document, &spans).expect("should work");
+
+        let xml_node_parts =
+            serialize_abstract_construction(&abstract_construction, Formatting::Compact)
+                .expect("should serialize");
+        let xml = egml::io::util::XmlNode::new("bldg:Building", xml_node_parts)
+            .to_string(Formatting::Compact)
+            .expect("should convert to string");
+
+        assert!(xml.contains("con:occupancy"));
+        assert!(xml.contains("Occupancy"));
+        assert!(xml.contains("numberOfOccupants"));
+        assert!(xml.contains("123"));
+        assert!(xml.contains("myInterval"));
+        assert!(xml.contains("myOccupantType"));
+    }
+
+    #[test]
+    fn test_round_trip_abstract_construction_with_occupancy() {
+        let xml_document = b"\
+<bldg:Building gml:id=\"DEBY_LOD2_4959457\">
+    <con:occupancy>
+        <Occupancy>
+            <numberOfOccupants>123</numberOfOccupants>
+            <interval>myInterval</interval>
+            <occupantType>myOccupantType</occupantType>
+        </Occupancy>
+    </con:occupancy>
+</bldg:Building>";
+
+        let spans = extract_xml_element_spans(xml_document).expect("should work");
+        let abstract_construction =
+            deserialize_abstract_construction(xml_document, &spans).expect("should work");
+
+        let xml_node_parts =
+            serialize_abstract_construction(&abstract_construction, Formatting::Compact)
+                .expect("should serialize");
+        let xml = egml::io::util::XmlNode::new("bldg:Building", xml_node_parts)
+            .to_string(Formatting::Compact)
+            .expect("should convert to string");
+
+        let round_tripped_spans = extract_xml_element_spans(xml.as_bytes()).expect("should work");
+        let round_tripped = deserialize_abstract_construction(xml.as_bytes(), &round_tripped_spans)
+            .expect("should work");
+
+        assert_eq!(
+            abstract_construction.occupancies(),
+            round_tripped.occupancies()
+        );
     }
 }

@@ -162,9 +162,9 @@ impl GeneralNamespace {
         match self {
             Self::Gml => "http://www.opengis.net/gml/3.2",
             Self::Xsi => "http://www.w3.org/2001/XMLSchema-instance",
-            Self::XLink => "https://www.w3.org/1999/xlink",
-            Self::Ct => "https://schemas.opengis.net/citygml/xAL/3.0/CommonTypes.xsd",
-            Self::XAl => "https://schemas.opengis.net/citygml/xAL/3.0/xAL.xsd",
+            Self::XLink => "http://www.w3.org/1999/xlink",
+            Self::Ct => "http://schemas.opengis.net/citygml/xAL/3.0/CommonTypes.xsd",
+            Self::XAl => "http://schemas.opengis.net/citygml/xAL/3.0/xAL.xsd",
         }
     }
 

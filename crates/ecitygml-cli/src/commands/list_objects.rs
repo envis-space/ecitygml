@@ -1,5 +1,5 @@
 use crate::error::Error;
-use ecitygml::model::common::HasFeatureType;
+use ecitygml::model::common::{HasFeatureType, IterFeatures};
 use ecitygml::model::core::AsAbstractFeature;
 use std::path::Path;
 use std::time::Instant;
@@ -22,13 +22,15 @@ pub fn run(file_path: impl AsRef<Path>) -> Result<(), Error> {
     info!("Refreshed bounded_by in {:.3?}", now.elapsed());
 
     for current_city_object in city_model.iter_features() {
-        let envelope_str = current_city_object
-            .bounded_by()
-            .map_or_else(String::new, |e| format!(", {}", e));
+        let envelope_str = egml::model::feature::AsAbstractFeature::bounded_by(
+            current_city_object.abstract_feature(),
+        )
+        .and_then(|x| x.envelope())
+        .map_or_else(String::new, |e| format!(", {}", e));
 
         info!(
             "   ID: {}, class: {}, envelope: {}",
-            current_city_object.id(),
+            current_city_object.feature_id(),
             current_city_object.feature_type(),
             envelope_str,
         );

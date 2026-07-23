@@ -2,83 +2,80 @@ use crate::Error;
 use crate::gml::codec::core::abstract_physical_space::{
     deserialize_abstract_physical_space, serialize_abstract_physical_space,
 };
-use crate::gml::codec::core::implicit_geometry_property::GmlImplicitGeometryProperty;
-use crate::gml::util::{XmlElementSpans, XmlNodeContent, XmlNodeParts, serialize_inner};
-use crate::gml::write::Formatting;
-use ecitygml_core::model::core::{
-    AbstractOccupiedSpace, AsAbstractFeature, AsAbstractOccupiedSpaceMut, AsAbstractPhysicalSpace,
-    ImplicitGeometry,
+use crate::gml::codec::core::implicit_geometry_property::{
+    deserialize_implicit_geometry_property, serialize_implicit_geometry_property,
 };
+use crate::gml::util::{CityGmlElement, CombinedCityGmlElement};
+use ecitygml_core::model::core::{
+    AbstractOccupiedSpace, AsAbstractOccupiedSpace, AsAbstractOccupiedSpaceMut,
+    AsAbstractPhysicalSpace,
+};
+use egml::io::util::collect_child;
+use egml::io::util::{Formatting, XmlElementSpans, XmlNodeContent, XmlNodeParts, serialize_inner};
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
-use tracing::debug;
 
 pub fn deserialize_abstract_occupied_space(
     xml_document: &[u8],
-    spans: &XmlElementSpans,
+    spans: &XmlElementSpans<CombinedCityGmlElement>,
 ) -> Result<AbstractOccupiedSpace, Error> {
-    let (abstract_physical_space_result, parsed_result) = rayon::join(
-        || deserialize_abstract_physical_space(xml_document, spans),
-        || de::from_reader::<_, GmlAbstractOccupiedSpace>(xml_document).map_err(Error::from),
-    );
-    let abstract_physical_space = abstract_physical_space_result?;
-    let parsed = parsed_result?;
+    let mut abstract_physical_space_result = None;
+    let mut _parsed_result = None;
+    let mut lod1_implicit_geometry_result = None;
+    let mut lod2_implicit_geometry_result = None;
+    let mut lod3_implicit_geometry_result = None;
+
+    rayon::scope(|s| {
+        s.spawn(|_| {
+            abstract_physical_space_result =
+                Some(deserialize_abstract_physical_space(xml_document, spans));
+        });
+        s.spawn(|_| {
+            _parsed_result = Some(
+                de::from_reader::<_, GmlAbstractOccupiedSpace>(xml_document).map_err(Error::from),
+            );
+        });
+        s.spawn(|_| {
+            lod1_implicit_geometry_result = Some(collect_child(
+                xml_document,
+                spans,
+                CityGmlElement::Lod1ImplicitRepresentationProperty.into(),
+                deserialize_implicit_geometry_property,
+            ));
+        });
+        s.spawn(|_| {
+            lod2_implicit_geometry_result = Some(collect_child(
+                xml_document,
+                spans,
+                CityGmlElement::Lod2ImplicitRepresentationProperty.into(),
+                deserialize_implicit_geometry_property,
+            ));
+        });
+        s.spawn(|_| {
+            lod3_implicit_geometry_result = Some(collect_child(
+                xml_document,
+                spans,
+                CityGmlElement::Lod3ImplicitRepresentationProperty.into(),
+                deserialize_implicit_geometry_property,
+            ));
+        });
+    });
+
+    let abstract_physical_space =
+        abstract_physical_space_result.expect("rayon::scope guarantees all spawns complete")?;
+    let _parsed = _parsed_result.expect("rayon::scope guarantees all spawns complete")?;
+    let lod1_implicit_geometry =
+        lod1_implicit_geometry_result.expect("rayon::scope guarantees all spawns complete")?;
+    let lod2_implicit_geometry =
+        lod2_implicit_geometry_result.expect("rayon::scope guarantees all spawns complete")?;
+    let lod3_implicit_geometry =
+        lod3_implicit_geometry_result.expect("rayon::scope guarantees all spawns complete")?;
+
     let mut abstract_occupied_space =
         AbstractOccupiedSpace::from_abstract_physical_space(abstract_physical_space);
-
-    if let Some(gml_implicit_geometry_property) = parsed.lod1_implicit_representation {
-        let multi_surface_result: Result<ImplicitGeometry, Error> =
-            gml_implicit_geometry_property.implicit_geometry.try_into();
-
-        match multi_surface_result {
-            Ok(x) => {
-                abstract_occupied_space.set_lod1_implicit_representation(Some(x));
-            }
-            Err(e) => {
-                debug!(
-                    "lod1ImplicitRepresentation of feature (id={}) contains invalid geometry: {}",
-                    &abstract_occupied_space.id(),
-                    e.to_string()
-                );
-            }
-        }
-    }
-
-    if let Some(gml_implicit_geometry_property) = parsed.lod2_implicit_representation {
-        let multi_surface_result: Result<ImplicitGeometry, Error> =
-            gml_implicit_geometry_property.implicit_geometry.try_into();
-
-        match multi_surface_result {
-            Ok(x) => {
-                abstract_occupied_space.set_lod2_implicit_representation(Some(x));
-            }
-            Err(e) => {
-                debug!(
-                    "lod2ImplicitRepresentation of feature (id={}) contains invalid geometry: {}",
-                    &abstract_occupied_space.id(),
-                    e.to_string()
-                );
-            }
-        }
-    }
-
-    if let Some(gml_implicit_geometry_property) = parsed.lod3_implicit_representation {
-        let multi_surface_result: Result<ImplicitGeometry, Error> =
-            gml_implicit_geometry_property.implicit_geometry.try_into();
-
-        match multi_surface_result {
-            Ok(x) => {
-                abstract_occupied_space.set_lod3_implicit_representation(Some(x));
-            }
-            Err(e) => {
-                debug!(
-                    "lod3ImplicitRepresentation of feature (id={}) contains invalid geometry: {}",
-                    &abstract_occupied_space.id(),
-                    e.to_string()
-                );
-            }
-        }
-    }
+    abstract_occupied_space.set_lod1_implicit_representation(lod1_implicit_geometry);
+    abstract_occupied_space.set_lod2_implicit_representation(lod2_implicit_geometry);
+    abstract_occupied_space.set_lod3_implicit_representation(lod3_implicit_geometry);
 
     Ok(abstract_occupied_space)
 }
@@ -99,45 +96,53 @@ pub fn serialize_abstract_occupied_space(
         xml_node_parts.content.push(XmlNodeContent::Raw(raw));
     }
 
+    if let Some(implicit_geometry_property) = abstract_occupied_space.lod1_implicit_representation()
+    {
+        let node = serialize_implicit_geometry_property(
+            implicit_geometry_property,
+            formatting,
+            CityGmlElement::Lod1ImplicitRepresentationProperty,
+        )?;
+        xml_node_parts.content.push(XmlNodeContent::Child(node));
+    }
+
+    if let Some(implicit_geometry_property) = abstract_occupied_space.lod2_implicit_representation()
+    {
+        let node = serialize_implicit_geometry_property(
+            implicit_geometry_property,
+            formatting,
+            CityGmlElement::Lod2ImplicitRepresentationProperty,
+        )?;
+        xml_node_parts.content.push(XmlNodeContent::Child(node));
+    }
+
+    if let Some(implicit_geometry_property) = abstract_occupied_space.lod3_implicit_representation()
+    {
+        let node = serialize_implicit_geometry_property(
+            implicit_geometry_property,
+            formatting,
+            CityGmlElement::Lod3ImplicitRepresentationProperty,
+        )?;
+        xml_node_parts.content.push(XmlNodeContent::Child(node));
+    }
+
     Ok(xml_node_parts)
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
-pub struct GmlAbstractOccupiedSpace {
-    #[serde(
-        rename = "lod1ImplicitRepresentation",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub lod1_implicit_representation: Option<GmlImplicitGeometryProperty>,
-
-    #[serde(
-        rename = "lod2ImplicitRepresentation",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub lod2_implicit_representation: Option<GmlImplicitGeometryProperty>,
-
-    #[serde(
-        rename = "lod3ImplicitRepresentation",
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub lod3_implicit_representation: Option<GmlImplicitGeometryProperty>,
-}
+pub struct GmlAbstractOccupiedSpace {}
 
 impl From<&AbstractOccupiedSpace> for GmlAbstractOccupiedSpace {
     fn from(_item: &AbstractOccupiedSpace) -> Self {
-        Self {
-            lod1_implicit_representation: None, // TODO
-            lod2_implicit_representation: None, // TODO
-            lod3_implicit_representation: None, // TODO
-        }
+        Self {}
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::gml::util::extract_xml_element_spans;
     use ecitygml_core::model::core::AsAbstractOccupiedSpace;
+    use egml::io::util::extract_xml_element_spans;
 
     #[test]
     fn test_deserialize_abstract_occupied_space() {
@@ -196,12 +201,13 @@ mod tests {
 
         let lod1_implicit_representation = abstract_occupied_space
             .lod1_implicit_representation()
+            .unwrap()
+            .object()
             .unwrap();
         assert_eq!(
             lod1_implicit_representation
-                .reference_point
-                .object
-                .as_ref()
+                .reference_point()
+                .object()
                 .expect("must exist")
                 .pos()
                 .x(),
@@ -209,9 +215,8 @@ mod tests {
         );
         assert_eq!(
             lod1_implicit_representation
-                .reference_point
-                .object
-                .as_ref()
+                .reference_point()
+                .object()
                 .expect("must exist")
                 .pos()
                 .y(),
@@ -219,9 +224,8 @@ mod tests {
         );
         assert_eq!(
             lod1_implicit_representation
-                .reference_point
-                .object
-                .as_ref()
+                .reference_point()
+                .object()
                 .expect("must exist")
                 .pos()
                 .z(),

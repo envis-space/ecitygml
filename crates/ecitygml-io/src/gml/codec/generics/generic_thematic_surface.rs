@@ -2,12 +2,18 @@ use crate::Error;
 use crate::gml::codec::core::{
     deserialize_abstract_thematic_surface, serialize_abstract_thematic_surface,
 };
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner};
-use crate::gml::write::Formatting;
+use crate::gml::util::CityGmlElement;
 use ecitygml_core::model::core::AsAbstractThematicSurface;
 use ecitygml_core::model::generics::GenericThematicSurface;
-use egml::io::GmlCode;
+use ecitygml_core::model::generics::values::{
+    GenericThematicSurfaceClassValue, GenericThematicSurfaceFunctionValue,
+    GenericThematicSurfaceUsageValue,
+};
+use egml::io::codec::basic::GmlCode;
+use egml::io::util::{
+    Formatting, XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner,
+};
+use egml::model::basic_types::Code;
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
@@ -24,9 +30,28 @@ pub fn deserialize_generic_thematic_surface(
 
     let mut generic_thematic_surface =
         GenericThematicSurface::from_abstract_thematic_surface(abstract_thematic_surface);
-    generic_thematic_surface.set_class(parsed.class.map(Into::into));
-    generic_thematic_surface.set_functions(parsed.functions.into_iter().map(Into::into).collect());
-    generic_thematic_surface.set_usages(parsed.usages.into_iter().map(Into::into).collect());
+    generic_thematic_surface.set_class_opt(
+        parsed
+            .class
+            .map(Code::from)
+            .map(GenericThematicSurfaceClassValue::from),
+    );
+    generic_thematic_surface.set_functions(
+        parsed
+            .functions
+            .into_iter()
+            .map(Code::from)
+            .map(GenericThematicSurfaceFunctionValue::from)
+            .collect(),
+    );
+    generic_thematic_surface.set_usages(
+        parsed
+            .usages
+            .into_iter()
+            .map(Code::from)
+            .map(GenericThematicSurfaceUsageValue::from)
+            .collect(),
+    );
 
     Ok(generic_thematic_surface)
 }
@@ -47,7 +72,10 @@ pub fn serialize_generic_thematic_surface(
         parts.content.push(XmlNodeContent::Raw(raw));
     }
 
-    Ok(XmlNode::new(XmlElement::GenericThematicSurface, parts))
+    Ok(XmlNode::new(
+        CityGmlElement::GenericThematicSurface.into(),
+        parts,
+    ))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -68,9 +96,22 @@ pub struct GmlGenericThematicSurface {
 impl From<&GenericThematicSurface> for GmlGenericThematicSurface {
     fn from(item: &GenericThematicSurface) -> Self {
         Self {
-            class: item.class().map(Into::into),
-            functions: item.functions().iter().map(Into::into).collect(),
-            usages: item.usages().iter().map(Into::into).collect(),
+            class: item
+                .class()
+                .map(GenericThematicSurfaceClassValue::code)
+                .map(Into::into),
+            functions: item
+                .functions()
+                .iter()
+                .map(GenericThematicSurfaceFunctionValue::code)
+                .map(Into::into)
+                .collect(),
+            usages: item
+                .usages()
+                .iter()
+                .map(GenericThematicSurfaceUsageValue::code)
+                .map(Into::into)
+                .collect(),
         }
     }
 }

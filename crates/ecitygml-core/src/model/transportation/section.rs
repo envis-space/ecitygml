@@ -1,18 +1,19 @@
-use crate::model::core::AsAbstractFeatureMut;
-use crate::model::core::refs::FeatureKindRef;
-use crate::model::core::refs::FeatureKindRefMut;
+use crate::model::common::{ForEachFeatureMut, IterFeatures};
+use crate::model::core::refs::AbstractFeatureKindRef;
+use crate::model::core::refs::AbstractFeatureKindRefMut;
+use crate::model::transportation::values::SectionClassValue;
 use crate::model::transportation::{
     AbstractTransportationSpace, AsAbstractTransportationSpace, AsAbstractTransportationSpaceMut,
 };
 use egml::model::base::Id;
-use egml::model::basic::Code;
+use egml::model::common::{ApplyTransform, ComputeEnvelope};
 use egml::model::geometry::Envelope;
-use nalgebra::Isometry3;
+use nalgebra::{Isometry3, Rotation3, Scale3, Transform3, Vector3};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Section {
     pub(crate) abstract_transportation_space: AbstractTransportationSpace,
-    class: Option<Code>,
+    class: Option<SectionClassValue>,
 }
 
 impl Section {
@@ -29,35 +30,20 @@ impl Section {
         }
     }
 
-    pub fn class(&self) -> Option<&Code> {
+    pub fn class(&self) -> Option<&SectionClassValue> {
         self.class.as_ref()
     }
 
-    pub fn set_class(&mut self, class: Option<Code>) {
+    pub fn set_class(&mut self, class: SectionClassValue) {
+        self.class = Some(class);
+    }
+
+    pub fn set_class_opt(&mut self, class: Option<SectionClassValue>) {
         self.class = class;
     }
-}
 
-impl Section {
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
-        std::iter::once(self.into()).chain(self.abstract_transportation_space.iter_features())
-    }
-
-    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
-        f((&mut *self).into());
-        self.abstract_transportation_space.for_each_feature_mut(f);
-    }
-
-    pub fn compute_envelope(&self) -> Option<Envelope> {
-        self.abstract_transportation_space.compute_envelope()
-    }
-
-    pub fn recompute_bounding_shape(&mut self) {
-        self.set_bounding_shape_from_envelope(self.compute_envelope());
-    }
-
-    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
-        self.abstract_transportation_space.apply_transform(m);
+    pub fn clear_class(&mut self) {
+        self.class = None;
     }
 }
 
@@ -76,3 +62,46 @@ impl AsAbstractTransportationSpaceMut for Section {
 crate::impl_abstract_transportation_space_traits!(Section);
 crate::impl_abstract_transportation_space_mut_traits!(Section);
 crate::impl_has_feature_type!(Section, Section);
+
+impl IterFeatures for Section {
+    fn iter_features(&self) -> Box<dyn Iterator<Item = AbstractFeatureKindRef<'_>> + '_> {
+        Box::new(
+            std::iter::once(self.into()).chain(self.abstract_transportation_space.iter_features()),
+        )
+    }
+}
+
+impl ForEachFeatureMut for Section {
+    fn for_each_feature_mut<F: FnMut(AbstractFeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
+        f((&mut *self).into());
+        self.abstract_transportation_space.for_each_feature_mut(f);
+    }
+}
+
+impl ComputeEnvelope for Section {
+    fn compute_envelope(&self) -> Option<Envelope> {
+        self.abstract_transportation_space.compute_envelope()
+    }
+}
+
+impl ApplyTransform for Section {
+    fn apply_transform(&mut self, m: Transform3<f64>) {
+        self.abstract_transportation_space.apply_transform(m);
+    }
+
+    fn apply_isometry(&mut self, isometry: Isometry3<f64>) {
+        self.abstract_transportation_space.apply_isometry(isometry);
+    }
+
+    fn apply_translation(&mut self, vector: Vector3<f64>) {
+        self.abstract_transportation_space.apply_translation(vector);
+    }
+
+    fn apply_rotation(&mut self, rotation: Rotation3<f64>) {
+        self.abstract_transportation_space.apply_rotation(rotation);
+    }
+
+    fn apply_scale(&mut self, scale: Scale3<f64>) {
+        self.abstract_transportation_space.apply_scale(scale);
+    }
+}

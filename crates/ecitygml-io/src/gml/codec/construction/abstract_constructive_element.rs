@@ -1,25 +1,23 @@
 use crate::Error;
-use crate::gml::codec::construction::filling_element_property::{
-    deserialize_filling_element_property, serialize_filling_element_property,
+use crate::gml::codec::construction::abstract_filling_element_property::{
+    deserialize_abstract_filling_element_property, serialize_abstract_filling_element_property,
 };
 use crate::gml::codec::core::{
     deserialize_abstract_occupied_space, serialize_abstract_occupied_space,
 };
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{
-    XmlElementSpans, XmlNodeContent, XmlNodeParts, collect_children, serialize_inner,
-};
-use crate::gml::write::Formatting;
+use crate::gml::util::{CityGmlElement, CombinedCityGmlElement};
 use ecitygml_core::model::construction::{
     AbstractConstructiveElement, AsAbstractConstructiveElement, AsAbstractConstructiveElementMut,
 };
 use ecitygml_core::model::core::AsAbstractOccupiedSpace;
+use egml::io::util::collect_children;
+use egml::io::util::{Formatting, XmlElementSpans, XmlNodeContent, XmlNodeParts, serialize_inner};
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
 pub fn deserialize_abstract_constructive_element(
     xml_document: &[u8],
-    spans: &XmlElementSpans,
+    spans: &XmlElementSpans<CombinedCityGmlElement>,
 ) -> Result<AbstractConstructiveElement, Error> {
     let mut abstract_occupied_space_result = None;
     let mut filling_elements_result = None;
@@ -34,8 +32,8 @@ pub fn deserialize_abstract_constructive_element(
             filling_elements_result = Some(collect_children(
                 xml_document,
                 spans,
-                XmlElement::FillingElementProperty,
-                deserialize_filling_element_property,
+                CityGmlElement::AbstractFillingElementProperty.into(),
+                deserialize_abstract_filling_element_property,
             ));
         });
         s.spawn(|_| {
@@ -77,11 +75,9 @@ pub fn serialize_abstract_constructive_element(
     }
 
     for prop in abstract_constructive_element.fillings() {
-        xml_node_parts
-            .content
-            .push(XmlNodeContent::Child(serialize_filling_element_property(
-                prop, formatting,
-            )?));
+        xml_node_parts.content.push(XmlNodeContent::Child(
+            serialize_abstract_filling_element_property(prop, formatting)?,
+        ));
     }
 
     Ok(xml_node_parts)

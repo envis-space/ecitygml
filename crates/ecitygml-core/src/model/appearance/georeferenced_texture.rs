@@ -1,10 +1,11 @@
 use crate::model::appearance::{AbstractTexture, AsAbstractTexture, AsAbstractTextureMut};
-use crate::model::core::AsAbstractFeatureMut;
-use crate::model::core::refs::FeatureKindRef;
-use crate::model::core::refs::FeatureKindRefMut;
+use crate::model::common::{ForEachFeatureMut, IterFeatures};
+use crate::model::core::refs::AbstractFeatureKindRef;
+use crate::model::core::refs::AbstractFeatureKindRefMut;
 use egml::model::base::Id;
+use egml::model::common::{ApplyTransform, ComputeEnvelope};
 use egml::model::geometry::Envelope;
-use nalgebra::Isometry3;
+use nalgebra::{Isometry3, Rotation3, Scale3, Transform3, Vector3};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct GeoreferencedTexture {
@@ -33,29 +34,6 @@ impl GeoreferencedTexture {
     }
 }
 
-impl GeoreferencedTexture {
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
-        std::iter::once(self.into()).chain(self.abstract_texture.iter_features())
-    }
-
-    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
-        f((&mut *self).into());
-        self.abstract_texture.for_each_feature_mut(f);
-    }
-
-    pub fn compute_envelope(&self) -> Option<Envelope> {
-        self.abstract_texture.compute_envelope()
-    }
-
-    pub fn recompute_bounding_shape(&mut self) {
-        self.set_bounding_shape_from_envelope(self.compute_envelope());
-    }
-
-    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
-        self.abstract_texture.apply_transform(m);
-    }
-}
-
 impl AsAbstractTexture for GeoreferencedTexture {
     fn abstract_texture(&self) -> &AbstractTexture {
         &self.abstract_texture
@@ -71,3 +49,44 @@ impl AsAbstractTextureMut for GeoreferencedTexture {
 crate::impl_abstract_texture_traits!(GeoreferencedTexture);
 crate::impl_abstract_texture_mut_traits!(GeoreferencedTexture);
 crate::impl_has_feature_type!(GeoreferencedTexture, GeoreferencedTexture);
+
+impl IterFeatures for GeoreferencedTexture {
+    fn iter_features(&self) -> Box<dyn Iterator<Item = AbstractFeatureKindRef<'_>> + '_> {
+        Box::new(std::iter::once(self.into()).chain(self.abstract_texture.iter_features()))
+    }
+}
+
+impl ForEachFeatureMut for GeoreferencedTexture {
+    fn for_each_feature_mut<F: FnMut(AbstractFeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
+        f((&mut *self).into());
+        self.abstract_texture.for_each_feature_mut(f);
+    }
+}
+
+impl ComputeEnvelope for GeoreferencedTexture {
+    fn compute_envelope(&self) -> Option<Envelope> {
+        self.abstract_texture.compute_envelope()
+    }
+}
+
+impl ApplyTransform for GeoreferencedTexture {
+    fn apply_transform(&mut self, m: Transform3<f64>) {
+        self.abstract_texture.apply_transform(m);
+    }
+
+    fn apply_isometry(&mut self, isometry: Isometry3<f64>) {
+        self.abstract_texture.apply_isometry(isometry);
+    }
+
+    fn apply_translation(&mut self, vector: Vector3<f64>) {
+        self.abstract_texture.apply_translation(vector);
+    }
+
+    fn apply_rotation(&mut self, rotation: Rotation3<f64>) {
+        self.abstract_texture.apply_rotation(rotation);
+    }
+
+    fn apply_scale(&mut self, scale: Scale3<f64>) {
+        self.abstract_texture.apply_scale(scale);
+    }
+}

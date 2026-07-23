@@ -1,13 +1,13 @@
-use crate::model::common::LevelOfDetail;
-use crate::model::core::AsAbstractFeatureMut;
-use crate::model::core::refs::FeatureKindRef;
-use crate::model::core::refs::FeatureKindRefMut;
+use crate::model::common::{ForEachFeatureMut, IterFeatures, LevelOfDetail};
+use crate::model::core::refs::AbstractFeatureKindRef;
+use crate::model::core::refs::AbstractFeatureKindRefMut;
 use crate::model::relief::{
     AbstractReliefComponent, AsAbstractReliefComponent, AsAbstractReliefComponentMut, TinProperty,
 };
 use egml::model::base::Id;
+use egml::model::common::{ApplyTransform, ComputeEnvelope};
 use egml::model::geometry::Envelope;
-use nalgebra::Isometry3;
+use nalgebra::{Isometry3, Rotation3, Scale3, Transform3, Vector3};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct TinRelief {
@@ -33,36 +33,16 @@ impl TinRelief {
         self.tin.as_ref()
     }
 
-    pub fn set_tin(&mut self, tin: Option<TinProperty>) {
+    pub fn set_tin(&mut self, tin: TinProperty) {
+        self.tin = Some(tin);
+    }
+
+    pub fn set_tin_opt(&mut self, tin: Option<TinProperty>) {
         self.tin = tin;
     }
-}
 
-impl TinRelief {
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
-        std::iter::once(self.into()).chain(self.abstract_relief_component.iter_features())
-    }
-
-    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
-        f((&mut *self).into());
-        self.abstract_relief_component.for_each_feature_mut(f);
-    }
-
-    pub fn compute_envelope(&self) -> Option<Envelope> {
-        self.tin
-            .as_ref()
-            .and_then(|x| x.object.as_ref())
-            .and_then(|x| x.compute_envelope())
-    }
-
-    pub fn recompute_bounding_shape(&mut self) {
-        self.set_bounding_shape_from_envelope(self.compute_envelope());
-    }
-
-    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
-        if let Some(triangulated_surface) = self.tin.as_mut().and_then(|p| p.object.as_mut()) {
-            triangulated_surface.apply_transform(m);
-        }
+    pub fn clear_tin(&mut self) {
+        self.tin = None;
     }
 }
 
@@ -81,3 +61,57 @@ impl AsAbstractReliefComponentMut for TinRelief {
 crate::impl_abstract_relief_component_traits!(TinRelief);
 crate::impl_abstract_relief_component_mut_traits!(TinRelief);
 crate::impl_has_feature_type!(TinRelief, TinRelief);
+
+impl IterFeatures for TinRelief {
+    fn iter_features(&self) -> Box<dyn Iterator<Item = AbstractFeatureKindRef<'_>> + '_> {
+        Box::new(std::iter::once(self.into()).chain(self.abstract_relief_component.iter_features()))
+    }
+}
+
+impl ForEachFeatureMut for TinRelief {
+    fn for_each_feature_mut<F: FnMut(AbstractFeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
+        f((&mut *self).into());
+        self.abstract_relief_component.for_each_feature_mut(f);
+    }
+}
+
+impl ComputeEnvelope for TinRelief {
+    fn compute_envelope(&self) -> Option<Envelope> {
+        self.tin
+            .as_ref()
+            .and_then(|x| x.object())
+            .and_then(|x| x.compute_envelope())
+    }
+}
+
+impl ApplyTransform for TinRelief {
+    fn apply_transform(&mut self, m: Transform3<f64>) {
+        if let Some(triangulated_surface) = self.tin.as_mut().and_then(|p| p.object_mut()) {
+            triangulated_surface.apply_transform(m);
+        }
+    }
+
+    fn apply_isometry(&mut self, isometry: Isometry3<f64>) {
+        if let Some(triangulated_surface) = self.tin.as_mut().and_then(|p| p.object_mut()) {
+            triangulated_surface.apply_isometry(isometry);
+        }
+    }
+
+    fn apply_translation(&mut self, vector: Vector3<f64>) {
+        if let Some(triangulated_surface) = self.tin.as_mut().and_then(|p| p.object_mut()) {
+            triangulated_surface.apply_translation(vector);
+        }
+    }
+
+    fn apply_rotation(&mut self, rotation: Rotation3<f64>) {
+        if let Some(triangulated_surface) = self.tin.as_mut().and_then(|p| p.object_mut()) {
+            triangulated_surface.apply_rotation(rotation);
+        }
+    }
+
+    fn apply_scale(&mut self, scale: Scale3<f64>) {
+        if let Some(triangulated_surface) = self.tin.as_mut().and_then(|p| p.object_mut()) {
+            triangulated_surface.apply_scale(scale);
+        }
+    }
+}

@@ -2,13 +2,13 @@ use crate::Error;
 use crate::gml::codec::core::{
     deserialize_abstract_feature_with_lifespan, serialize_abstract_feature_with_lifespan,
 };
-use crate::gml::util::{XmlElementSpans, XmlNodeParts};
-use crate::gml::write::Formatting;
+use crate::gml::util::CombinedCityGmlElement;
 use ecitygml_core::model::core::{AbstractAppearance, AsAbstractFeatureWithLifespan};
+use egml::io::util::{Formatting, XmlElementSpans, XmlNodeParts};
 
 pub fn deserialize_abstract_appearance(
     xml_document: &[u8],
-    spans: &XmlElementSpans,
+    spans: &XmlElementSpans<CombinedCityGmlElement>,
 ) -> Result<AbstractAppearance, Error> {
     let abstract_feature_with_lifespan =
         deserialize_abstract_feature_with_lifespan(xml_document, spans)?;

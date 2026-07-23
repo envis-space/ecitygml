@@ -1,23 +1,27 @@
-use crate::model::core::refs::FeatureKindRef;
-use crate::model::core::refs::FeatureKindRefMut;
+use crate::model::common::{ForEachFeatureMut, IterFeatures};
+use crate::model::core::refs::AbstractFeatureKindRef;
+use crate::model::core::refs::AbstractFeatureKindRefMut;
 use crate::model::core::{
-    AbstractUnoccupiedSpace, AsAbstractUnoccupiedSpace, AsAbstractUnoccupiedSpaceMut,
+    AbstractUnoccupiedSpace, AsAbstractUnoccupiedSpace, AsAbstractUnoccupiedSpaceMut, Occupancy,
 };
 use crate::model::transportation::marking_property::MarkingProperty;
 use crate::model::transportation::{
-    AuxiliaryTrafficSpaceProperty, TrafficDirectionValue, TrafficSpaceProperty,
+    AuxiliaryTrafficSpaceProperty, HoleProperty, TrafficDirectionValue, TrafficSpaceProperty,
 };
 use egml::model::base::Id;
+use egml::model::common::{ApplyTransform, ComputeEnvelope};
 use egml::model::geometry::Envelope;
-use nalgebra::Isometry3;
+use nalgebra::{Isometry3, Rotation3, Scale3, Transform3, Vector3};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbstractTransportationSpace {
     pub(crate) abstract_unoccupied_space: AbstractUnoccupiedSpace,
     traffic_direction: Option<TrafficDirectionValue>,
+    occupancies: Vec<Occupancy>,
     traffic_spaces: Vec<TrafficSpaceProperty>,
     auxiliary_traffic_spaces: Vec<AuxiliaryTrafficSpaceProperty>,
     markings: Vec<MarkingProperty>,
+    holes: Vec<HoleProperty>,
 }
 
 impl AbstractTransportationSpace {
@@ -31,71 +35,12 @@ impl AbstractTransportationSpace {
         Self {
             abstract_unoccupied_space,
             traffic_direction: None,
+            occupancies: Vec::new(),
             traffic_spaces: Vec::new(),
             auxiliary_traffic_spaces: Vec::new(),
             markings: Vec::new(),
+            holes: Vec::new(),
         }
-    }
-}
-impl AbstractTransportationSpace {
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
-        self.abstract_unoccupied_space
-            .iter_features()
-            .chain(
-                self.traffic_spaces
-                    .iter()
-                    .flat_map(|x| x.object.as_ref())
-                    .flat_map(|x| x.iter_features()),
-            )
-            .chain(
-                self.auxiliary_traffic_spaces
-                    .iter()
-                    .flat_map(|x| x.object.as_ref())
-                    .flat_map(|x| x.iter_features()),
-            )
-            .chain(
-                self.markings
-                    .iter()
-                    .flat_map(|x| x.object.as_ref())
-                    .flat_map(|x| x.iter_features()),
-            )
-    }
-    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
-        self.abstract_unoccupied_space.for_each_feature_mut(f);
-        for prop in &mut self.traffic_spaces {
-            if let Some(x) = prop.object.as_mut() {
-                x.for_each_feature_mut(f);
-            }
-        }
-        for prop in &mut self.auxiliary_traffic_spaces {
-            if let Some(x) = prop.object.as_mut() {
-                x.for_each_feature_mut(f);
-            }
-        }
-        for prop in &mut self.markings {
-            if let Some(x) = prop.object.as_mut() {
-                x.for_each_feature_mut(f);
-            }
-        }
-    }
-    pub fn compute_envelope(&self) -> Option<Envelope> {
-        self.abstract_unoccupied_space.compute_envelope()
-    }
-    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
-        self.abstract_unoccupied_space.apply_transform(m);
-
-        self.traffic_spaces
-            .iter_mut()
-            .flat_map(|x| x.object.as_mut())
-            .for_each(|x| x.apply_transform(m));
-        self.auxiliary_traffic_spaces
-            .iter_mut()
-            .flat_map(|x| x.object.as_mut())
-            .for_each(|x| x.apply_transform(m));
-        self.markings
-            .iter_mut()
-            .flat_map(|x| x.object.as_mut())
-            .for_each(|x| x.apply_transform(m));
     }
 }
 
@@ -104,6 +49,10 @@ pub trait AsAbstractTransportationSpace: AsAbstractUnoccupiedSpace {
 
     fn traffic_direction(&self) -> Option<TrafficDirectionValue> {
         self.abstract_transportation_space().traffic_direction
+    }
+
+    fn occupancies(&self) -> &[Occupancy] {
+        &self.abstract_transportation_space().occupancies
     }
 
     fn traffic_spaces(&self) -> &[TrafficSpaceProperty] {
@@ -119,6 +68,10 @@ pub trait AsAbstractTransportationSpace: AsAbstractUnoccupiedSpace {
     fn markings(&self) -> &[MarkingProperty] {
         &self.abstract_transportation_space().markings
     }
+
+    fn holes(&self) -> &[HoleProperty] {
+        &self.abstract_transportation_space().holes
+    }
 }
 
 pub trait AsAbstractTransportationSpaceMut:
@@ -126,8 +79,40 @@ pub trait AsAbstractTransportationSpaceMut:
 {
     fn abstract_transportation_space_mut(&mut self) -> &mut AbstractTransportationSpace;
 
-    fn set_traffic_direction(&mut self, value: Option<TrafficDirectionValue>) {
+    fn set_traffic_direction(&mut self, value: TrafficDirectionValue) {
+        self.abstract_transportation_space_mut().traffic_direction = Some(value);
+    }
+
+    fn set_traffic_direction_opt(&mut self, value: Option<TrafficDirectionValue>) {
         self.abstract_transportation_space_mut().traffic_direction = value;
+    }
+
+    fn clear_traffic_direction(&mut self) {
+        self.abstract_transportation_space_mut().traffic_direction = None;
+    }
+
+    fn occupancies_mut(&mut self) -> &mut Vec<Occupancy> {
+        &mut self.abstract_transportation_space_mut().occupancies
+    }
+
+    fn set_occupancies(&mut self, values: Vec<Occupancy>) {
+        self.abstract_transportation_space_mut().occupancies = values;
+    }
+
+    fn push_occupancy(&mut self, occupancy: Occupancy) {
+        self.abstract_transportation_space_mut()
+            .occupancies
+            .push(occupancy);
+    }
+
+    fn extend_occupancies(&mut self, occupancies: impl IntoIterator<Item = Occupancy>) {
+        self.abstract_transportation_space_mut()
+            .occupancies
+            .extend(occupancies);
+    }
+
+    fn traffic_spaces_mut(&mut self) -> &mut [TrafficSpaceProperty] {
+        &mut self.abstract_transportation_space_mut().traffic_spaces
     }
 
     fn set_traffic_spaces(&mut self, values: Vec<TrafficSpaceProperty>) {
@@ -147,6 +132,12 @@ pub trait AsAbstractTransportationSpaceMut:
         self.abstract_transportation_space_mut()
             .traffic_spaces
             .extend(traffic_spaces);
+    }
+
+    fn auxiliary_traffic_spaces_mut(&mut self) -> &mut [AuxiliaryTrafficSpaceProperty] {
+        &mut self
+            .abstract_transportation_space_mut()
+            .auxiliary_traffic_spaces
     }
 
     fn set_auxiliary_traffic_spaces(&mut self, values: Vec<AuxiliaryTrafficSpaceProperty>) {
@@ -188,6 +179,22 @@ pub trait AsAbstractTransportationSpaceMut:
             .markings
             .extend(markings);
     }
+
+    fn holes_mut(&mut self) -> &mut Vec<HoleProperty> {
+        &mut self.abstract_transportation_space_mut().holes
+    }
+
+    fn set_holes(&mut self, values: Vec<HoleProperty>) {
+        self.abstract_transportation_space_mut().holes = values;
+    }
+
+    fn push_hole(&mut self, hole: HoleProperty) {
+        self.abstract_transportation_space_mut().holes.push(hole);
+    }
+
+    fn extend_holes(&mut self, holes: impl IntoIterator<Item = HoleProperty>) {
+        self.abstract_transportation_space_mut().holes.extend(holes);
+    }
 }
 
 impl AsAbstractTransportationSpace for AbstractTransportationSpace {
@@ -209,10 +216,7 @@ macro_rules! impl_abstract_transportation_space_traits {
 
         impl $crate::model::core::AsAbstractUnoccupiedSpace for $type {
             fn abstract_unoccupied_space(&self) -> &$crate::model::core::AbstractUnoccupiedSpace {
-                use $crate::model::transportation::AsAbstractTransportationSpace;
-                &self
-                    .abstract_transportation_space()
-                    .abstract_unoccupied_space
+                &<$type as $crate::model::transportation::AsAbstractTransportationSpace>::abstract_transportation_space(self).abstract_unoccupied_space
             }
         }
     };
@@ -227,10 +231,7 @@ macro_rules! impl_abstract_transportation_space_mut_traits {
             fn abstract_unoccupied_space_mut(
                 &mut self,
             ) -> &mut $crate::model::core::AbstractUnoccupiedSpace {
-                use $crate::model::transportation::AsAbstractTransportationSpaceMut;
-                &mut self
-                    .abstract_transportation_space_mut()
-                    .abstract_unoccupied_space
+                &mut <$type as $crate::model::transportation::AsAbstractTransportationSpaceMut>::abstract_transportation_space_mut(self).abstract_unoccupied_space
             }
         }
     };
@@ -238,3 +239,175 @@ macro_rules! impl_abstract_transportation_space_mut_traits {
 
 impl_abstract_transportation_space_traits!(AbstractTransportationSpace);
 impl_abstract_transportation_space_mut_traits!(AbstractTransportationSpace);
+
+impl IterFeatures for AbstractTransportationSpace {
+    fn iter_features(&self) -> Box<dyn Iterator<Item = AbstractFeatureKindRef<'_>> + '_> {
+        Box::new(
+            self.abstract_unoccupied_space
+                .iter_features()
+                .chain(
+                    self.traffic_spaces
+                        .iter()
+                        .flat_map(|x| x.object())
+                        .flat_map(|x| x.iter_features()),
+                )
+                .chain(
+                    self.auxiliary_traffic_spaces
+                        .iter()
+                        .flat_map(|x| x.object())
+                        .flat_map(|x| x.iter_features()),
+                )
+                .chain(
+                    self.markings
+                        .iter()
+                        .flat_map(|x| x.object())
+                        .flat_map(|x| x.iter_features()),
+                )
+                .chain(
+                    self.holes
+                        .iter()
+                        .flat_map(|x| x.object())
+                        .flat_map(|x| x.iter_features()),
+                ),
+        )
+    }
+}
+
+impl ForEachFeatureMut for AbstractTransportationSpace {
+    fn for_each_feature_mut<F: FnMut(AbstractFeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
+        self.abstract_unoccupied_space.for_each_feature_mut(f);
+        for prop in &mut self.traffic_spaces {
+            if let Some(x) = prop.object_mut() {
+                x.for_each_feature_mut(f);
+            }
+        }
+        for prop in &mut self.auxiliary_traffic_spaces {
+            if let Some(x) = prop.object_mut() {
+                x.for_each_feature_mut(f);
+            }
+        }
+        for prop in &mut self.markings {
+            if let Some(x) = prop.object_mut() {
+                x.for_each_feature_mut(f);
+            }
+        }
+        for prop in &mut self.holes {
+            if let Some(x) = prop.object_mut() {
+                x.for_each_feature_mut(f);
+            }
+        }
+    }
+}
+
+impl ComputeEnvelope for AbstractTransportationSpace {
+    fn compute_envelope(&self) -> Option<Envelope> {
+        self.abstract_unoccupied_space.compute_envelope()
+    }
+}
+
+impl ApplyTransform for AbstractTransportationSpace {
+    fn apply_transform(&mut self, m: Transform3<f64>) {
+        self.abstract_unoccupied_space.apply_transform(m);
+
+        self.traffic_spaces
+            .iter_mut()
+            .flat_map(|x| x.object_mut())
+            .for_each(|x| x.apply_transform(m));
+        self.auxiliary_traffic_spaces
+            .iter_mut()
+            .flat_map(|x| x.object_mut())
+            .for_each(|x| x.apply_transform(m));
+        self.markings
+            .iter_mut()
+            .flat_map(|x| x.object_mut())
+            .for_each(|x| x.apply_transform(m));
+        self.holes
+            .iter_mut()
+            .flat_map(|x| x.object_mut())
+            .for_each(|x| x.apply_transform(m));
+    }
+
+    fn apply_isometry(&mut self, isometry: Isometry3<f64>) {
+        self.abstract_unoccupied_space.apply_isometry(isometry);
+
+        self.traffic_spaces
+            .iter_mut()
+            .flat_map(|x| x.object_mut())
+            .for_each(|x| x.apply_isometry(isometry));
+        self.auxiliary_traffic_spaces
+            .iter_mut()
+            .flat_map(|x| x.object_mut())
+            .for_each(|x| x.apply_isometry(isometry));
+        self.markings
+            .iter_mut()
+            .flat_map(|x| x.object_mut())
+            .for_each(|x| x.apply_isometry(isometry));
+        self.holes
+            .iter_mut()
+            .flat_map(|x| x.object_mut())
+            .for_each(|x| x.apply_isometry(isometry));
+    }
+
+    fn apply_translation(&mut self, vector: Vector3<f64>) {
+        self.abstract_unoccupied_space.apply_translation(vector);
+
+        self.traffic_spaces
+            .iter_mut()
+            .flat_map(|x| x.object_mut())
+            .for_each(|x| x.apply_translation(vector));
+        self.auxiliary_traffic_spaces
+            .iter_mut()
+            .flat_map(|x| x.object_mut())
+            .for_each(|x| x.apply_translation(vector));
+        self.markings
+            .iter_mut()
+            .flat_map(|x| x.object_mut())
+            .for_each(|x| x.apply_translation(vector));
+        self.holes
+            .iter_mut()
+            .flat_map(|x| x.object_mut())
+            .for_each(|x| x.apply_translation(vector));
+    }
+
+    fn apply_rotation(&mut self, rotation: Rotation3<f64>) {
+        self.abstract_unoccupied_space.apply_rotation(rotation);
+
+        self.traffic_spaces
+            .iter_mut()
+            .flat_map(|x| x.object_mut())
+            .for_each(|x| x.apply_rotation(rotation));
+        self.auxiliary_traffic_spaces
+            .iter_mut()
+            .flat_map(|x| x.object_mut())
+            .for_each(|x| x.apply_rotation(rotation));
+        self.markings
+            .iter_mut()
+            .flat_map(|x| x.object_mut())
+            .for_each(|x| x.apply_rotation(rotation));
+        self.holes
+            .iter_mut()
+            .flat_map(|x| x.object_mut())
+            .for_each(|x| x.apply_rotation(rotation));
+    }
+
+    fn apply_scale(&mut self, scale: Scale3<f64>) {
+        self.abstract_unoccupied_space.apply_scale(scale);
+
+        self.traffic_spaces
+            .iter_mut()
+            .flat_map(|x| x.object_mut())
+            .for_each(|x| x.apply_scale(scale));
+        self.auxiliary_traffic_spaces
+            .iter_mut()
+            .flat_map(|x| x.object_mut())
+            .for_each(|x| x.apply_scale(scale));
+        self.markings
+            .iter_mut()
+            .flat_map(|x| x.object_mut())
+            .for_each(|x| x.apply_scale(scale));
+        self.holes
+            .iter_mut()
+            .flat_map(|x| x.object_mut())
+            .for_each(|x| x.apply_scale(scale));
+    }
+}

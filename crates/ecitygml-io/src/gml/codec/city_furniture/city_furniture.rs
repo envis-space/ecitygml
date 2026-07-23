@@ -2,12 +2,16 @@ use crate::Error;
 use crate::gml::codec::core::{
     deserialize_abstract_occupied_space, serialize_abstract_occupied_space,
 };
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner};
-use crate::gml::write::Formatting;
+use crate::gml::util::CityGmlElement;
 use ecitygml_core::model::city_furniture::CityFurniture;
+use ecitygml_core::model::city_furniture::values::{
+    CityFurnitureClassValue, CityFurnitureFunctionValue, CityFurnitureUsageValue,
+};
 use ecitygml_core::model::core::AsAbstractOccupiedSpace;
-use egml::io::GmlCode;
+use egml::io::codec::basic::GmlCode;
+use egml::io::util::extract_xml_element_spans;
+use egml::io::util::{Formatting, XmlNode, XmlNodeContent, serialize_inner};
+use egml::model::basic_types::Code;
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
@@ -21,9 +25,28 @@ pub fn deserialize_city_furniture(xml_document: &[u8]) -> Result<CityFurniture, 
     let parsed = parsed_result?;
     let mut city_furniture = CityFurniture::from_abstract_occupied_space(abstract_occupied_space);
 
-    city_furniture.set_class(parsed.class.map(Into::into));
-    city_furniture.set_functions(parsed.functions.into_iter().map(Into::into).collect());
-    city_furniture.set_usages(parsed.usages.into_iter().map(Into::into).collect());
+    city_furniture.set_class_opt(
+        parsed
+            .class
+            .map(Code::from)
+            .map(CityFurnitureClassValue::from),
+    );
+    city_furniture.set_functions(
+        parsed
+            .functions
+            .into_iter()
+            .map(Code::from)
+            .map(CityFurnitureFunctionValue::from)
+            .collect(),
+    );
+    city_furniture.set_usages(
+        parsed
+            .usages
+            .into_iter()
+            .map(Code::from)
+            .map(CityFurnitureUsageValue::from)
+            .collect(),
+    );
 
     Ok(city_furniture)
 }
@@ -39,7 +62,10 @@ pub fn serialize_city_furniture(
         xml_node_parts.content.push(XmlNodeContent::Raw(raw));
     }
 
-    Ok(XmlNode::new(XmlElement::CityFurniture, xml_node_parts))
+    Ok(XmlNode::new(
+        CityGmlElement::CityFurniture.into(),
+        xml_node_parts,
+    ))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -60,9 +86,22 @@ pub struct GmlCityFurniture {
 impl From<&CityFurniture> for GmlCityFurniture {
     fn from(item: &CityFurniture) -> Self {
         Self {
-            class: item.class().map(Into::into),
-            functions: item.functions().iter().map(Into::into).collect(),
-            usages: item.usages().iter().map(Into::into).collect(),
+            class: item
+                .class()
+                .map(CityFurnitureClassValue::code)
+                .map(Into::into),
+            functions: item
+                .functions()
+                .iter()
+                .map(CityFurnitureFunctionValue::code)
+                .map(Into::into)
+                .collect(),
+            usages: item
+                .usages()
+                .iter()
+                .map(CityFurnitureUsageValue::code)
+                .map(Into::into)
+                .collect(),
         }
     }
 }
@@ -73,7 +112,8 @@ mod tests {
     use ecitygml_core::model::core::{
         AsAbstractCityObject, AsAbstractFeature, AsAbstractOccupiedSpace, AsAbstractSpace,
     };
-    use egml::model::base::Id;
+    use egml::model::base::{AsAbstractGml, Id};
+    use egml::model::basic_types::Code;
 
     #[test]
     fn test_deserialize_basic_city_furniture() {
@@ -113,12 +153,12 @@ mod tests {
         let city_furniture = deserialize_city_furniture(xml_document).expect("should work");
 
         assert_eq!(
-            city_furniture.id(),
+            city_furniture.feature_id(),
             &Id::try_from("UUID_379c7ee8-b010-33d2-8e55-786e6be6fa46").expect("should work")
         );
         assert_eq!(
-            city_furniture.name().first().expect("should work"),
-            "Vorschriftzeichen"
+            city_furniture.names().first().expect("should work"),
+            &Code::new("Vorschriftzeichen")
         );
         assert!(city_furniture.lod1_implicit_representation().is_some());
         assert!(city_furniture.lod2_multi_surface().is_some());

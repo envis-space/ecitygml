@@ -5,16 +5,17 @@ use crate::geometry::{
 use ecitygml_rs::model::building::{AsAbstractBuilding, Building as RustBuilding};
 use ecitygml_rs::model::city_furniture::CityFurniture as RustCityFurniture;
 use ecitygml_rs::model::construction::{
-    AsAbstractConstructionSurface, ConstructionSurfaceKind, DoorSurface as RustDoorSurface,
-    FillingSurfaceKind, GroundSurface as RustGroundSurface, RoofSurface as RustRoofSurface,
+    AsAbstractConstructionSurface, AbstractConstructionSurfaceKind, DoorSurface as RustDoorSurface,
+    AbstractFillingSurfaceKind, GroundSurface as RustGroundSurface, RoofSurface as RustRoofSurface,
     WallSurface as RustWallSurface, WindowSurface as RustWindowSurface,
 };
 use ecitygml_rs::model::core::{
     AsAbstractFeature, AsAbstractOccupiedSpace, AsAbstractSpace, AsAbstractThematicSurface,
-    SpaceBoundaryKind, ThematicSurfaceKind,
+    AbstractSpaceBoundaryKind, AbstractThematicSurfaceKind,
 };
+use egml::model::feature::AsAbstractFeature as EgmlAsAbstractFeature;
 use ecitygml_rs::model::relief::{
-    ReliefComponentKind, ReliefFeature as RustReliefFeature, TinRelief as RustTinRelief,
+    AbstractReliefComponentKind, ReliefFeature as RustReliefFeature, TinRelief as RustTinRelief,
 };
 use ecitygml_rs::model::transportation::{
     AsAbstractTransportationSpace, AuxiliaryTrafficArea as RustAuxiliaryTrafficArea,
@@ -32,13 +33,13 @@ use pyo3_stub_gen::derive::*;
 
 macro_rules! py_id {
     ($self:ident) => {
-        $self.inner.id().to_string()
+        $self.inner.feature_id().to_string()
     };
 }
 
 macro_rules! py_bounded_by {
     ($self:ident) => {
-        $self.inner.bounded_by().map(PyEnvelope::from)
+        $self.inner.bounded_by().and_then(|bs| bs.envelope()).map(PyEnvelope::from)
     };
 }
 
@@ -50,67 +51,67 @@ macro_rules! py_feature_type {
 
 macro_rules! py_lod1_solid {
     ($self:ident) => {
-        $self.inner.lod1_solid().and_then(|p| p.object.as_ref()).map(PySolid::from)
+        $self.inner.lod1_solid().and_then(|p| p.object()).map(PySolid::from)
     };
 }
 
 macro_rules! py_lod2_solid {
     ($self:ident) => {
-        $self.inner.lod2_solid().and_then(|p| p.object.as_ref()).map(PySolid::from)
+        $self.inner.lod2_solid().and_then(|p| p.object()).map(PySolid::from)
     };
 }
 
 macro_rules! py_lod3_solid {
     ($self:ident) => {
-        $self.inner.lod3_solid().and_then(|p| p.object.as_ref()).map(PySolid::from)
+        $self.inner.lod3_solid().and_then(|p| p.object()).map(PySolid::from)
     };
 }
 
 macro_rules! py_lod0_multi_surface {
     ($self:ident) => {
-        $self.inner.lod0_multi_surface().and_then(|p| p.object.as_ref()).map(PyMultiSurface::from)
+        $self.inner.lod0_multi_surface().and_then(|p| p.object()).map(PyMultiSurface::from)
     };
 }
 
 macro_rules! py_lod2_multi_surface {
     ($self:ident) => {
-        $self.inner.lod2_multi_surface().and_then(|p| p.object.as_ref()).map(PyMultiSurface::from)
+        $self.inner.lod2_multi_surface().and_then(|p| p.object()).map(PyMultiSurface::from)
     };
 }
 
 macro_rules! py_lod3_multi_surface {
     ($self:ident) => {
-        $self.inner.lod3_multi_surface().and_then(|p| p.object.as_ref()).map(PyMultiSurface::from)
+        $self.inner.lod3_multi_surface().and_then(|p| p.object()).map(PyMultiSurface::from)
     };
 }
 
 macro_rules! py_lod0_multi_curve {
     ($self:ident) => {
-        $self.inner.lod0_multi_curve().and_then(|p| p.object.as_ref()).map(PyMultiCurve::from)
+        $self.inner.lod0_multi_curve().and_then(|p| p.object()).map(PyMultiCurve::from)
     };
 }
 
 macro_rules! py_lod2_multi_curve {
     ($self:ident) => {
-        $self.inner.lod2_multi_curve().and_then(|p| p.object.as_ref()).map(PyMultiCurve::from)
+        $self.inner.lod2_multi_curve().and_then(|p| p.object()).map(PyMultiCurve::from)
     };
 }
 
 macro_rules! py_ts_lod0_multi_surface {
     ($self:ident) => {
-        $self.inner.lod0_multi_surface().and_then(|p| p.object.as_ref()).map(PyMultiSurface::from)
+        $self.inner.lod0_multi_surface().and_then(|p| p.object()).map(PyMultiSurface::from)
     };
 }
 
 macro_rules! py_ts_lod2_multi_surface {
     ($self:ident) => {
-        $self.inner.lod2_multi_surface().and_then(|p| p.object.as_ref()).map(PyMultiSurface::from)
+        $self.inner.lod2_multi_surface().and_then(|p| p.object()).map(PyMultiSurface::from)
     };
 }
 
 macro_rules! py_ts_lod3_multi_surface {
     ($self:ident) => {
-        $self.inner.lod3_multi_surface().and_then(|p| p.object.as_ref()).map(PyMultiSurface::from)
+        $self.inner.lod3_multi_surface().and_then(|p| p.object()).map(PyMultiSurface::from)
     };
 }
 
@@ -123,14 +124,14 @@ fn construction_surfaces_from_boundaries<T, F>(
     extract: F,
 ) -> Vec<T>
 where
-    F: Fn(&ConstructionSurfaceKind) -> Option<T>,
+    F: Fn(&AbstractConstructionSurfaceKind) -> Option<T>,
 {
     inner
         .boundaries()
         .iter()
-        .filter_map(|b| b.object.as_ref())
+        .filter_map(|b| b.object())
         .filter_map(|b| match b {
-            SpaceBoundaryKind::ThematicSurfaceKind(ThematicSurfaceKind::ConstructionSurfaceKind(
+            AbstractSpaceBoundaryKind::AbstractThematicSurfaceKind(AbstractThematicSurfaceKind::AbstractConstructionSurfaceKind(
                 csk,
             )) => extract(csk),
             _ => None,
@@ -327,9 +328,9 @@ impl PyWallSurface {
         self.inner
             .filling_surfaces()
             .iter()
-            .filter_map(|p| p.object.as_ref())
+            .filter_map(|p| p.object())
             .filter_map(|fsk| match fsk {
-                FillingSurfaceKind::DoorSurface(ds) => Some(PyDoorSurface::from(ds)),
+                AbstractFillingSurfaceKind::DoorSurface(ds) => Some(PyDoorSurface::from(ds)),
                 _ => None,
             })
             .collect()
@@ -340,9 +341,9 @@ impl PyWallSurface {
         self.inner
             .filling_surfaces()
             .iter()
-            .filter_map(|p| p.object.as_ref())
+            .filter_map(|p| p.object())
             .filter_map(|fsk| match fsk {
-                FillingSurfaceKind::WindowSurface(ws) => Some(PyWindowSurface::from(ws)),
+                AbstractFillingSurfaceKind::WindowSurface(ws) => Some(PyWindowSurface::from(ws)),
                 _ => None,
             })
             .collect()
@@ -565,7 +566,7 @@ impl PyBuilding {
     #[getter]
     pub fn wall_surface(&self) -> Vec<PyWallSurface> {
         construction_surfaces_from_boundaries(&self.inner, |csk| match csk {
-            ConstructionSurfaceKind::WallSurface(ws) => Some(PyWallSurface::from(ws)),
+            AbstractConstructionSurfaceKind::WallSurface(ws) => Some(PyWallSurface::from(ws)),
             _ => None,
         })
     }
@@ -573,7 +574,7 @@ impl PyBuilding {
     #[getter]
     pub fn roof_surface(&self) -> Vec<PyRoofSurface> {
         construction_surfaces_from_boundaries(&self.inner, |csk| match csk {
-            ConstructionSurfaceKind::RoofSurface(rs) => Some(PyRoofSurface::from(rs)),
+            AbstractConstructionSurfaceKind::RoofSurface(rs) => Some(PyRoofSurface::from(rs)),
             _ => None,
         })
     }
@@ -581,7 +582,7 @@ impl PyBuilding {
     #[getter]
     pub fn ground_surface(&self) -> Vec<PyGroundSurface> {
         construction_surfaces_from_boundaries(&self.inner, |csk| match csk {
-            ConstructionSurfaceKind::GroundSurface(gs) => Some(PyGroundSurface::from(gs)),
+            AbstractConstructionSurfaceKind::GroundSurface(gs) => Some(PyGroundSurface::from(gs)),
             _ => None,
         })
     }
@@ -755,9 +756,9 @@ impl PyTrafficSpace {
         self.inner
             .boundaries()
             .iter()
-            .filter_map(|b| b.object.as_ref())
+            .filter_map(|b| b.object())
             .filter_map(|b| match b {
-                SpaceBoundaryKind::ThematicSurfaceKind(ThematicSurfaceKind::TrafficArea(ta)) => {
+                AbstractSpaceBoundaryKind::AbstractThematicSurfaceKind(AbstractThematicSurfaceKind::TrafficArea(ta)) => {
                     Some(PyTrafficArea::from(ta))
                 }
                 _ => None,
@@ -828,10 +829,10 @@ impl PyAuxiliaryTrafficSpace {
         self.inner
             .boundaries()
             .iter()
-            .filter_map(|b| b.object.as_ref())
+            .filter_map(|b| b.object())
             .filter_map(|b| match b {
-                SpaceBoundaryKind::ThematicSurfaceKind(
-                    ThematicSurfaceKind::AuxiliaryTrafficArea(ata),
+                AbstractSpaceBoundaryKind::AbstractThematicSurfaceKind(
+                    AbstractThematicSurfaceKind::AuxiliaryTrafficArea(ata),
                 ) => Some(PyAuxiliaryTrafficArea::from(ata)),
                 _ => None,
             })
@@ -906,7 +907,7 @@ impl PySection {
         self.inner
             .traffic_spaces()
             .iter()
-            .filter_map(|p| p.object.as_ref())
+            .filter_map(|p| p.object())
             .map(PyTrafficSpace::from)
             .collect()
     }
@@ -916,7 +917,7 @@ impl PySection {
         self.inner
             .auxiliary_traffic_spaces()
             .iter()
-            .filter_map(|p| p.object.as_ref())
+            .filter_map(|p| p.object())
             .map(PyAuxiliaryTrafficSpace::from)
             .collect()
     }
@@ -989,7 +990,7 @@ impl PyIntersection {
         self.inner
             .traffic_spaces()
             .iter()
-            .filter_map(|p| p.object.as_ref())
+            .filter_map(|p| p.object())
             .map(PyTrafficSpace::from)
             .collect()
     }
@@ -999,7 +1000,7 @@ impl PyIntersection {
         self.inner
             .auxiliary_traffic_spaces()
             .iter()
-            .filter_map(|p| p.object.as_ref())
+            .filter_map(|p| p.object())
             .map(PyAuxiliaryTrafficSpace::from)
             .collect()
     }
@@ -1057,7 +1058,7 @@ impl PyRoad {
         self.inner
             .sections()
             .iter()
-            .filter_map(|p| p.object.as_ref())
+            .filter_map(|p| p.object())
             .map(PySection::from)
             .collect()
     }
@@ -1067,7 +1068,7 @@ impl PyRoad {
         self.inner
             .intersections()
             .iter()
-            .filter_map(|p| p.object.as_ref())
+            .filter_map(|p| p.object())
             .map(PyIntersection::from)
             .collect()
     }
@@ -1124,7 +1125,7 @@ impl PyTinRelief {
     pub fn tin(&self) -> Option<PyTriangulatedSurface> {
         self.inner
             .tin()
-            .and_then(|x| x.object.as_ref())
+            .and_then(|x| x.object())
             .map(|x| PyTriangulatedSurface::from(x.clone()))
     }
 
@@ -1181,9 +1182,9 @@ impl PyReliefFeature {
         self.inner
             .relief_components()
             .iter()
-            .filter_map(|p| p.object.as_ref())
+            .filter_map(|p| p.object())
             .filter_map(|c| match c {
-                ReliefComponentKind::TinRelief(t) => Some(PyTinRelief::from(t)),
+                AbstractReliefComponentKind::TinRelief(t) => Some(PyTinRelief::from(t)),
             })
             .collect()
     }
@@ -1255,7 +1256,8 @@ impl PySolitaryVegetationObject {
     pub fn lod1_implicit_representation(&self) -> Option<PyDirectPosition> {
         self.inner
             .lod1_implicit_representation()
-            .and_then(|ig| ig.reference_point.object.as_ref())
+            .and_then(|ig| ig.object())
+            .and_then(|ig| ig.reference_point().object())
             .map(|p| PyDirectPosition::from(p.pos()))
     }
 

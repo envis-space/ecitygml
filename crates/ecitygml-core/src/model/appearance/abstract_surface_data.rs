@@ -1,8 +1,10 @@
-use crate::model::core::refs::{FeatureKindRef, FeatureKindRefMut};
+use crate::model::common::{ForEachFeatureMut, IterFeatures};
+use crate::model::core::refs::{AbstractFeatureKindRef, AbstractFeatureKindRefMut};
 use crate::model::core::{AbstractFeature, AsAbstractFeature, AsAbstractFeatureMut};
 use egml::model::base::Id;
+use egml::model::common::{ApplyTransform, ComputeEnvelope};
 use egml::model::geometry::Envelope;
-use nalgebra::Isometry3;
+use nalgebra::{Isometry3, Rotation3, Scale3, Transform3, Vector3};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbstractSurfaceData {
@@ -20,18 +22,6 @@ impl AbstractSurfaceData {
             abstract_feature,
             is_front: None,
         }
-    }
-}
-impl AbstractSurfaceData {
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
-        std::iter::empty()
-    }
-    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, _f: &mut F) {}
-    pub fn compute_envelope(&self) -> Option<Envelope> {
-        None
-    }
-    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
-        self.abstract_feature.apply_transform(m);
     }
 }
 
@@ -66,10 +56,14 @@ impl AsAbstractSurfaceDataMut for AbstractSurfaceData {
 #[macro_export]
 macro_rules! impl_abstract_surface_data_traits {
     ($type:ty) => {
+        $crate::impl_abstract_feature_traits!($type);
+
         impl $crate::model::core::AsAbstractFeature for $type {
             fn abstract_feature(&self) -> &$crate::model::core::AbstractFeature {
-                use $crate::model::appearance::AsAbstractSurfaceData;
-                &self.abstract_surface_data().abstract_feature
+                &<$type as $crate::model::appearance::AsAbstractSurfaceData>::abstract_surface_data(
+                    self,
+                )
+                .abstract_feature
             }
         }
     };
@@ -78,10 +72,11 @@ macro_rules! impl_abstract_surface_data_traits {
 #[macro_export]
 macro_rules! impl_abstract_surface_data_mut_traits {
     ($type:ty) => {
+        $crate::impl_abstract_feature_mut_traits!($type);
+
         impl $crate::model::core::AsAbstractFeatureMut for $type {
             fn abstract_feature_mut(&mut self) -> &mut $crate::model::core::AbstractFeature {
-                use $crate::model::appearance::AsAbstractSurfaceDataMut;
-                &mut self.abstract_surface_data_mut().abstract_feature
+                &mut <$type as $crate::model::appearance::AsAbstractSurfaceDataMut>::abstract_surface_data_mut(self).abstract_feature
             }
         }
     };
@@ -89,3 +84,41 @@ macro_rules! impl_abstract_surface_data_mut_traits {
 
 impl_abstract_surface_data_traits!(AbstractSurfaceData);
 impl_abstract_surface_data_mut_traits!(AbstractSurfaceData);
+
+impl IterFeatures for AbstractSurfaceData {
+    fn iter_features(&self) -> Box<dyn Iterator<Item = AbstractFeatureKindRef<'_>> + '_> {
+        Box::new(std::iter::empty())
+    }
+}
+
+impl ForEachFeatureMut for AbstractSurfaceData {
+    fn for_each_feature_mut<F: FnMut(AbstractFeatureKindRefMut<'_>)>(&mut self, _f: &mut F) {}
+}
+
+impl ComputeEnvelope for AbstractSurfaceData {
+    fn compute_envelope(&self) -> Option<Envelope> {
+        None
+    }
+}
+
+impl ApplyTransform for AbstractSurfaceData {
+    fn apply_transform(&mut self, m: Transform3<f64>) {
+        self.abstract_feature.apply_transform(m);
+    }
+
+    fn apply_isometry(&mut self, isometry: Isometry3<f64>) {
+        self.abstract_feature.apply_isometry(isometry);
+    }
+
+    fn apply_translation(&mut self, vector: Vector3<f64>) {
+        self.abstract_feature.apply_translation(vector);
+    }
+
+    fn apply_rotation(&mut self, rotation: Rotation3<f64>) {
+        self.abstract_feature.apply_rotation(rotation);
+    }
+
+    fn apply_scale(&mut self, scale: Scale3<f64>) {
+        self.abstract_feature.apply_scale(scale);
+    }
+}

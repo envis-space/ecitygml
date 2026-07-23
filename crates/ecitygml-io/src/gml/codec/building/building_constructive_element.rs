@@ -2,12 +2,18 @@ use crate::Error;
 use crate::gml::codec::construction::{
     deserialize_abstract_constructive_element, serialize_abstract_constructive_element,
 };
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner};
-use crate::gml::write::Formatting;
+use crate::gml::util::CityGmlElement;
 use ecitygml_core::model::building::BuildingConstructiveElement;
+use ecitygml_core::model::building::values::{
+    BuildingConstructiveElementClassValue, BuildingConstructiveElementFunctionValue,
+    BuildingConstructiveElementUsageValue,
+};
 use ecitygml_core::model::construction::AsAbstractConstructiveElement;
-use egml::io::GmlCode;
+use egml::io::codec::basic::GmlCode;
+use egml::io::util::{
+    Formatting, XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner,
+};
+use egml::model::basic_types::Code;
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
@@ -26,10 +32,28 @@ pub fn deserialize_building_constructive_element(
             abstract_constructive_element,
         );
 
-    building_constructive_element.set_class(parsed.class.map(Into::into));
-    building_constructive_element
-        .set_functions(parsed.functions.into_iter().map(Into::into).collect());
-    building_constructive_element.set_usages(parsed.usages.into_iter().map(Into::into).collect());
+    building_constructive_element.set_class_opt(
+        parsed
+            .class
+            .map(Code::from)
+            .map(BuildingConstructiveElementClassValue::from),
+    );
+    building_constructive_element.set_functions(
+        parsed
+            .functions
+            .into_iter()
+            .map(Code::from)
+            .map(BuildingConstructiveElementFunctionValue::from)
+            .collect(),
+    );
+    building_constructive_element.set_usages(
+        parsed
+            .usages
+            .into_iter()
+            .map(Code::from)
+            .map(BuildingConstructiveElementUsageValue::from)
+            .collect(),
+    );
 
     Ok(building_constructive_element)
 }
@@ -51,7 +75,7 @@ pub fn serialize_building_constructive_element(
     }
 
     Ok(XmlNode::new(
-        XmlElement::BuildingConstructiveElement,
+        CityGmlElement::BuildingConstructiveElement.into(),
         xml_node_parts,
     ))
 }
@@ -74,9 +98,22 @@ pub struct GmlBuildingConstructiveElement {
 impl From<&BuildingConstructiveElement> for GmlBuildingConstructiveElement {
     fn from(item: &BuildingConstructiveElement) -> Self {
         Self {
-            class: item.class().map(Into::into),
-            functions: item.functions().iter().map(Into::into).collect(),
-            usages: item.usages().iter().map(Into::into).collect(),
+            class: item
+                .class()
+                .map(BuildingConstructiveElementClassValue::code)
+                .map(Into::into),
+            functions: item
+                .functions()
+                .iter()
+                .map(BuildingConstructiveElementFunctionValue::code)
+                .map(Into::into)
+                .collect(),
+            usages: item
+                .usages()
+                .iter()
+                .map(BuildingConstructiveElementUsageValue::code)
+                .map(Into::into)
+                .collect(),
         }
     }
 }
@@ -87,7 +124,7 @@ mod tests {
     use ecitygml_core::model::construction::AsAbstractConstructiveElementMut;
     use ecitygml_core::model::core::AsAbstractFeature;
     use egml::model::base::Id;
-    use egml::model::basic::Code;
+    use egml::model::basic_types::Code;
     use quick_xml::se;
 
     #[test]
@@ -188,7 +225,7 @@ mod tests {
             deserialize_building_constructive_element(xml_document).expect("should work");
 
         assert_eq!(
-            building_constructive_element.id(),
+            building_constructive_element.feature_id(),
             &Id::try_from("_FZK-Haus-Storey-Construction-tex-Windows_BD.CvWEAVLAPO2cqWPW8xrz_BP.Um20q9TChr2VYbrcN9zj").expect("should work")
         );
         /*assert_eq!(
@@ -210,7 +247,7 @@ mod tests {
         let id = Id::try_from("test-id").expect("should work");
         let mut building_constructive_element = BuildingConstructiveElement::new(id);
         building_constructive_element.set_is_structural_element(Some(true));
-        building_constructive_element.set_class(Some(Code::new("Slab")));
+        building_constructive_element.set_class(Code::new("Slab").into());
 
         let gml_building_constructive_element =
             GmlBuildingConstructiveElement::from(&building_constructive_element);

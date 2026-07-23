@@ -1,18 +1,19 @@
-use crate::model::core::refs::FeatureKindRef;
-use crate::model::core::refs::FeatureKindRefMut;
+use crate::model::common::{ForEachFeatureMut, IterFeatures};
+use crate::model::core::refs::AbstractFeatureKindRef;
+use crate::model::core::refs::AbstractFeatureKindRefMut;
 use crate::model::core::{
-    AbstractThematicSurface, AsAbstractFeatureMut, AsAbstractThematicSurface,
-    AsAbstractThematicSurfaceMut,
+    AbstractThematicSurface, AsAbstractThematicSurface, AsAbstractThematicSurfaceMut,
 };
+use crate::model::transportation::values::MarkingClassValue;
 use egml::model::base::Id;
-use egml::model::basic::Code;
+use egml::model::common::{ApplyTransform, ComputeEnvelope};
 use egml::model::geometry::Envelope;
-use nalgebra::Isometry3;
+use nalgebra::{Isometry3, Rotation3, Scale3, Transform3, Vector3};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Marking {
     pub(crate) abstract_thematic_surface: AbstractThematicSurface,
-    class: Option<Code>,
+    class: Option<MarkingClassValue>,
 }
 
 impl Marking {
@@ -29,35 +30,20 @@ impl Marking {
         }
     }
 
-    pub fn class(&self) -> Option<&Code> {
+    pub fn class(&self) -> Option<&MarkingClassValue> {
         self.class.as_ref()
     }
 
-    pub fn set_class(&mut self, class: Option<Code>) {
+    pub fn set_class(&mut self, class: MarkingClassValue) {
+        self.class = Some(class);
+    }
+
+    pub fn set_class_opt(&mut self, class: Option<MarkingClassValue>) {
         self.class = class;
     }
-}
 
-impl Marking {
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
-        std::iter::once(self.into()).chain(self.abstract_thematic_surface.iter_features())
-    }
-
-    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
-        f((&mut *self).into());
-        self.abstract_thematic_surface.for_each_feature_mut(f);
-    }
-
-    pub fn compute_envelope(&self) -> Option<Envelope> {
-        self.abstract_thematic_surface.compute_envelope()
-    }
-
-    pub fn recompute_bounding_shape(&mut self) {
-        self.set_bounding_shape_from_envelope(self.compute_envelope());
-    }
-
-    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
-        self.abstract_thematic_surface.apply_transform(m);
+    pub fn clear_class(&mut self) {
+        self.class = None;
     }
 }
 
@@ -76,3 +62,44 @@ impl AsAbstractThematicSurfaceMut for Marking {
 crate::impl_abstract_thematic_surface_traits!(Marking);
 crate::impl_abstract_thematic_surface_mut_traits!(Marking);
 crate::impl_has_feature_type!(Marking, Marking);
+
+impl IterFeatures for Marking {
+    fn iter_features(&self) -> Box<dyn Iterator<Item = AbstractFeatureKindRef<'_>> + '_> {
+        Box::new(std::iter::once(self.into()).chain(self.abstract_thematic_surface.iter_features()))
+    }
+}
+
+impl ForEachFeatureMut for Marking {
+    fn for_each_feature_mut<F: FnMut(AbstractFeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
+        f((&mut *self).into());
+        self.abstract_thematic_surface.for_each_feature_mut(f);
+    }
+}
+
+impl ComputeEnvelope for Marking {
+    fn compute_envelope(&self) -> Option<Envelope> {
+        self.abstract_thematic_surface.compute_envelope()
+    }
+}
+
+impl ApplyTransform for Marking {
+    fn apply_transform(&mut self, m: Transform3<f64>) {
+        self.abstract_thematic_surface.apply_transform(m);
+    }
+
+    fn apply_isometry(&mut self, isometry: Isometry3<f64>) {
+        self.abstract_thematic_surface.apply_isometry(isometry);
+    }
+
+    fn apply_translation(&mut self, vector: Vector3<f64>) {
+        self.abstract_thematic_surface.apply_translation(vector);
+    }
+
+    fn apply_rotation(&mut self, rotation: Rotation3<f64>) {
+        self.abstract_thematic_surface.apply_rotation(rotation);
+    }
+
+    fn apply_scale(&mut self, scale: Scale3<f64>) {
+        self.abstract_thematic_surface.apply_scale(scale);
+    }
+}

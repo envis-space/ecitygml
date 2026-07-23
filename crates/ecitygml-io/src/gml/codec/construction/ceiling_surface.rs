@@ -2,10 +2,9 @@ use crate::Error;
 use crate::gml::codec::construction::abstract_construction_surface::{
     deserialize_abstract_construction_surface, serialize_abstract_construction_surface,
 };
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{XmlNode, extract_xml_element_spans};
-use crate::gml::write::Formatting;
+use crate::gml::util::CityGmlElement;
 use ecitygml_core::model::construction::{AsAbstractConstructionSurface, CeilingSurface};
+use egml::io::util::{Formatting, XmlNode, extract_xml_element_spans};
 use serde::{Deserialize, Serialize};
 
 pub fn deserialize_ceiling_surface(xml_document: &[u8]) -> Result<CeilingSurface, Error> {
@@ -21,11 +20,14 @@ pub fn serialize_ceiling_surface(
     ceiling_surface: &CeilingSurface,
     formatting: Formatting,
 ) -> Result<XmlNode, Error> {
-    let parts = serialize_abstract_construction_surface(
+    let xml_node_parts = serialize_abstract_construction_surface(
         ceiling_surface.abstract_construction_surface(),
         formatting,
     )?;
-    Ok(XmlNode::new(XmlElement::CeilingSurface, parts))
+    Ok(XmlNode::new(
+        CityGmlElement::CeilingSurface.into(),
+        xml_node_parts,
+    ))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]

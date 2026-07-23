@@ -61,39 +61,6 @@ private:
     }
 };
 
-class CityObjectGeometry
-{
-public:
-    explicit CityObjectGeometry(CCityObjectGeometry* handle) : handle_(handle)
-    {};
-
-    [[nodiscard]] Envelope envelope() const
-    {
-        CEnvelope* c_envelope = nullptr;
-        CErrorCode err = city_object_geometry_envelope(handle_, &c_envelope);
-        if (err != CErrorCode::OK) {
-            throw std::invalid_argument("Error code: " + std::to_string(static_cast<int>(err)));
-        }
-
-        Envelope envelope(c_envelope);
-        return envelope;
-    }
-
-    [[nodiscard]] bool has_handle() const noexcept {
-        return handle_ != nullptr;
-    }
-
-    ~CityObjectGeometry() { cleanup(); }
-
-private:
-    CCityObjectGeometry* handle_ = nullptr;
-
-    void cleanup() noexcept {
-        if (handle_) { city_object_geometry_destroy(handle_); handle_ = nullptr; }
-    }
-};
-
-
 class CityModel
 {
 public:
@@ -130,7 +97,7 @@ public:
 
     ~ObjectIds() {
         if (ptr_ != nullptr) {
-            city_model_geometry_store_free_object_ids(ptr_, len_);
+            city_model_arena_free_object_ids(ptr_, len_);
         }
     }
 
@@ -149,7 +116,7 @@ public:
         if (this != &other) {
             // Clean up existing resources
             if (ptr_ != nullptr) {
-                city_model_geometry_store_free_object_ids(ptr_, len_);
+                city_model_arena_free_object_ids(ptr_, len_);
             }
 
             // Move from other
@@ -202,24 +169,24 @@ private:
 };
 
 
-class CityModelGeometryStore
+class CityModelArena
 {
 public:
-    explicit CityModelGeometryStore(const CityModel* city_model)
+    explicit CityModelArena(const CityModel* city_model)
     {
-        CErrorCode err = city_model_geometry_store_create(city_model->handle(), &handle_);
+        CErrorCode err = city_model_arena_create(city_model->handle(), &handle_);
         if (err != CErrorCode::OK) {
             throw std::invalid_argument("Error code: " + std::to_string(static_cast<int>(err)));
         }
     };
 
-    [[nodiscard]] CCityModelGeometryStore* handle() const noexcept { return handle_; }
+    [[nodiscard]] CCityModelArena* handle() const noexcept { return handle_; }
 
 
     [[nodiscard]] uint objects_len() const
     {
         uintptr_t count = 0;
-        CErrorCode err = city_model_geometry_store_objects_len(handle_, &count);
+        CErrorCode err = city_model_arena_objects_len(handle_, &count);
         if (err != CErrorCode::OK) {
             throw std::invalid_argument("Error code: " + std::to_string(static_cast<int>(err)));
         }
@@ -231,7 +198,7 @@ public:
         char** ptr = nullptr;
         uintptr_t len = 0;
 
-        CErrorCode err = city_model_geometry_store_get_object_ids(handle_, &ptr, &len);
+        CErrorCode err = city_model_arena_get_object_ids(handle_, &ptr, &len);
         if (err != CErrorCode::OK) {
             throw std::runtime_error("Error code: " + std::to_string(static_cast<int>(err)));
         }
@@ -239,24 +206,24 @@ public:
         return ObjectIds(ptr, len);
     }
 
-    [[nodiscard]] CityObjectGeometry get(const std::string& id) const
+    [[nodiscard]] Envelope get_envelope(const std::string& id) const
     {
-        CCityObjectGeometry* geometry_collection = nullptr;
-        CErrorCode err = city_model_geometry_store_get(handle_, id.c_str(), &geometry_collection);
+        CEnvelope* c_envelope = nullptr;
+        CErrorCode err = city_model_arena_get_envelope(handle_, id.c_str(), &c_envelope);
         if (err != CErrorCode::OK) {
             throw std::invalid_argument("Error code: " + std::to_string(static_cast<int>(err)));
         }
 
-        CityObjectGeometry city_object_geometry_collection(geometry_collection);
-        return city_object_geometry_collection;
+        Envelope envelope(c_envelope);
+        return envelope;
     }
 
-    ~CityModelGeometryStore() { cleanup(); }
+    ~CityModelArena() { cleanup(); }
 
 private:
-    CCityModelGeometryStore* handle_ = nullptr;
+    CCityModelArena* handle_ = nullptr;
 
     void cleanup() noexcept {
-        if (handle_) { city_model_geometry_store_destroy(handle_); handle_ = nullptr; }
+        if (handle_) { city_model_arena_destroy(handle_); handle_ = nullptr; }
     }
 };

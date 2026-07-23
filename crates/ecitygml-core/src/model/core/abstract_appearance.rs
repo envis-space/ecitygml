@@ -1,10 +1,12 @@
-use crate::model::core::refs::{FeatureKindRef, FeatureKindRefMut};
+use crate::model::common::{ForEachFeatureMut, IterFeatures};
+use crate::model::core::refs::{AbstractFeatureKindRef, AbstractFeatureKindRefMut};
 use crate::model::core::{
     AbstractFeatureWithLifespan, AsAbstractFeatureWithLifespan, AsAbstractFeatureWithLifespanMut,
 };
 use egml::model::base::Id;
+use egml::model::common::{ApplyTransform, ComputeEnvelope};
 use egml::model::geometry::Envelope;
-use nalgebra::Isometry3;
+use nalgebra::{Isometry3, Rotation3, Scale3, Transform3, Vector3};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbstractAppearance {
@@ -22,20 +24,6 @@ impl AbstractAppearance {
         Self {
             abstract_feature_with_lifespan,
         }
-    }
-}
-impl AbstractAppearance {
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
-        std::iter::empty()
-    }
-    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, _f: &mut F) {}
-
-    pub fn compute_envelope(&self) -> Option<Envelope> {
-        None
-    }
-
-    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
-        self.abstract_feature_with_lifespan.apply_transform(m);
     }
 }
 
@@ -68,8 +56,8 @@ macro_rules! impl_abstract_appearance_traits {
             fn abstract_feature_with_lifespan(
                 &self,
             ) -> &$crate::model::core::AbstractFeatureWithLifespan {
-                use $crate::model::core::AsAbstractAppearance;
-                &self.abstract_appearance().abstract_feature_with_lifespan
+                &<$type as $crate::model::core::AsAbstractAppearance>::abstract_appearance(self)
+                    .abstract_feature_with_lifespan
             }
         }
     };
@@ -84,10 +72,7 @@ macro_rules! impl_abstract_appearance_mut_traits {
             fn abstract_feature_with_lifespan_mut(
                 &mut self,
             ) -> &mut $crate::model::core::AbstractFeatureWithLifespan {
-                use $crate::model::core::AsAbstractAppearanceMut;
-                &mut self
-                    .abstract_appearance_mut()
-                    .abstract_feature_with_lifespan
+                &mut <$type as $crate::model::core::AsAbstractAppearanceMut>::abstract_appearance_mut(self).abstract_feature_with_lifespan
             }
         }
     };
@@ -95,3 +80,42 @@ macro_rules! impl_abstract_appearance_mut_traits {
 
 impl_abstract_appearance_traits!(AbstractAppearance);
 impl_abstract_appearance_mut_traits!(AbstractAppearance);
+
+impl IterFeatures for AbstractAppearance {
+    fn iter_features(&self) -> Box<dyn Iterator<Item = AbstractFeatureKindRef<'_>> + '_> {
+        Box::new(std::iter::empty())
+    }
+}
+
+impl ForEachFeatureMut for AbstractAppearance {
+    fn for_each_feature_mut<F: FnMut(AbstractFeatureKindRefMut<'_>)>(&mut self, _f: &mut F) {}
+}
+
+impl ComputeEnvelope for AbstractAppearance {
+    fn compute_envelope(&self) -> Option<Envelope> {
+        None
+    }
+}
+
+impl ApplyTransform for AbstractAppearance {
+    fn apply_transform(&mut self, m: Transform3<f64>) {
+        self.abstract_feature_with_lifespan.apply_transform(m);
+    }
+
+    fn apply_isometry(&mut self, isometry: Isometry3<f64>) {
+        self.abstract_feature_with_lifespan.apply_isometry(isometry);
+    }
+
+    fn apply_translation(&mut self, vector: Vector3<f64>) {
+        self.abstract_feature_with_lifespan
+            .apply_translation(vector);
+    }
+
+    fn apply_rotation(&mut self, rotation: Rotation3<f64>) {
+        self.abstract_feature_with_lifespan.apply_rotation(rotation);
+    }
+
+    fn apply_scale(&mut self, scale: Scale3<f64>) {
+        self.abstract_feature_with_lifespan.apply_scale(scale);
+    }
+}

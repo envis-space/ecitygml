@@ -2,15 +2,15 @@ use crate::Error;
 use crate::gml::codec::core::{
     deserialize_abstract_occupied_space, serialize_abstract_occupied_space,
 };
-use crate::gml::util::{XmlElementSpans, XmlNodeParts};
-use crate::gml::write::Formatting;
+use crate::gml::util::CombinedCityGmlElement;
 use ecitygml_core::model::core::AsAbstractOccupiedSpace;
 use ecitygml_core::model::vegetation::AbstractVegetationObject;
+use egml::io::util::{Formatting, XmlElementSpans, XmlNodeParts};
 use serde::{Deserialize, Serialize};
 
 pub fn deserialize_abstract_vegetation_object(
     xml_document: &[u8],
-    spans: &XmlElementSpans,
+    spans: &XmlElementSpans<CombinedCityGmlElement>,
 ) -> Result<AbstractVegetationObject, Error> {
     let occupied_space = deserialize_abstract_occupied_space(xml_document, spans)?;
     let abstract_vegetation_object =

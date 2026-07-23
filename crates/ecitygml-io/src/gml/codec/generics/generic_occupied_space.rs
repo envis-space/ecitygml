@@ -3,12 +3,18 @@ use crate::gml::codec::core::{
     deserialize_abstract_occupied_space, serialize_abstract_occupied_space,
 };
 use crate::gml::codec::vegetation::GmlPlantCover;
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner};
-use crate::gml::write::Formatting;
+use crate::gml::util::CityGmlElement;
 use ecitygml_core::model::core::AsAbstractOccupiedSpace;
 use ecitygml_core::model::generics::GenericOccupiedSpace;
-use egml::io::GmlCode;
+use ecitygml_core::model::generics::values::{
+    GenericOccupiedSpaceClassValue, GenericOccupiedSpaceFunctionValue,
+    GenericOccupiedSpaceUsageValue,
+};
+use egml::io::codec::basic::GmlCode;
+use egml::io::util::{
+    Formatting, XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner,
+};
+use egml::model::basic_types::Code;
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
@@ -25,9 +31,28 @@ pub fn deserialize_generic_occupied_space(
 
     let mut generic_occupied_space =
         GenericOccupiedSpace::from_abstract_occupied_space(abstract_occupied_space);
-    generic_occupied_space.set_class(parsed.class.map(Into::into));
-    generic_occupied_space.set_functions(parsed.functions.into_iter().map(Into::into).collect());
-    generic_occupied_space.set_usages(parsed.usages.into_iter().map(Into::into).collect());
+    generic_occupied_space.set_class_opt(
+        parsed
+            .class
+            .map(Code::from)
+            .map(GenericOccupiedSpaceClassValue::from),
+    );
+    generic_occupied_space.set_functions(
+        parsed
+            .functions
+            .into_iter()
+            .map(Code::from)
+            .map(GenericOccupiedSpaceFunctionValue::from)
+            .collect(),
+    );
+    generic_occupied_space.set_usages(
+        parsed
+            .usages
+            .into_iter()
+            .map(Code::from)
+            .map(GenericOccupiedSpaceUsageValue::from)
+            .collect(),
+    );
 
     Ok(generic_occupied_space)
 }
@@ -48,7 +73,10 @@ pub fn serialize_generic_occupied_space(
         parts.content.push(XmlNodeContent::Raw(raw));
     }
 
-    Ok(XmlNode::new(XmlElement::GenericOccupiedSpace, parts))
+    Ok(XmlNode::new(
+        CityGmlElement::GenericOccupiedSpace.into(),
+        parts,
+    ))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -69,9 +97,22 @@ pub struct GmlGenericOccupiedSpace {
 impl From<&GenericOccupiedSpace> for GmlGenericOccupiedSpace {
     fn from(item: &GenericOccupiedSpace) -> Self {
         Self {
-            class: item.class().map(Into::into),
-            functions: item.functions().iter().map(Into::into).collect(),
-            usages: item.usages().iter().map(Into::into).collect(),
+            class: item
+                .class()
+                .map(GenericOccupiedSpaceClassValue::code)
+                .map(Into::into),
+            functions: item
+                .functions()
+                .iter()
+                .map(GenericOccupiedSpaceFunctionValue::code)
+                .map(Into::into)
+                .collect(),
+            usages: item
+                .usages()
+                .iter()
+                .map(GenericOccupiedSpaceUsageValue::code)
+                .map(Into::into)
+                .collect(),
         }
     }
 }

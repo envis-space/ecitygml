@@ -2,29 +2,36 @@ use crate::Error;
 use crate::gml::codec::transportation::{
     deserialize_auxiliary_traffic_space, serialize_auxiliary_traffic_space,
 };
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{XmlElementSpans, XmlNode, XmlNodeContent, XmlNodeParts};
-use crate::gml::write::Formatting;
+use crate::gml::util::{CityGmlElement, CombinedCityGmlElement};
 use ecitygml_core::model::transportation::AuxiliaryTrafficSpaceProperty;
+use egml::io::codec::base::{
+    GmlAssociationAttributes, GmlOwnershipAttributes, serialize_association_attributes,
+    serialize_ownership_attributes,
+};
+use egml::io::util::{Formatting, XmlElementSpans, XmlNode, XmlNodeContent, XmlNodeParts};
+use egml::model::base::{HasAssociationAttributes, HasOwnershipAttributes};
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
 pub fn deserialize_auxiliary_traffic_space_property(
     xml_document: &[u8],
-    spans: &XmlElementSpans,
+    spans: &XmlElementSpans<CombinedCityGmlElement>,
 ) -> Result<AuxiliaryTrafficSpaceProperty, Error> {
-    let gml_auxiliary_traffic_space_property: GmlAuxiliaryTrafficSpaceProperty =
-        de::from_reader(xml_document)?;
-    let mut auxiliary_traffic_space_property: AuxiliaryTrafficSpaceProperty =
-        gml_auxiliary_traffic_space_property.into();
+    let parsed: GmlAuxiliaryTrafficSpaceProperty = de::from_reader(xml_document)?;
 
-    if let Some(span) = spans.first(XmlElement::AuxiliaryTrafficSpace) {
-        auxiliary_traffic_space_property.object = Some(deserialize_auxiliary_traffic_space(
+    let mut object = None;
+
+    if let Some(span) = spans.first(CityGmlElement::AuxiliaryTrafficSpace.into()) {
+        object = Some(deserialize_auxiliary_traffic_space(
             &xml_document[span.start..span.end],
         )?);
     }
 
-    Ok(auxiliary_traffic_space_property)
+    Ok(AuxiliaryTrafficSpaceProperty::new(
+        object,
+        parsed.association.try_into()?,
+        parsed.ownership.into(),
+    ))
 }
 
 pub fn serialize_auxiliary_traffic_space_property(
@@ -32,12 +39,13 @@ pub fn serialize_auxiliary_traffic_space_property(
     formatting: Formatting,
 ) -> Result<XmlNode, Error> {
     let mut parts = XmlNodeParts::empty();
-    if let Some(href) = &property.href {
-        parts
-            .attributes
-            .push(("xlink:href".to_string(), href.clone()));
-    }
-    if let Some(object) = &property.object {
+    parts
+        .attributes
+        .extend(serialize_association_attributes(property.association()));
+    parts
+        .attributes
+        .extend(serialize_ownership_attributes(property.ownership()));
+    if let Some(object) = property.object() {
         parts
             .content
             .push(XmlNodeContent::Child(serialize_auxiliary_traffic_space(
@@ -45,25 +53,15 @@ pub fn serialize_auxiliary_traffic_space_property(
             )?));
     }
     Ok(XmlNode::new(
-        XmlElement::AuxiliaryTrafficSpaceProperty,
+        CityGmlElement::AuxiliaryTrafficSpaceProperty.into(),
         parts,
     ))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct GmlAuxiliaryTrafficSpaceProperty {
-    #[serde(
-        rename(serialize = "@xlink:href", deserialize = "@href"),
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub href: Option<String>,
-}
-
-impl From<GmlAuxiliaryTrafficSpaceProperty> for AuxiliaryTrafficSpaceProperty {
-    fn from(item: GmlAuxiliaryTrafficSpaceProperty) -> Self {
-        Self {
-            object: None,
-            href: item.href,
-        }
-    }
+    #[serde(flatten)]
+    pub association: GmlAssociationAttributes,
+    #[serde(flatten)]
+    pub ownership: GmlOwnershipAttributes,
 }

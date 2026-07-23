@@ -3,10 +3,12 @@ use crate::model::appearance::enums::{TextureType, WrapMode};
 use crate::model::appearance::{
     AbstractSurfaceData, AsAbstractSurfaceData, AsAbstractSurfaceDataMut,
 };
-use crate::model::core::refs::{FeatureKindRef, FeatureKindRefMut};
+use crate::model::common::{ForEachFeatureMut, IterFeatures};
+use crate::model::core::refs::{AbstractFeatureKindRef, AbstractFeatureKindRefMut};
 use egml::model::base::Id;
+use egml::model::common::{ApplyTransform, ComputeEnvelope};
 use egml::model::geometry::Envelope;
-use nalgebra::Isometry3;
+use nalgebra::{Isometry3, Rotation3, Scale3, Transform3, Vector3};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbstractTexture {
@@ -30,20 +32,6 @@ impl AbstractTexture {
             wrap_mode: None,
             border_color: None,
         }
-    }
-}
-impl AbstractTexture {
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
-        std::iter::empty()
-    }
-    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, _f: &mut F) {}
-
-    pub fn compute_envelope(&self) -> Option<Envelope> {
-        None
-    }
-
-    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
-        self.abstract_surface_data.apply_transform(m);
     }
 }
 
@@ -106,8 +94,8 @@ macro_rules! impl_abstract_texture_traits {
 
         impl $crate::model::appearance::AsAbstractSurfaceData for $type {
             fn abstract_surface_data(&self) -> &$crate::model::appearance::AbstractSurfaceData {
-                use $crate::model::appearance::AsAbstractTexture;
-                &self.abstract_texture().abstract_surface_data
+                &<$type as $crate::model::appearance::AsAbstractTexture>::abstract_texture(self)
+                    .abstract_surface_data
             }
         }
     };
@@ -122,8 +110,7 @@ macro_rules! impl_abstract_texture_mut_traits {
             fn abstract_surface_data_mut(
                 &mut self,
             ) -> &mut $crate::model::appearance::AbstractSurfaceData {
-                use $crate::model::appearance::AsAbstractTextureMut;
-                &mut self.abstract_texture_mut().abstract_surface_data
+                &mut <$type as $crate::model::appearance::AsAbstractTextureMut>::abstract_texture_mut(self).abstract_surface_data
             }
         }
     };
@@ -131,3 +118,41 @@ macro_rules! impl_abstract_texture_mut_traits {
 
 impl_abstract_texture_traits!(AbstractTexture);
 impl_abstract_texture_mut_traits!(AbstractTexture);
+
+impl IterFeatures for AbstractTexture {
+    fn iter_features(&self) -> Box<dyn Iterator<Item = AbstractFeatureKindRef<'_>> + '_> {
+        Box::new(std::iter::empty())
+    }
+}
+
+impl ForEachFeatureMut for AbstractTexture {
+    fn for_each_feature_mut<F: FnMut(AbstractFeatureKindRefMut<'_>)>(&mut self, _f: &mut F) {}
+}
+
+impl ComputeEnvelope for AbstractTexture {
+    fn compute_envelope(&self) -> Option<Envelope> {
+        None
+    }
+}
+
+impl ApplyTransform for AbstractTexture {
+    fn apply_transform(&mut self, m: Transform3<f64>) {
+        self.abstract_surface_data.apply_transform(m);
+    }
+
+    fn apply_isometry(&mut self, isometry: Isometry3<f64>) {
+        self.abstract_surface_data.apply_isometry(isometry);
+    }
+
+    fn apply_translation(&mut self, vector: Vector3<f64>) {
+        self.abstract_surface_data.apply_translation(vector);
+    }
+
+    fn apply_rotation(&mut self, rotation: Rotation3<f64>) {
+        self.abstract_surface_data.apply_rotation(rotation);
+    }
+
+    fn apply_scale(&mut self, scale: Scale3<f64>) {
+        self.abstract_surface_data.apply_scale(scale);
+    }
+}

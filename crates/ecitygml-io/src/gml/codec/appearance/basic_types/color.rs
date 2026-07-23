@@ -1,6 +1,8 @@
-use crate::gml::util::{deserialize_space_separated_f64_3, serialize_space_separated_f64_3};
 use ecitygml_core::model::appearance::basic_types::Color;
 use ecitygml_core::model::core::basic_types::DoubleBetween0And1;
+use egml::io::util::serde_helpers::{
+    deserialize_space_separated_f64_3, serialize_space_separated_f64_3,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]

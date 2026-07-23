@@ -1,18 +1,21 @@
-use crate::model::core::refs::FeatureKindRef;
-use crate::model::core::refs::FeatureKindRefMut;
+use crate::model::common::{ForEachFeatureMut, IterFeatures};
+use crate::model::core::refs::AbstractFeatureKindRef;
+use crate::model::core::refs::AbstractFeatureKindRefMut;
 use crate::model::core::{
-    AbstractOccupiedSpace, AsAbstractOccupiedSpace, AsAbstractOccupiedSpaceMut,
+    AbstractOccupiedSpace, AsAbstractOccupiedSpace, AsAbstractOccupiedSpaceMut, Occupancy,
 };
 use chrono::NaiveDate;
 use egml::model::base::Id;
+use egml::model::common::{ApplyTransform, ComputeEnvelope};
 use egml::model::geometry::Envelope;
-use nalgebra::Isometry3;
+use nalgebra::{Isometry3, Rotation3, Scale3, Transform3, Vector3};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbstractConstruction {
     pub(crate) abstract_occupied_space: AbstractOccupiedSpace,
     date_of_construction: Option<NaiveDate>,
     date_of_demolition: Option<NaiveDate>,
+    occupancies: Vec<Occupancy>,
 }
 
 impl AbstractConstruction {
@@ -25,21 +28,8 @@ impl AbstractConstruction {
             abstract_occupied_space,
             date_of_construction: None,
             date_of_demolition: None,
+            occupancies: Vec::new(),
         }
-    }
-}
-impl AbstractConstruction {
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
-        self.abstract_occupied_space.iter_features()
-    }
-    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
-        self.abstract_occupied_space.for_each_feature_mut(f);
-    }
-    pub fn compute_envelope(&self) -> Option<Envelope> {
-        self.abstract_occupied_space.compute_envelope()
-    }
-    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
-        self.abstract_occupied_space.apply_transform(m);
     }
 }
 
@@ -53,6 +43,10 @@ pub trait AsAbstractConstruction: AsAbstractOccupiedSpace {
     fn date_of_demolition(&self) -> Option<&NaiveDate> {
         self.abstract_construction().date_of_demolition.as_ref()
     }
+
+    fn occupancies(&self) -> &[Occupancy] {
+        self.abstract_construction().occupancies.as_ref()
+    }
 }
 
 pub trait AsAbstractConstructionMut: AsAbstractOccupiedSpaceMut + AsAbstractConstruction {
@@ -64,6 +58,24 @@ pub trait AsAbstractConstructionMut: AsAbstractOccupiedSpaceMut + AsAbstractCons
 
     fn set_date_of_demolition(&mut self, date_of_demolition: Option<NaiveDate>) {
         self.abstract_construction_mut().date_of_demolition = date_of_demolition;
+    }
+
+    fn occupancies_mut(&mut self) -> &mut Vec<Occupancy> {
+        &mut self.abstract_construction_mut().occupancies
+    }
+
+    fn set_occupancies(&mut self, values: Vec<Occupancy>) {
+        self.abstract_construction_mut().occupancies = values;
+    }
+
+    fn push_occupancy(&mut self, occupancy: Occupancy) {
+        self.abstract_construction_mut().occupancies.push(occupancy);
+    }
+
+    fn extend_occupancies(&mut self, occupancies: impl IntoIterator<Item = Occupancy>) {
+        self.abstract_construction_mut()
+            .occupancies
+            .extend(occupancies);
     }
 }
 
@@ -86,8 +98,7 @@ macro_rules! impl_abstract_construction_traits {
 
         impl $crate::model::core::AsAbstractOccupiedSpace for $type {
             fn abstract_occupied_space(&self) -> &$crate::model::core::AbstractOccupiedSpace {
-                use $crate::model::construction::AsAbstractConstruction;
-                &self.abstract_construction().abstract_occupied_space
+                &<$type as $crate::model::construction::AsAbstractConstruction>::abstract_construction(self).abstract_occupied_space
             }
         }
     };
@@ -102,8 +113,7 @@ macro_rules! impl_abstract_construction_mut_traits {
             fn abstract_occupied_space_mut(
                 &mut self,
             ) -> &mut $crate::model::core::AbstractOccupiedSpace {
-                use $crate::model::construction::AsAbstractConstructionMut;
-                &mut self.abstract_construction_mut().abstract_occupied_space
+                &mut <$type as $crate::model::construction::AsAbstractConstructionMut>::abstract_construction_mut(self).abstract_occupied_space
             }
         }
     };
@@ -111,3 +121,43 @@ macro_rules! impl_abstract_construction_mut_traits {
 
 impl_abstract_construction_traits!(AbstractConstruction);
 impl_abstract_construction_mut_traits!(AbstractConstruction);
+
+impl IterFeatures for AbstractConstruction {
+    fn iter_features(&self) -> Box<dyn Iterator<Item = AbstractFeatureKindRef<'_>> + '_> {
+        self.abstract_occupied_space.iter_features()
+    }
+}
+
+impl ForEachFeatureMut for AbstractConstruction {
+    fn for_each_feature_mut<F: FnMut(AbstractFeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
+        self.abstract_occupied_space.for_each_feature_mut(f);
+    }
+}
+
+impl ComputeEnvelope for AbstractConstruction {
+    fn compute_envelope(&self) -> Option<Envelope> {
+        self.abstract_occupied_space.compute_envelope()
+    }
+}
+
+impl ApplyTransform for AbstractConstruction {
+    fn apply_transform(&mut self, m: Transform3<f64>) {
+        self.abstract_occupied_space.apply_transform(m);
+    }
+
+    fn apply_isometry(&mut self, isometry: Isometry3<f64>) {
+        self.abstract_occupied_space.apply_isometry(isometry);
+    }
+
+    fn apply_translation(&mut self, vector: Vector3<f64>) {
+        self.abstract_occupied_space.apply_translation(vector);
+    }
+
+    fn apply_rotation(&mut self, rotation: Rotation3<f64>) {
+        self.abstract_occupied_space.apply_rotation(rotation);
+    }
+
+    fn apply_scale(&mut self, scale: Scale3<f64>) {
+        self.abstract_occupied_space.apply_scale(scale);
+    }
+}

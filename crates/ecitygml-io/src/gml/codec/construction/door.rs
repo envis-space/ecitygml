@@ -2,10 +2,9 @@ use crate::Error;
 use crate::gml::codec::construction::abstract_filling_element::{
     deserialize_abstract_filling_element, serialize_abstract_filling_element,
 };
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{XmlNode, extract_xml_element_spans};
-use crate::gml::write::Formatting;
+use crate::gml::util::CityGmlElement;
 use ecitygml_core::model::construction::{AsAbstractFillingElement, Door};
+use egml::io::util::{Formatting, XmlNode, extract_xml_element_spans};
 
 pub fn deserialize_door(xml_document: &[u8]) -> Result<Door, Error> {
     let spans = extract_xml_element_spans(xml_document)?;
@@ -19,5 +18,5 @@ pub fn serialize_door(door: &Door, formatting: Formatting) -> Result<XmlNode, Er
     let xml_node_parts =
         serialize_abstract_filling_element(door.abstract_filling_element(), formatting)?;
 
-    Ok(XmlNode::new(XmlElement::Door, xml_node_parts))
+    Ok(XmlNode::new(CityGmlElement::Door.into(), xml_node_parts))
 }

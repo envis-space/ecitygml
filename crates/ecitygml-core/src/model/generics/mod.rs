@@ -1,3 +1,5 @@
+pub mod values;
+
 mod double_attribute;
 mod generic_attribute_kind;
 mod generic_attribute_set;
