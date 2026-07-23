@@ -1,47 +1,36 @@
 use crate::Error;
-use crate::gml::codec::construction::filling_surface_property::{
-    deserialize_filling_surface_property, serialize_filling_surface_property,
+use crate::gml::codec::construction::abstract_filling_surface_property::{
+    deserialize_abstract_filling_surface_property, serialize_abstract_filling_surface_property,
 };
 use crate::gml::codec::core::{
     deserialize_abstract_thematic_surface, serialize_abstract_thematic_surface,
 };
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{
-    XmlElementSpans, XmlNodeContent, XmlNodeParts, collect_children, serialize_inner,
-};
-use crate::gml::write::Formatting;
+use crate::gml::util::{CityGmlElement, CombinedCityGmlElement};
 use ecitygml_core::model::construction::{
     AbstractConstructionSurface, AsAbstractConstructionSurface, AsAbstractConstructionSurfaceMut,
 };
 use ecitygml_core::model::core::AsAbstractThematicSurface;
+use egml::io::util::collect_children;
+use egml::io::util::{Formatting, XmlElementSpans, XmlNodeContent, XmlNodeParts, serialize_inner};
 use serde::{Deserialize, Serialize};
 
 pub fn deserialize_abstract_construction_surface(
     xml_document: &[u8],
-    spans: &XmlElementSpans,
+    spans: &XmlElementSpans<CombinedCityGmlElement>,
 ) -> Result<AbstractConstructionSurface, Error> {
-    let mut abstract_thematic_surface_result = None;
-    let mut filling_surfaces_result = None;
-
-    rayon::scope(|s| {
-        s.spawn(|_| {
-            abstract_thematic_surface_result =
-                Some(deserialize_abstract_thematic_surface(xml_document, spans));
-        });
-        s.spawn(|_| {
-            filling_surfaces_result = Some(collect_children(
+    let (abstract_thematic_surface_result, filling_surfaces_result) = rayon::join(
+        || deserialize_abstract_thematic_surface(xml_document, spans),
+        || {
+            collect_children(
                 xml_document,
                 spans,
-                XmlElement::FillingSurfaceProperty,
-                deserialize_filling_surface_property,
-            ));
-        });
-    });
-
-    let abstract_thematic_surface =
-        abstract_thematic_surface_result.expect("rayon::scope guarantees all spawns complete")?;
-    let filling_surfaces =
-        filling_surfaces_result.expect("rayon::scope guarantees all spawns complete")?;
+                CityGmlElement::AbstractFillingSurfaceProperty.into(),
+                deserialize_abstract_filling_surface_property,
+            )
+        },
+    );
+    let abstract_thematic_surface = abstract_thematic_surface_result?;
+    let filling_surfaces = filling_surfaces_result?;
 
     let mut abstract_construction_surface =
         AbstractConstructionSurface::from_abstract_thematic_surface(abstract_thematic_surface);
@@ -70,7 +59,9 @@ pub fn serialize_abstract_construction_surface(
         abstract_construction_surface
             .filling_surfaces()
             .iter()
-            .map(|x| serialize_filling_surface_property(x, formatting).map(XmlNodeContent::from))
+            .map(|x| {
+                serialize_abstract_filling_surface_property(x, formatting).map(XmlNodeContent::from)
+            })
             .collect::<Result<Vec<_>, _>>()?,
     );
 

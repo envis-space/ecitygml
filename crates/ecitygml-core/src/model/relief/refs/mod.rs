@@ -1,5 +1,5 @@
-mod relief_component_kind_ref;
-pub use relief_component_kind_ref::*;
+mod abstract_relief_component_kind_ref;
+pub use abstract_relief_component_kind_ref::*;
 
-mod relief_component_kind_ref_mut;
-pub use relief_component_kind_ref_mut::*;
+mod abstract_relief_component_kind_ref_mut;
+pub use abstract_relief_component_kind_ref_mut::*;

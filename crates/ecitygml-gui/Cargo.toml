@@ -1,0 +1,26 @@
+[package]
+name = "ecitygml-gui"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Desktop GUI for viewing CityGML datasets."
+
+[[bin]]
+name = "ecitygml-gui"
+path = "src/main.rs"
+
+[dependencies]
+ecitygml = { version = "0.0.2-alpha.5", path = "../ecitygml" }
+ecitygml-core = { version = "0.0.2-alpha.5", path = "../ecitygml-core" }
+egml = { workspace = true }
+
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+three-d = { workspace = true, features = ["egui-gui"] }
+rfd = { workspace = true, features = ["xdg-portal"] }
+bvh = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+nalgebra = { workspace = true }

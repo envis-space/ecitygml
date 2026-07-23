@@ -3,7 +3,8 @@ use crate::city_objects::{
 };
 use ecitygml_rs::model::building::Building as RustBuilding;
 use ecitygml_rs::model::city_furniture::CityFurniture as RustCityFurniture;
-use ecitygml_rs::model::core::refs::FeatureKindRef;
+use ecitygml_rs::model::common::IterFeatures;
+use ecitygml_rs::model::core::refs::AbstractFeatureKindRef;
 use ecitygml_rs::model::relief::{ReliefFeature as RustReliefFeature, TinRelief as RustTinRelief};
 use ecitygml_rs::model::transportation::Road as RustRoad;
 use ecitygml_rs::model::vegetation::SolitaryVegetationObject as RustSolitaryVegetationObject;
@@ -86,21 +87,23 @@ impl PyCityModel {
     pub fn buildings(&self) -> Vec<PyBuilding> {
         self.inner
             .iter_features()
-            .filter_map(|x: FeatureKindRef| <&RustBuilding>::try_from(x).ok().map(PyBuilding::from))
+            .filter_map(|x: AbstractFeatureKindRef| {
+                <&RustBuilding>::try_from(x).ok().map(PyBuilding::from)
+            })
             .collect()
     }
 
     pub fn roads(&self) -> Vec<PyRoad> {
         self.inner
             .iter_features()
-            .filter_map(|x: FeatureKindRef| <&RustRoad>::try_from(x).ok().map(PyRoad::from))
+            .filter_map(|x: AbstractFeatureKindRef| <&RustRoad>::try_from(x).ok().map(PyRoad::from))
             .collect()
     }
 
     pub fn solitary_vegetation_objects(&self) -> Vec<PySolitaryVegetationObject> {
         self.inner
             .iter_features()
-            .filter_map(|x: FeatureKindRef| {
+            .filter_map(|x: AbstractFeatureKindRef| {
                 <&RustSolitaryVegetationObject>::try_from(x)
                     .ok()
                     .map(PySolitaryVegetationObject::from)
@@ -111,7 +114,7 @@ impl PyCityModel {
     pub fn city_furniture_objects(&self) -> Vec<PyCityFurniture> {
         self.inner
             .iter_features()
-            .filter_map(|x: FeatureKindRef| {
+            .filter_map(|x: AbstractFeatureKindRef| {
                 <&RustCityFurniture>::try_from(x)
                     .ok()
                     .map(PyCityFurniture::from)
@@ -122,7 +125,7 @@ impl PyCityModel {
     pub fn relief_features(&self) -> Vec<PyReliefFeature> {
         self.inner
             .iter_features()
-            .filter_map(|x: FeatureKindRef| {
+            .filter_map(|x: AbstractFeatureKindRef| {
                 <&RustReliefFeature>::try_from(x)
                     .ok()
                     .map(PyReliefFeature::from)
@@ -133,7 +136,7 @@ impl PyCityModel {
     pub fn tin_reliefs(&self) -> Vec<PyTinRelief> {
         self.inner
             .iter_features()
-            .filter_map(|x: FeatureKindRef| {
+            .filter_map(|x: AbstractFeatureKindRef| {
                 <&RustTinRelief>::try_from(x).ok().map(PyTinRelief::from)
             })
             .collect()

@@ -2,11 +2,16 @@ use crate::Error;
 use crate::gml::codec::vegetation::abstract_vegetation_object::{
     deserialize_abstract_vegetation_object, serialize_abstract_vegetation_object,
 };
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner};
-use crate::gml::write::Formatting;
+use crate::gml::util::CityGmlElement;
+use ecitygml_core::model::vegetation::values::{
+    PlantCoverClassValue, PlantCoverFunctionValue, PlantCoverUsageValue,
+};
 use ecitygml_core::model::vegetation::{AsAbstractVegetationObject, PlantCover};
-use egml::io::{GmlCode, GmlMeasure};
+use egml::io::codec::basic::{GmlCode, GmlMeasure};
+use egml::io::util::{
+    Formatting, XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner,
+};
+use egml::model::basic_types::Code;
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
@@ -20,12 +25,26 @@ pub fn deserialize_plant_cover(xml_document: &[u8]) -> Result<PlantCover, Error>
     let parsed = parsed_result?;
     let mut plant_cover = PlantCover::from_abstract_vegetation_object(abstract_vegetation_object);
 
-    plant_cover.set_class(parsed.class.map(Into::into));
-    plant_cover.set_functions(parsed.functions.into_iter().map(Into::into).collect());
-    plant_cover.set_usages(parsed.usages.into_iter().map(Into::into).collect());
-    plant_cover.set_average_height(parsed.average_height.map(Into::into));
-    plant_cover.set_min_height(parsed.min_height.map(Into::into));
-    plant_cover.set_max_height(parsed.max_height.map(Into::into));
+    plant_cover.set_class_opt(parsed.class.map(Code::from).map(PlantCoverClassValue::from));
+    plant_cover.set_functions(
+        parsed
+            .functions
+            .into_iter()
+            .map(Code::from)
+            .map(PlantCoverFunctionValue::from)
+            .collect(),
+    );
+    plant_cover.set_usages(
+        parsed
+            .usages
+            .into_iter()
+            .map(Code::from)
+            .map(PlantCoverUsageValue::from)
+            .collect(),
+    );
+    plant_cover.set_average_height_opt(parsed.average_height.map(Into::into));
+    plant_cover.set_min_height_opt(parsed.min_height.map(Into::into));
+    plant_cover.set_max_height_opt(parsed.max_height.map(Into::into));
 
     Ok(plant_cover)
 }
@@ -41,7 +60,7 @@ pub fn serialize_plant_cover(
         parts.content.push(XmlNodeContent::Raw(raw));
     }
 
-    Ok(XmlNode::new(XmlElement::PlantCover, parts))
+    Ok(XmlNode::new(CityGmlElement::PlantCover.into(), parts))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -80,9 +99,19 @@ pub struct GmlPlantCover {
 impl From<&PlantCover> for GmlPlantCover {
     fn from(item: &PlantCover) -> Self {
         Self {
-            class: item.class().map(Into::into),
-            functions: item.functions().iter().map(Into::into).collect(),
-            usages: item.usages().iter().map(Into::into).collect(),
+            class: item.class().map(PlantCoverClassValue::code).map(Into::into),
+            functions: item
+                .functions()
+                .iter()
+                .map(PlantCoverFunctionValue::code)
+                .map(Into::into)
+                .collect(),
+            usages: item
+                .usages()
+                .iter()
+                .map(PlantCoverUsageValue::code)
+                .map(Into::into)
+                .collect(),
             average_height: item.average_height().map(Into::into),
             min_height: item.min_height().map(Into::into),
             max_height: item.max_height().map(Into::into),

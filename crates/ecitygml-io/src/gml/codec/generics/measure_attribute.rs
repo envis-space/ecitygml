@@ -1,7 +1,7 @@
 use crate::Error;
 use crate::Error::AttributeWithoutName;
 use ecitygml_core::model::generics::MeasureAttribute;
-use egml::io::GmlMeasure;
+use egml::io::codec::basic::GmlMeasure;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]

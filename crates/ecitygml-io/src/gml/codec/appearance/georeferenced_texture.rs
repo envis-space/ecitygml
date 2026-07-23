@@ -2,10 +2,11 @@ use crate::Error;
 use crate::gml::codec::appearance::abstract_texture::{
     deserialize_abstract_texture, serialize_abstract_texture,
 };
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner};
-use crate::gml::write::Formatting;
+use crate::gml::util::CityGmlElement;
 use ecitygml_core::model::appearance::{AsAbstractTexture, GeoreferencedTexture};
+use egml::io::util::{
+    Formatting, XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner,
+};
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
@@ -13,15 +14,15 @@ pub fn deserialize_georeferenced_texture(
     xml_document: &[u8],
 ) -> Result<GeoreferencedTexture, Error> {
     let spans = extract_xml_element_spans(xml_document)?;
-    let (abstract_texture_result, gml_result) = rayon::join(
+    let (abstract_texture_result, parsed_result) = rayon::join(
         || deserialize_abstract_texture(xml_document, &spans),
         || de::from_reader::<_, GmlGeoreferencedTexture>(xml_document).map_err(Error::from),
     );
     let abstract_texture = abstract_texture_result?;
-    let gml = gml_result?;
+    let parsed = parsed_result?;
 
     let mut georeferenced_texture = GeoreferencedTexture::from_abstract_texture(abstract_texture);
-    georeferenced_texture.set_prefer_world_file(gml.prefer_world_file);
+    georeferenced_texture.set_prefer_world_file(parsed.prefer_world_file);
 
     Ok(georeferenced_texture)
 }
@@ -41,7 +42,7 @@ pub fn serialize_georeferenced_texture(
     }
 
     Ok(XmlNode::new(
-        XmlElement::GeoreferencedTexture,
+        CityGmlElement::GeoreferencedTexture.into(),
         xml_node_parts,
     ))
 }

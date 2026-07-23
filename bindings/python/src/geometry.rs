@@ -1,10 +1,11 @@
+use egml::model::common::{ComputeEnvelope, Triangulate};
 use egml::model::geometry::DirectPosition as RustDirectPosition;
 use egml::model::geometry::Envelope as RustEnvelope;
 use egml::model::geometry::aggregates::{MultiCurve as RustMultiCurve, MultiSurface as RustMultiSurface};
 use egml::model::geometry::primitives::{
-    LinearRing as RustLinearRing, Polygon as RustPolygon, RingKind, Solid as RustSolid,
-    Triangle as RustTriangle, TriangulatedSurface as RustTriangulatedSurface, SurfaceKind,
-    CurveKind,
+    AbstractCurveKind, AbstractRingKind, AbstractSurfaceKind, LinearRing as RustLinearRing,
+    Polygon as RustPolygon, Solid as RustSolid, Triangle as RustTriangle,
+    TriangulatedSurface as RustTriangulatedSurface,
 };
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::*;
@@ -169,11 +170,11 @@ impl PyLinearRing {
     }
 }
 
-// Helper to convert a RingKind reference into a PyLinearRing
-pub fn ring_kind_to_py(ring: &RingKind) -> PyLinearRing {
+// Helper to convert an AbstractRingKind reference into a PyLinearRing
+pub fn ring_kind_to_py(ring: &AbstractRingKind) -> PyLinearRing {
     match ring {
-        RingKind::LinearRing(lr) => PyLinearRing { inner: lr.clone() },
-        RingKind::RingKind(_) => {
+        AbstractRingKind::LinearRing(lr) => PyLinearRing { inner: lr.clone() },
+        AbstractRingKind::AbstractRingKind(_) => {
             let pts = ring.points().to_vec();
             let lr = RustLinearRing::new(pts)
                 .expect("ring from valid GML has >= 3 non-duplicate points");
@@ -204,15 +205,15 @@ impl From<RustPolygon> for PyPolygon {
 impl PyPolygon {
     #[getter]
     pub fn exterior(&self) -> Option<PyLinearRing> {
-        self.inner.exterior().as_ref()
-            .and_then(|rp| rp.object.as_ref())
+        self.inner.exterior()
+            .and_then(|rp| rp.object())
             .map(ring_kind_to_py)
     }
 
     #[getter]
     pub fn interior(&self) -> Vec<PyLinearRing> {
         self.inner.interior().iter()
-            .filter_map(|rp| rp.object.as_ref())
+            .filter_map(|rp| rp.object())
             .map(ring_kind_to_py)
             .collect()
     }
@@ -258,25 +259,25 @@ impl From<&RustTriangle> for PyTriangle {
 impl PyTriangle {
     #[getter]
     pub fn a(&self) -> PyDirectPosition {
-        PyDirectPosition::from(self.inner.a)
+        PyDirectPosition::from(self.inner.a())
     }
 
     #[getter]
     pub fn b(&self) -> PyDirectPosition {
-        PyDirectPosition::from(self.inner.b)
+        PyDirectPosition::from(self.inner.b())
     }
 
     #[getter]
     pub fn c(&self) -> PyDirectPosition {
-        PyDirectPosition::from(self.inner.c)
+        PyDirectPosition::from(self.inner.c())
     }
 
     pub fn __repr__(&self) -> String {
         format!(
             "Triangle(a={}, b={}, c={})",
-            PyDirectPosition::from(self.inner.a).__repr__(),
-            PyDirectPosition::from(self.inner.b).__repr__(),
-            PyDirectPosition::from(self.inner.c).__repr__()
+            PyDirectPosition::from(self.inner.a()).__repr__(),
+            PyDirectPosition::from(self.inner.b()).__repr__(),
+            PyDirectPosition::from(self.inner.c()).__repr__()
         )
     }
 }
@@ -344,11 +345,11 @@ impl PySolid {
     pub fn polygons(&self) -> Vec<PyPolygon> {
         self.inner
             .exterior()
-            .and_then(|sp| sp.object.as_ref())
+            .and_then(|sp| sp.object())
             .map(|shell| {
                 shell.members().iter()
-                    .filter_map(|sp| match sp.object.as_ref() {
-                        Some(SurfaceKind::Polygon(p)) => Some(PyPolygon::from(p.clone())),
+                    .filter_map(|sp| match sp.object() {
+                        Some(AbstractSurfaceKind::Polygon(p)) => Some(PyPolygon::from(p.clone())),
                         _ => None,
                     })
                     .collect()
@@ -359,10 +360,10 @@ impl PySolid {
     pub fn triangulate(&self) -> PyResult<PyTriangulatedSurface> {
         self.inner
             .exterior()
-            .and_then(|sp| sp.object.as_ref())
+            .and_then(|sp| sp.object())
             .ok_or_else(|| pyo3::exceptions::PyRuntimeError::new_err("Solid has no exterior shell"))?
             .triangulate()
-            .map(PyTriangulatedSurface::from)
+            .map(|t| PyTriangulatedSurface::from(t.into_surface()))
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     }
 
@@ -373,7 +374,7 @@ impl PySolid {
     pub fn __repr__(&self) -> String {
         let count = self.inner
             .exterior()
-            .and_then(|sp| sp.object.as_ref())
+            .and_then(|sp| sp.object())
             .map(|shell| shell.members().len())
             .unwrap_or(0);
         format!("Solid({} surfaces)", count)
@@ -410,8 +411,8 @@ impl PyMultiSurface {
         self.inner
             .surface_member()
             .iter()
-            .filter_map(|sp| match sp.object.as_ref() {
-                Some(SurfaceKind::Polygon(p)) => Some(PyPolygon::from(p.clone())),
+            .filter_map(|sp| match sp.object() {
+                Some(AbstractSurfaceKind::Polygon(p)) => Some(PyPolygon::from(p.clone())),
                 _ => None,
             })
             .collect()
@@ -420,7 +421,7 @@ impl PyMultiSurface {
     pub fn triangulate(&self) -> PyResult<PyTriangulatedSurface> {
         self.inner
             .triangulate()
-            .map(PyTriangulatedSurface::from)
+            .map(|t| PyTriangulatedSurface::from(t.into_surface()))
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))
     }
 
@@ -463,11 +464,12 @@ impl PyMultiCurve {
         self.inner
             .curve_member()
             .iter()
-            .filter_map(|cp| cp.object.as_ref())
-            .map(|ck| match ck {
-                CurveKind::LineString(ls) => {
-                    ls.points().iter().map(PyDirectPosition::from).collect()
+            .filter_map(|cp| cp.object())
+            .filter_map(|ck| match ck {
+                AbstractCurveKind::LineString(ls) => {
+                    Some(ls.points().iter().map(PyDirectPosition::from).collect())
                 }
+                _ => None,
             })
             .collect()
     }

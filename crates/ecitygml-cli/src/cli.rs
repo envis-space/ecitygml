@@ -14,7 +14,7 @@ pub enum Commands {
     Statistics {
         /// Input directory
         #[clap(short, long, value_hint = ValueHint::FilePath)]
-        file_path: PathBuf,
+        input: PathBuf,
     },
 
     /// List all objects with their metadata
@@ -63,7 +63,7 @@ pub enum Commands {
         formatting: FormattingArg,
 
         /// Indentation size in spaces (only used with --formatting indent)
-        #[clap(long, default_value = "2")]
+        #[clap(long, default_value = "1")]
         indent_size: usize,
     },
 }

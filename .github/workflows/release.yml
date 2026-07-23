@@ -1,0 +1,110 @@
+name: Release
+
+on:
+  push:
+    tags:
+    - '[0-9]+.[0-9]+.[0-9]+*'
+
+permissions:
+  contents: write
+
+jobs:
+
+  check-version:
+    name: Check version
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+    - name: Verify tag matches Cargo.toml
+      shell: bash
+      run: |
+        VERSION="${{ github.ref_name }}"
+        if ! grep -q "^version = \"$VERSION\"" Cargo.toml; then
+          echo "Tag $VERSION does not match version in Cargo.toml" >&2
+          exit 1
+        fi
+
+  build:
+    needs: check-version
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - target: x86_64-unknown-linux-gnu
+          os: ubuntu-latest
+        - target: aarch64-unknown-linux-gnu
+          os: ubuntu-24.04-arm
+        - target: x86_64-apple-darwin
+          os: macos-latest
+        - target: aarch64-apple-darwin
+          os: macos-latest
+        - target: x86_64-pc-windows-msvc
+          os: windows-latest
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ matrix.target }}
+
+    - name: Build
+      env:
+        CMAKE_TOOLCHAIN_FILE: ${{ runner.os == 'Windows' && 'C:\vcpkg\scripts\buildsystems\vcpkg.cmake' || '' }}
+        RUSTFLAGS: ${{ runner.os == 'Windows' && '-L C:\vcpkg\installed\x64-windows-static-md\lib' || '' }}
+      run: cargo build --profile release-lto --bin ecitygml-gui --target ${{ matrix.target }}
+
+    - name: Package binary (Unix)
+      if: runner.os != 'Windows'
+      run: |
+        BINARY=target/${{ matrix.target }}/release-lto/ecitygml-gui
+        ARCHIVE=ecitygml-gui-${{ github.ref_name }}-${{ matrix.target }}.tar.gz
+        tar -czf "$ARCHIVE" -C "$(dirname "$BINARY")" "$(basename "$BINARY")"
+        shasum -a 256 "$ARCHIVE" > "$ARCHIVE.sha256"
+        echo "ARCHIVE=$ARCHIVE" >> "$GITHUB_ENV"
+
+    - name: Package binary (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $binary = "target\${{ matrix.target }}\release-lto\ecitygml-gui.exe"
+        $archive = "ecitygml-gui-${{ github.ref_name }}-${{ matrix.target }}.zip"
+        Compress-Archive -Path $binary -DestinationPath $archive
+        certutil -hashfile $archive SHA256 > "$archive.sha256"
+        echo "ARCHIVE=$archive" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+    - uses: actions/upload-artifact@v7
+      with:
+        name: ecitygml-${{ matrix.target }}
+        path: |
+          ${{ env.ARCHIVE }}
+          ${{ env.ARCHIVE }}.sha256
+        if-no-files-found: error
+
+  release:
+    name: Create release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - name: Detect prerelease
+      shell: bash
+      run: |
+        if [[ "${{ github.ref_name }}" == *alpha* || "${{ github.ref_name }}" == *beta* || "${{ github.ref_name }}" == *rc* ]]; then
+          echo "PRERELEASE=true" >> $GITHUB_ENV
+        else
+          echo "PRERELEASE=false" >> $GITHUB_ENV
+        fi
+
+    - uses: actions/download-artifact@v8
+      with:
+        path: artifacts
+        pattern: ecitygml-*
+        merge-multiple: true
+
+    - uses: softprops/action-gh-release@v3
+      with:
+        files: artifacts/*
+        generate_release_notes: true
+        prerelease: ${{ env.PRERELEASE == 'true' }}

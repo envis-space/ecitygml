@@ -1,10 +1,14 @@
-use crate::model::core::refs::FeatureKindRef;
-use crate::model::core::refs::FeatureKindRefMut;
-use crate::model::core::{AbstractSpace, AsAbstractSpace, AsAbstractSpaceMut, PointCloudProperty};
+use crate::model::common::{ForEachFeatureMut, IterFeatures};
+use crate::model::core::refs::AbstractFeatureKindRef;
+use crate::model::core::refs::AbstractFeatureKindRefMut;
+use crate::model::core::{
+    AbstractPointCloudProperty, AbstractSpace, AsAbstractSpace, AsAbstractSpaceMut,
+};
 use egml::model::base::Id;
+use egml::model::common::{ApplyTransform, ComputeEnvelope};
 use egml::model::geometry::Envelope;
 use egml::model::geometry::aggregates::MultiCurveProperty;
-use nalgebra::Isometry3;
+use nalgebra::{Isometry3, Rotation3, Scale3, Transform3, Vector3};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbstractPhysicalSpace {
@@ -12,7 +16,7 @@ pub struct AbstractPhysicalSpace {
     lod1_terrain_intersection_curve: Option<MultiCurveProperty>,
     lod2_terrain_intersection_curve: Option<MultiCurveProperty>,
     lod3_terrain_intersection_curve: Option<MultiCurveProperty>,
-    point_cloud: Option<PointCloudProperty>,
+    point_cloud: Option<AbstractPointCloudProperty>,
 }
 
 impl AbstractPhysicalSpace {
@@ -28,40 +32,6 @@ impl AbstractPhysicalSpace {
             lod3_terrain_intersection_curve: None,
             point_cloud: None,
         }
-    }
-}
-
-impl AbstractPhysicalSpace {
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
-        self.abstract_space.iter_features()
-    }
-
-    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
-        self.abstract_space.for_each_feature_mut(f);
-    }
-
-    pub fn compute_envelope(&self) -> Option<Envelope> {
-        let envelopes: Vec<Envelope> = vec![
-            self.abstract_space.compute_envelope(),
-            self.lod1_terrain_intersection_curve()
-                .and_then(|x| x.object.as_ref())
-                .and_then(|x| x.compute_envelope()),
-            self.lod2_terrain_intersection_curve()
-                .and_then(|x| x.object.as_ref())
-                .and_then(|x| x.compute_envelope()),
-            self.lod3_terrain_intersection_curve()
-                .and_then(|x| x.object.as_ref())
-                .and_then(|x| x.compute_envelope()),
-        ]
-        .into_iter()
-        .flatten()
-        .collect();
-
-        Envelope::from_envelopes(&envelopes)
-    }
-
-    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
-        self.abstract_space.apply_transform(m);
     }
 }
 
@@ -86,7 +56,7 @@ pub trait AsAbstractPhysicalSpace: AsAbstractSpace {
             .as_ref()
     }
 
-    fn point_cloud(&self) -> Option<&PointCloudProperty> {
+    fn point_cloud(&self) -> Option<&AbstractPointCloudProperty> {
         self.abstract_physical_space().point_cloud.as_ref()
     }
 }
@@ -118,7 +88,7 @@ pub trait AsAbstractPhysicalSpaceMut: AsAbstractSpaceMut + AsAbstractPhysicalSpa
             .lod3_terrain_intersection_curve = lod3_terrain_intersection_curve;
     }
 
-    fn set_point_cloud(&mut self, value: Option<PointCloudProperty>) {
+    fn set_point_cloud(&mut self, value: Option<AbstractPointCloudProperty>) {
         self.abstract_physical_space_mut().point_cloud = value;
     }
 
@@ -140,7 +110,7 @@ pub trait AsAbstractPhysicalSpaceMut: AsAbstractSpaceMut + AsAbstractPhysicalSpa
             .as_mut()
     }
 
-    fn point_cloud_mut(&mut self) -> Option<&mut PointCloudProperty> {
+    fn point_cloud_mut(&mut self) -> Option<&mut AbstractPointCloudProperty> {
         self.abstract_physical_space_mut().point_cloud.as_mut()
     }
 }
@@ -164,8 +134,10 @@ macro_rules! impl_abstract_physical_space_traits {
 
         impl $crate::model::core::AsAbstractSpace for $type {
             fn abstract_space(&self) -> &$crate::model::core::AbstractSpace {
-                use $crate::model::core::AsAbstractPhysicalSpace;
-                &self.abstract_physical_space().abstract_space
+                &<$type as $crate::model::core::AsAbstractPhysicalSpace>::abstract_physical_space(
+                    self,
+                )
+                .abstract_space
             }
         }
     };
@@ -178,8 +150,7 @@ macro_rules! impl_abstract_physical_space_mut_traits {
 
         impl $crate::model::core::AsAbstractSpaceMut for $type {
             fn abstract_space_mut(&mut self) -> &mut $crate::model::core::AbstractSpace {
-                use $crate::model::core::AsAbstractPhysicalSpaceMut;
-                &mut self.abstract_physical_space_mut().abstract_space
+                &mut <$type as $crate::model::core::AsAbstractPhysicalSpaceMut>::abstract_physical_space_mut(self).abstract_space
             }
         }
     };
@@ -187,3 +158,74 @@ macro_rules! impl_abstract_physical_space_mut_traits {
 
 impl_abstract_physical_space_traits!(AbstractPhysicalSpace);
 impl_abstract_physical_space_mut_traits!(AbstractPhysicalSpace);
+
+impl IterFeatures for AbstractPhysicalSpace {
+    fn iter_features(&self) -> Box<dyn Iterator<Item = AbstractFeatureKindRef<'_>> + '_> {
+        Box::new(
+            self.abstract_space.iter_features(), /* TODO .chain(
+                                                     self.point_cloud
+                                                         .iter()
+                                                         .filter_map(|x| x.object.as_ref())
+                                                         .flat_map(|x| x.iter_features()),
+                                                 )*/
+        )
+    }
+}
+
+impl ForEachFeatureMut for AbstractPhysicalSpace {
+    fn for_each_feature_mut<F: FnMut(AbstractFeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
+        self.abstract_space.for_each_feature_mut(f);
+        if let Some(prop) = &mut self.point_cloud
+            && let Some(x) = prop.object_mut()
+        {
+            x.for_each_feature_mut(f);
+        }
+    }
+}
+
+impl ComputeEnvelope for AbstractPhysicalSpace {
+    fn compute_envelope(&self) -> Option<Envelope> {
+        let envelopes: Vec<Envelope> = vec![
+            self.abstract_space.compute_envelope(),
+            self.lod1_terrain_intersection_curve()
+                .and_then(|x| x.object())
+                .and_then(|x| x.compute_envelope()),
+            self.lod2_terrain_intersection_curve()
+                .and_then(|x| x.object())
+                .and_then(|x| x.compute_envelope()),
+            self.lod3_terrain_intersection_curve()
+                .and_then(|x| x.object())
+                .and_then(|x| x.compute_envelope()),
+            self.point_cloud()
+                .and_then(|x| x.object())
+                .and_then(|x| x.compute_envelope()),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+
+        Envelope::from_envelopes(&envelopes)
+    }
+}
+
+impl ApplyTransform for AbstractPhysicalSpace {
+    fn apply_transform(&mut self, m: Transform3<f64>) {
+        self.abstract_space.apply_transform(m);
+    }
+
+    fn apply_isometry(&mut self, isometry: Isometry3<f64>) {
+        self.abstract_space.apply_isometry(isometry);
+    }
+
+    fn apply_translation(&mut self, vector: Vector3<f64>) {
+        self.abstract_space.apply_translation(vector);
+    }
+
+    fn apply_rotation(&mut self, rotation: Rotation3<f64>) {
+        self.abstract_space.apply_rotation(rotation);
+    }
+
+    fn apply_scale(&mut self, scale: Scale3<f64>) {
+        self.abstract_space.apply_scale(scale);
+    }
+}

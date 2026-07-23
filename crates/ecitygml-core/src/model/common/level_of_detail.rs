@@ -2,7 +2,7 @@ use crate::Error;
 use crate::Error::InvalidLodName;
 use strum_macros::{Display, EnumIter};
 
-#[derive(Debug, Copy, Hash, Eq, Clone, PartialEq, EnumIter, Ord, PartialOrd, Display)]
+#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq, Ord, PartialOrd, EnumIter, Display)]
 pub enum LevelOfDetail {
     Zero,
     One,

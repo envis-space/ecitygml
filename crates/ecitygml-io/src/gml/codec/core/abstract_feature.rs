@@ -1,29 +1,35 @@
 use crate::Error;
-use crate::gml::util::{XmlElementSpans, XmlNodeContent, XmlNodeParts, serialize_inner};
-use crate::gml::write::Formatting;
+use crate::gml::util::{CombinedCityGmlElement, filter_to_gml_element_spans};
 use ecitygml_core::model::core::AbstractFeature;
-use egml::model::base::Id;
+use egml::io::util::{Formatting, XmlElementSpans, XmlNodeParts};
+use egml::model::base::{AsAbstractGml, AsAbstractGmlMut, Id};
+use egml::model::feature::AsAbstractFeature;
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(0);
-fn generate_id() -> Id {
+fn generate_feature_id() -> Id {
     let n = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-    Id::try_from(format!("ecitygml-gen-{n}")).expect("ecitygml-gen-{n} is always a valid xsd:ID")
+    Id::try_from(format!("ecitygml-gen-feature-{n}"))
+        .expect("ecitygml-gen-feature-{n} is always a valid xsd:ID")
 }
 
 pub fn deserialize_abstract_feature(
     xml_document: &[u8],
-    _spans: &XmlElementSpans,
+    spans: &XmlElementSpans<CombinedCityGmlElement>,
 ) -> Result<AbstractFeature, Error> {
-    let mut gml_abstract_feature = egml::io::deserialize_abstract_feature(xml_document)?;
+    let gml_spans = filter_to_gml_element_spans(spans);
+    let mut gml_abstract_feature =
+        egml::io::codec::feature::deserialize_abstract_feature(xml_document, &gml_spans)?;
 
-    if gml_abstract_feature.abstract_gml.id.is_none() {
-        gml_abstract_feature.abstract_gml.id = Some(generate_id())
+    if gml_abstract_feature.abstract_gml().id().is_none() {
+        gml_abstract_feature
+            .abstract_gml_mut()
+            .set_id(generate_feature_id());
         // gml_abstract_feature.abstract_gml.id = Some(Id::from_hashed_bytes(xml_document))
     }
 
-    let abstract_feature = AbstractFeature::from_gml_abstract_feature(gml_abstract_feature);
+    let abstract_feature = AbstractFeature::from_abstract_feature(gml_abstract_feature);
 
     Ok(abstract_feature)
 }
@@ -32,17 +38,10 @@ pub fn serialize_abstract_feature(
     abstract_feature: &AbstractFeature,
     formatting: Formatting,
 ) -> Result<XmlNodeParts, Error> {
-    let mut xml_node_parts = XmlNodeParts::empty();
-    xml_node_parts
-        .attributes
-        .push(("gml:id".to_string(), abstract_feature.id().to_string()));
-
-    if let Some(raw) = serialize_inner(
-        egml::io::GmlAbstractFeature::from(abstract_feature.gml_abstract_feature()),
+    let xml_node_parts: XmlNodeParts = egml::io::codec::feature::serialize_abstract_feature(
+        abstract_feature.abstract_feature(),
         formatting,
-    )? {
-        xml_node_parts.content.push(XmlNodeContent::Raw(raw));
-    }
+    )?;
 
     Ok(xml_node_parts)
 }

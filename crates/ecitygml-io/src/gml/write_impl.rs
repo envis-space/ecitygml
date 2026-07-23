@@ -1,7 +1,7 @@
 use crate::Error;
 use crate::gml::codec::core::serialize_city_model;
-use crate::gml::write::Formatting;
 use ecitygml_core::model::core::CityModel;
+use egml::io::util::Formatting;
 use quick_xml::events::{BytesDecl, Event};
 use std::io::Write;
 

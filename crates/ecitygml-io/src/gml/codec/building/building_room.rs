@@ -2,28 +2,48 @@ use crate::Error;
 use crate::gml::codec::core::{
     deserialize_abstract_unoccupied_space, serialize_abstract_unoccupied_space,
 };
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner};
-use crate::gml::write::Formatting;
+use crate::gml::util::CityGmlElement;
 use ecitygml_core::model::building::BuildingRoom;
+use ecitygml_core::model::building::values::{
+    BuildingRoomClassValue, BuildingRoomFunctionValue, BuildingRoomUsageValue,
+};
 use ecitygml_core::model::core::AsAbstractUnoccupiedSpace;
-use egml::io::GmlCode;
+use egml::io::codec::basic::GmlCode;
+use egml::io::util::extract_xml_element_spans;
+use egml::io::util::{Formatting, XmlNode, XmlNodeContent, serialize_inner};
+use egml::model::basic_types::Code;
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
 pub fn deserialize_building_room(xml_document: &[u8]) -> Result<BuildingRoom, Error> {
     let spans = extract_xml_element_spans(xml_document)?;
-    let (abstract_unoccupied_space_result, parsed_result) = rayon::join(
-        || deserialize_abstract_unoccupied_space(xml_document, &spans),
-        || de::from_reader::<_, GmlAbstractBuildingRoom>(xml_document).map_err(Error::from),
-    );
-    let abstract_unoccupied_space = abstract_unoccupied_space_result?;
-    let parsed = parsed_result?;
+    let abstract_unoccupied_space = deserialize_abstract_unoccupied_space(xml_document, &spans)?;
+    let parsed =
+        de::from_reader::<_, GmlAbstractBuildingRoom>(xml_document).map_err(Error::from)?;
     let mut building_room = BuildingRoom::from_abstract_unoccupied_space(abstract_unoccupied_space);
 
-    building_room.set_class(parsed.class.map(Into::into));
-    building_room.set_functions(parsed.functions.into_iter().map(Into::into).collect());
-    building_room.set_usages(parsed.usages.into_iter().map(Into::into).collect());
+    building_room.set_class_opt(
+        parsed
+            .class
+            .map(Code::from)
+            .map(BuildingRoomClassValue::from),
+    );
+    building_room.set_functions(
+        parsed
+            .functions
+            .into_iter()
+            .map(Code::from)
+            .map(BuildingRoomFunctionValue::from)
+            .collect(),
+    );
+    building_room.set_usages(
+        parsed
+            .usages
+            .into_iter()
+            .map(Code::from)
+            .map(BuildingRoomUsageValue::from)
+            .collect(),
+    );
 
     Ok(building_room)
 }
@@ -39,7 +59,10 @@ pub fn serialize_building_room(
         xml_node_parts.content.push(XmlNodeContent::Raw(raw));
     }
 
-    Ok(XmlNode::new(XmlElement::BuildingRoom, xml_node_parts))
+    Ok(XmlNode::new(
+        CityGmlElement::BuildingRoom.into(),
+        xml_node_parts,
+    ))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -60,9 +83,22 @@ pub struct GmlAbstractBuildingRoom {
 impl From<&BuildingRoom> for GmlAbstractBuildingRoom {
     fn from(item: &BuildingRoom) -> Self {
         Self {
-            class: item.class().map(Into::into),
-            functions: item.functions().iter().map(Into::into).collect(),
-            usages: item.usages().iter().map(Into::into).collect(),
+            class: item
+                .class()
+                .map(BuildingRoomClassValue::code)
+                .map(Into::into),
+            functions: item
+                .functions()
+                .iter()
+                .map(BuildingRoomFunctionValue::code)
+                .map(Into::into)
+                .collect(),
+            usages: item
+                .usages()
+                .iter()
+                .map(BuildingRoomUsageValue::code)
+                .map(Into::into)
+                .collect(),
         }
     }
 }

@@ -2,12 +2,17 @@ use crate::Error;
 use crate::gml::codec::core::{
     deserialize_abstract_thematic_surface, serialize_abstract_thematic_surface,
 };
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner};
-use crate::gml::write::Formatting;
+use crate::gml::util::CityGmlElement;
 use ecitygml_core::model::core::AsAbstractThematicSurface;
 use ecitygml_core::model::transportation::TrafficArea;
-use egml::io::GmlCode;
+use ecitygml_core::model::transportation::values::{
+    SurfaceMaterialValue, TrafficAreaClassValue, TrafficAreaFunctionValue, TrafficAreaUsageValue,
+};
+use egml::io::codec::basic::GmlCode;
+use egml::io::util::{
+    Formatting, XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner,
+};
+use egml::model::basic_types::Code;
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
@@ -21,10 +26,34 @@ pub fn deserialize_traffic_area(xml_document: &[u8]) -> Result<TrafficArea, Erro
     let parsed = parsed_result?;
     let mut traffic_area = TrafficArea::from_abstract_thematic_surface(abstract_thematic_surface);
 
-    traffic_area.set_class(parsed.class.map(Into::into));
-    traffic_area.set_functions(parsed.functions.into_iter().map(Into::into).collect());
-    traffic_area.set_usages(parsed.usages.into_iter().map(Into::into).collect());
-    traffic_area.set_surface_material(parsed.surface_material.map(Into::into));
+    traffic_area.set_class_opt(
+        parsed
+            .class
+            .map(Code::from)
+            .map(TrafficAreaClassValue::from),
+    );
+    traffic_area.set_functions(
+        parsed
+            .functions
+            .into_iter()
+            .map(Code::from)
+            .map(TrafficAreaFunctionValue::from)
+            .collect(),
+    );
+    traffic_area.set_usages(
+        parsed
+            .usages
+            .into_iter()
+            .map(Code::from)
+            .map(TrafficAreaUsageValue::from)
+            .collect(),
+    );
+    traffic_area.set_surface_material_opt(
+        parsed
+            .surface_material
+            .map(Code::from)
+            .map(SurfaceMaterialValue::from),
+    );
 
     Ok(traffic_area)
 }
@@ -40,7 +69,7 @@ pub fn serialize_traffic_area(
         parts.content.push(XmlNodeContent::Raw(raw));
     }
 
-    Ok(XmlNode::new(XmlElement::TrafficArea, parts))
+    Ok(XmlNode::new(CityGmlElement::TrafficArea.into(), parts))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -67,10 +96,26 @@ pub struct GmlTrafficArea {
 impl From<&TrafficArea> for GmlTrafficArea {
     fn from(item: &TrafficArea) -> Self {
         Self {
-            class: item.class().map(Into::into),
-            functions: item.functions().iter().map(Into::into).collect(),
-            usages: item.usages().iter().map(Into::into).collect(),
-            surface_material: item.surface_material().map(Into::into),
+            class: item
+                .class()
+                .map(TrafficAreaClassValue::code)
+                .map(Into::into),
+            functions: item
+                .functions()
+                .iter()
+                .map(TrafficAreaFunctionValue::code)
+                .map(Into::into)
+                .collect(),
+            usages: item
+                .usages()
+                .iter()
+                .map(TrafficAreaUsageValue::code)
+                .map(Into::into)
+                .collect(),
+            surface_material: item
+                .surface_material()
+                .map(SurfaceMaterialValue::code)
+                .map(Into::into),
         }
     }
 }
@@ -102,13 +147,16 @@ mod tests {
         let traffic_area = deserialize_traffic_area(xml_document).expect("should work");
 
         assert_eq!(
-            traffic_area.id(),
+            traffic_area.feature_id(),
             &Id::try_from("UUID_482ae9d8-0d5f-3a97-9d9e-e5362caa2a57").expect("should work")
         );
         assert!(traffic_area.lod2_multi_surface().is_none());
         assert_eq!(traffic_area.generic_attributes().len(), 1);
-        assert_eq!(traffic_area.functions().first().unwrap().value(), "2");
-        assert_eq!(traffic_area.usages().first().unwrap().value(), "1");
-        assert_eq!(traffic_area.surface_material().unwrap().value(), "1");
+        assert_eq!(
+            traffic_area.functions().first().unwrap().code().value(),
+            "2"
+        );
+        assert_eq!(traffic_area.usages().first().unwrap().code().value(), "1");
+        assert_eq!(traffic_area.surface_material().unwrap().code().value(), "1");
     }
 }

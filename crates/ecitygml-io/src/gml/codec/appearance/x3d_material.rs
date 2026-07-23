@@ -4,31 +4,37 @@ use crate::gml::codec::appearance::abstract_surface_data::{
 };
 use crate::gml::codec::appearance::basic_types::{GmlColor, GmlGeometryReference};
 use crate::gml::codec::core::basic_types::GmlDoubleBetween0And1;
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner};
-use crate::gml::write::Formatting;
+use crate::gml::util::CityGmlElement;
 use ecitygml_core::model::appearance::{AsAbstractSurfaceData, X3DMaterial};
+use egml::io::util::{
+    Formatting, XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner,
+};
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
 pub fn deserialize_x3d_material(xml_document: &[u8]) -> Result<X3DMaterial, Error> {
     let spans = extract_xml_element_spans(xml_document)?;
-    let (abstract_surface_data_result, gml_result) = rayon::join(
+    let (abstract_surface_data_result, parsed_result) = rayon::join(
         || deserialize_abstract_surface_data(xml_document, &spans),
         || de::from_reader::<_, GmlX3DMaterial>(xml_document).map_err(Error::from),
     );
     let abstract_surface_data = abstract_surface_data_result?;
-    let gml = gml_result?;
+    let parsed = parsed_result?;
 
     let mut x3d_material = X3DMaterial::from_abstract_surface_data(abstract_surface_data);
-    x3d_material.set_ambient_intensity(gml.ambient_intensity.map(TryInto::try_into).transpose()?);
-    x3d_material.set_diffuse_color(gml.diffuse_color.map(TryInto::try_into).transpose()?);
-    x3d_material.set_emissive_color(gml.emissive_color.map(TryInto::try_into).transpose()?);
-    x3d_material.set_specular_color(gml.specular_color.map(TryInto::try_into).transpose()?);
-    x3d_material.set_shininess(gml.shininess.map(TryInto::try_into).transpose()?);
-    x3d_material.set_transparency(gml.transparency.map(TryInto::try_into).transpose()?);
-    x3d_material.set_is_smooth(gml.is_smooth);
-    x3d_material.set_targets(gml.targets.into_iter().map(Into::into).collect());
+    x3d_material.set_ambient_intensity_opt(
+        parsed
+            .ambient_intensity
+            .map(TryInto::try_into)
+            .transpose()?,
+    );
+    x3d_material.set_diffuse_color_opt(parsed.diffuse_color.map(TryInto::try_into).transpose()?);
+    x3d_material.set_emissive_color_opt(parsed.emissive_color.map(TryInto::try_into).transpose()?);
+    x3d_material.set_specular_color_opt(parsed.specular_color.map(TryInto::try_into).transpose()?);
+    x3d_material.set_shininess_opt(parsed.shininess.map(TryInto::try_into).transpose()?);
+    x3d_material.set_transparency_opt(parsed.transparency.map(TryInto::try_into).transpose()?);
+    x3d_material.set_is_smooth(parsed.is_smooth);
+    x3d_material.set_targets(parsed.targets.into_iter().map(Into::into).collect());
 
     Ok(x3d_material)
 }
@@ -44,7 +50,10 @@ pub fn serialize_x3d_material(
         xml_node_parts.content.push(XmlNodeContent::Raw(raw));
     }
 
-    Ok(XmlNode::new(XmlElement::X3DMaterial, xml_node_parts))
+    Ok(XmlNode::new(
+        CityGmlElement::X3DMaterial.into(),
+        xml_node_parts,
+    ))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]

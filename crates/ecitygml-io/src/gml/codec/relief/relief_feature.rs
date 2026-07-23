@@ -3,16 +3,16 @@ use crate::gml::codec::core::basic_types::GmlIntegerBetween0And3;
 use crate::gml::codec::core::{
     deserialize_abstract_space_boundary, serialize_abstract_space_boundary,
 };
-use crate::gml::codec::relief::relief_component_property::{
-    deserialize_relief_component_property, serialize_relief_component_property,
+use crate::gml::codec::relief::abstract_relief_component_property::{
+    deserialize_abstract_relief_component_property, serialize_abstract_relief_component_property,
 };
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{
-    XmlNode, XmlNodeContent, collect_children, extract_xml_element_spans, serialize_inner,
-};
-use crate::gml::write::Formatting;
+use crate::gml::util::CityGmlElement;
 use ecitygml_core::model::core::AsAbstractSpaceBoundary;
 use ecitygml_core::model::relief::ReliefFeature;
+use egml::io::util::collect_children;
+use egml::io::util::{
+    Formatting, XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner,
+};
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
@@ -26,7 +26,7 @@ pub fn deserialize_relief_feature(xml_document: &[u8]) -> Result<ReliefFeature, 
     rayon::scope(|s| {
         s.spawn(|_| {
             abstract_space_boundary_result =
-                Some(deserialize_abstract_space_boundary(xml_document, &spans))
+                Some(deserialize_abstract_space_boundary(xml_document, &spans));
         });
         s.spawn(|_| {
             parsed_result =
@@ -36,8 +36,8 @@ pub fn deserialize_relief_feature(xml_document: &[u8]) -> Result<ReliefFeature, 
             relief_components_result = Some(collect_children(
                 xml_document,
                 &spans,
-                XmlElement::ReliefComponentProperty,
-                deserialize_relief_component_property,
+                CityGmlElement::AbstractReliefComponentProperty.into(),
+                deserialize_abstract_relief_component_property,
             ));
         });
     });
@@ -67,14 +67,12 @@ pub fn serialize_relief_feature(
     }
 
     for component in relief_feature.relief_components() {
-        parts
-            .content
-            .push(XmlNodeContent::Child(serialize_relief_component_property(
-                component, formatting,
-            )?));
+        parts.content.push(XmlNodeContent::Child(
+            serialize_abstract_relief_component_property(component, formatting)?,
+        ));
     }
 
-    Ok(XmlNode::new(XmlElement::ReliefFeature, parts))
+    Ok(XmlNode::new(CityGmlElement::ReliefFeature.into(), parts))
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -127,19 +125,19 @@ mod tests {
             deserialize_relief_feature(xml_document.as_bytes()).expect("should work");
 
         assert_eq!(
-            relief_feature.id(),
+            relief_feature.feature_id(),
             &Id::try_from("ID_7a8b707e-f87c-35f3-8e3c-254427e59493").unwrap()
         );
         assert_eq!(relief_feature.lod(), LevelOfDetail::Two);
         assert_eq!(relief_feature.num_relief_components(), 1);
 
-        let relief_component_property = relief_feature
+        let abstract_relief_component_property = relief_feature
             .relief_components()
             .first()
             .to_owned()
             .unwrap();
-        assert!(relief_component_property.object.is_some());
-        let relief_component = relief_component_property.object.as_ref().unwrap();
-        assert_eq!(relief_component.id(), &Id::try_from("abc").unwrap());
+        assert!(abstract_relief_component_property.object().is_some());
+        let relief_component = abstract_relief_component_property.object().unwrap();
+        assert_eq!(relief_component.feature_id(), &Id::try_from("abc").unwrap());
     }
 }

@@ -2,13 +2,14 @@ use crate::model::appearance::basic_types::Color;
 use crate::model::appearance::{
     AbstractSurfaceData, AsAbstractSurfaceData, AsAbstractSurfaceDataMut, GeometryReference,
 };
-use crate::model::core::AsAbstractFeatureMut;
+use crate::model::common::{ForEachFeatureMut, IterFeatures};
 use crate::model::core::basic_types::DoubleBetween0And1;
-use crate::model::core::refs::FeatureKindRef;
-use crate::model::core::refs::FeatureKindRefMut;
+use crate::model::core::refs::AbstractFeatureKindRef;
+use crate::model::core::refs::AbstractFeatureKindRefMut;
 use egml::model::base::Id;
+use egml::model::common::{ApplyTransform, ComputeEnvelope};
 use egml::model::geometry::Envelope;
-use nalgebra::Isometry3;
+use nalgebra::{Isometry3, Rotation3, Scale3, Transform3, Vector3};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct X3DMaterial {
@@ -46,48 +47,96 @@ impl X3DMaterial {
         self.ambient_intensity
     }
 
-    pub fn set_ambient_intensity(&mut self, ambient_intensity: Option<DoubleBetween0And1>) {
+    pub fn set_ambient_intensity(&mut self, ambient_intensity: DoubleBetween0And1) {
+        self.ambient_intensity = Some(ambient_intensity);
+    }
+
+    pub fn set_ambient_intensity_opt(&mut self, ambient_intensity: Option<DoubleBetween0And1>) {
         self.ambient_intensity = ambient_intensity;
+    }
+
+    pub fn clear_ambient_intensity(&mut self) {
+        self.ambient_intensity = None;
     }
 
     pub fn diffuse_color(&self) -> Option<Color> {
         self.diffuse_color
     }
 
-    pub fn set_diffuse_color(&mut self, diffuse_color: Option<Color>) {
+    pub fn set_diffuse_color(&mut self, diffuse_color: Color) {
+        self.diffuse_color = Some(diffuse_color);
+    }
+
+    pub fn set_diffuse_color_opt(&mut self, diffuse_color: Option<Color>) {
         self.diffuse_color = diffuse_color;
+    }
+
+    pub fn clear_diffuse_color(&mut self) {
+        self.diffuse_color = None;
     }
 
     pub fn emissive_color(&self) -> Option<Color> {
         self.emissive_color
     }
 
-    pub fn set_emissive_color(&mut self, emissive_color: Option<Color>) {
+    pub fn set_emissive_color(&mut self, emissive_color: Color) {
+        self.emissive_color = Some(emissive_color);
+    }
+
+    pub fn set_emissive_color_opt(&mut self, emissive_color: Option<Color>) {
         self.emissive_color = emissive_color;
+    }
+
+    pub fn clear_emissive_color(&mut self) {
+        self.emissive_color = None;
     }
 
     pub fn specular_color(&self) -> Option<Color> {
         self.specular_color
     }
 
-    pub fn set_specular_color(&mut self, specular_color: Option<Color>) {
+    pub fn set_specular_color(&mut self, specular_color: Color) {
+        self.specular_color = Some(specular_color);
+    }
+
+    pub fn set_specular_color_opt(&mut self, specular_color: Option<Color>) {
         self.specular_color = specular_color;
+    }
+
+    pub fn clear_specular_color(&mut self) {
+        self.specular_color = None;
     }
 
     pub fn shininess(&self) -> Option<DoubleBetween0And1> {
         self.shininess
     }
 
-    pub fn set_shininess(&mut self, shininess: Option<DoubleBetween0And1>) {
+    pub fn set_shininess(&mut self, shininess: DoubleBetween0And1) {
+        self.shininess = Some(shininess);
+    }
+
+    pub fn set_shininess_opt(&mut self, shininess: Option<DoubleBetween0And1>) {
         self.shininess = shininess;
+    }
+
+    pub fn clear_shininess(&mut self) {
+        self.shininess = None;
     }
 
     pub fn transparency(&self) -> Option<DoubleBetween0And1> {
         self.transparency
     }
 
-    pub fn set_transparency(&mut self, transparency: Option<DoubleBetween0And1>) {
+    pub fn set_transparency(&mut self, transparency: DoubleBetween0And1) {
+        self.transparency = Some(transparency);
+    }
+
+    pub fn set_transparency_opt(&mut self, transparency: Option<DoubleBetween0And1>) {
         self.transparency = transparency;
+    }
+
+    pub fn clear_transparency(&mut self) {
+        self.transparency = None;
     }
 
     pub fn is_smooth(&self) -> Option<bool> {
@@ -102,6 +151,10 @@ impl X3DMaterial {
         &self.targets
     }
 
+    pub fn targets_mut(&mut self) -> &mut [GeometryReference] {
+        &mut self.targets
+    }
+
     pub fn set_targets(&mut self, targets: Vec<GeometryReference>) {
         self.targets = targets;
     }
@@ -112,29 +165,6 @@ impl X3DMaterial {
 
     pub fn extend_targets(&mut self, targets: impl IntoIterator<Item = GeometryReference>) {
         self.targets.extend(targets);
-    }
-}
-
-impl X3DMaterial {
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
-        std::iter::once(self.into()).chain(self.abstract_surface_data.iter_features())
-    }
-
-    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
-        f((&mut *self).into());
-        self.abstract_surface_data.for_each_feature_mut(f);
-    }
-
-    pub fn compute_envelope(&self) -> Option<Envelope> {
-        self.abstract_surface_data.compute_envelope()
-    }
-
-    pub fn recompute_bounding_shape(&mut self) {
-        self.set_bounding_shape_from_envelope(self.compute_envelope());
-    }
-
-    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
-        self.abstract_surface_data.apply_transform(m);
     }
 }
 
@@ -153,3 +183,44 @@ impl AsAbstractSurfaceDataMut for X3DMaterial {
 crate::impl_abstract_surface_data_traits!(X3DMaterial);
 crate::impl_abstract_surface_data_mut_traits!(X3DMaterial);
 crate::impl_has_feature_type!(X3DMaterial, X3DMaterial);
+
+impl IterFeatures for X3DMaterial {
+    fn iter_features(&self) -> Box<dyn Iterator<Item = AbstractFeatureKindRef<'_>> + '_> {
+        Box::new(std::iter::once(self.into()).chain(self.abstract_surface_data.iter_features()))
+    }
+}
+
+impl ForEachFeatureMut for X3DMaterial {
+    fn for_each_feature_mut<F: FnMut(AbstractFeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
+        f((&mut *self).into());
+        self.abstract_surface_data.for_each_feature_mut(f);
+    }
+}
+
+impl ComputeEnvelope for X3DMaterial {
+    fn compute_envelope(&self) -> Option<Envelope> {
+        self.abstract_surface_data.compute_envelope()
+    }
+}
+
+impl ApplyTransform for X3DMaterial {
+    fn apply_transform(&mut self, m: Transform3<f64>) {
+        self.abstract_surface_data.apply_transform(m);
+    }
+
+    fn apply_isometry(&mut self, isometry: Isometry3<f64>) {
+        self.abstract_surface_data.apply_isometry(isometry);
+    }
+
+    fn apply_translation(&mut self, vector: Vector3<f64>) {
+        self.abstract_surface_data.apply_translation(vector);
+    }
+
+    fn apply_rotation(&mut self, rotation: Rotation3<f64>) {
+        self.abstract_surface_data.apply_rotation(rotation);
+    }
+
+    fn apply_scale(&mut self, scale: Scale3<f64>) {
+        self.abstract_surface_data.apply_scale(scale);
+    }
+}

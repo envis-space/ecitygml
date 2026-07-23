@@ -1,12 +1,16 @@
 use ecitygml_core::model::building::Building;
+use ecitygml_core::model::common::IterFeatures;
 use ecitygml_core::model::construction::{
-    AsAbstractConstructionSurface, DoorSurface, FillingSurfaceKind, GroundSurface, WindowSurface,
+    AbstractConstructionSurfaceKind, RoofSurface, WallSurface,
 };
-use ecitygml_core::model::construction::{ConstructionSurfaceKind, RoofSurface, WallSurface};
+use ecitygml_core::model::construction::{
+    AbstractFillingSurfaceKind, AsAbstractConstructionSurface, DoorSurface, GroundSurface,
+    WindowSurface,
+};
 use ecitygml_core::model::core::enums::RelativeToTerrain;
 use ecitygml_core::model::core::{
-    AsAbstractCityObject, AsAbstractFeature, AsAbstractSpace, SpaceBoundaryKind,
-    ThematicSurfaceKind,
+    AbstractSpaceBoundaryKind, AbstractThematicSurfaceKind, AsAbstractCityObject,
+    AsAbstractFeature, AsAbstractSpace,
 };
 use ecitygml_core::model::transportation::{AsAbstractTransportationSpace, Road};
 use ecitygml_io::GmlReader;
@@ -15,12 +19,12 @@ fn collect_wall_surfaces(building: &ecitygml_core::model::building::Building) ->
     building
         .boundaries()
         .iter()
-        .flat_map(|x| &x.object)
+        .flat_map(|x| x.object())
         .filter_map(|x| match x {
-            SpaceBoundaryKind::ThematicSurfaceKind(
-                ThematicSurfaceKind::ConstructionSurfaceKind(ConstructionSurfaceKind::WallSurface(
-                    w,
-                )),
+            AbstractSpaceBoundaryKind::AbstractThematicSurfaceKind(
+                AbstractThematicSurfaceKind::AbstractConstructionSurfaceKind(
+                    AbstractConstructionSurfaceKind::WallSurface(w),
+                ),
             ) => Some(w),
             _ => None,
         })
@@ -31,12 +35,12 @@ fn collect_roof_surfaces(building: &ecitygml_core::model::building::Building) ->
     building
         .boundaries()
         .iter()
-        .flat_map(|x| &x.object)
+        .flat_map(|x| x.object())
         .filter_map(|x| match x {
-            SpaceBoundaryKind::ThematicSurfaceKind(
-                ThematicSurfaceKind::ConstructionSurfaceKind(ConstructionSurfaceKind::RoofSurface(
-                    r,
-                )),
+            AbstractSpaceBoundaryKind::AbstractThematicSurfaceKind(
+                AbstractThematicSurfaceKind::AbstractConstructionSurfaceKind(
+                    AbstractConstructionSurfaceKind::RoofSurface(r),
+                ),
             ) => Some(r),
             _ => None,
         })
@@ -49,11 +53,11 @@ fn collect_ground_surfaces(
     building
         .boundaries()
         .iter()
-        .flat_map(|x| &x.object)
+        .flat_map(|x| x.object())
         .filter_map(|x| match x {
-            SpaceBoundaryKind::ThematicSurfaceKind(
-                ThematicSurfaceKind::ConstructionSurfaceKind(
-                    ConstructionSurfaceKind::GroundSurface(g),
+            AbstractSpaceBoundaryKind::AbstractThematicSurfaceKind(
+                AbstractThematicSurfaceKind::AbstractConstructionSurfaceKind(
+                    AbstractConstructionSurfaceKind::GroundSurface(g),
                 ),
             ) => Some(g),
             _ => None,
@@ -78,7 +82,7 @@ fn test_lod1_building_model_fzk() {
     assert_eq!(buildings.len(), 1);
     let building = buildings.first().expect("should work");
     assert_eq!(
-        building.id().to_string(),
+        building.feature_id().to_string(),
         "UUID_d281adfc-4901-0f52-540b-4cc1a9325f82"
     );
 
@@ -102,7 +106,7 @@ fn test_lod2_building_model_fzk() {
     assert_eq!(buildings.len(), 1);
     let building = buildings.first().expect("should work");
     assert_eq!(
-        building.id().to_string(),
+        building.feature_id().to_string(),
         "UUID_d281adfc-4901-0f52-540b-4cc1a9325f82"
     );
 
@@ -128,7 +132,7 @@ fn test_lod3_building_model_fzk() {
 
     let building = buildings.first().expect("should work");
     assert_eq!(
-        building.id().to_string(),
+        building.feature_id().to_string(),
         "UUID_d281adfc-4901-0f52-540b-4cc1a9325f82"
     );
     assert_eq!(
@@ -145,9 +149,9 @@ fn test_lod3_building_model_fzk() {
     let door_surfaces: Vec<&DoorSurface> = wall_surface
         .filling_surfaces()
         .iter()
-        .flat_map(|x| &x.object)
+        .flat_map(|x| x.object())
         .filter_map(|x| match x {
-            FillingSurfaceKind::DoorSurface(x) => Some(x),
+            AbstractFillingSurfaceKind::DoorSurface(x) => Some(x),
             _ => None,
         })
         .collect();
@@ -168,7 +172,7 @@ fn test_lod2_building_model_tum() {
         .flat_map(|x| x.try_into())
         .collect();
     let building = buildings.first().expect("should work");
-    assert_eq!(building.id().to_string(), "DEBY_LOD2_4959457");
+    assert_eq!(building.feature_id().to_string(), "DEBY_LOD2_4959457");
 
     assert_eq!(collect_wall_surfaces(building).len(), 14);
     assert_eq!(collect_roof_surfaces(building).len(), 2);
@@ -198,8 +202,7 @@ fn test_road_model_asam_junction() {
         .intersections()
         .first()
         .expect("should work")
-        .object
-        .as_ref()
+        .object()
         .unwrap();
     assert_eq!(intersection.traffic_spaces().len(), 3);
 }
@@ -225,8 +228,7 @@ fn test_road_model_asam_road_shape() {
         .sections()
         .first()
         .expect("should work")
-        .object
-        .as_ref()
+        .object()
         .unwrap();
     assert_eq!(section.traffic_spaces().len(), 2);
     assert_eq!(section.auxiliary_traffic_spaces().len(), 2);

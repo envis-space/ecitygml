@@ -1,9 +1,8 @@
 use crate::Error;
-
-use crate::gml::util::{XmlElementSpans, XmlNodeContent, XmlNodeParts, serialize_inner};
-use crate::gml::write::Formatting;
+use egml::io::util::{Formatting, XmlElementSpans, XmlNodeContent, XmlNodeParts, serialize_inner};
 
 use crate::gml::codec::core::{deserialize_abstract_feature, serialize_abstract_feature};
+use crate::gml::util::CombinedCityGmlElement;
 use ecitygml_core::model::appearance::{
     AbstractSurfaceData, AsAbstractSurfaceData, AsAbstractSurfaceDataMut,
 };
@@ -13,17 +12,17 @@ use serde::{Deserialize, Serialize};
 
 pub fn deserialize_abstract_surface_data(
     xml_document: &[u8],
-    spans: &XmlElementSpans,
+    spans: &XmlElementSpans<CombinedCityGmlElement>,
 ) -> Result<AbstractSurfaceData, Error> {
     let (abstract_feature_result, gml_result) = rayon::join(
         || deserialize_abstract_feature(xml_document, spans),
         || de::from_reader::<_, GmlAbstractSurfaceData>(xml_document).map_err(Error::from),
     );
     let abstract_feature = abstract_feature_result?;
-    let gml = gml_result?;
+    let parsed = gml_result?;
 
     let mut abstract_surface_data = AbstractSurfaceData::from_abstract_feature(abstract_feature);
-    abstract_surface_data.set_is_front(gml.is_front);
+    abstract_surface_data.set_is_front(parsed.is_front);
 
     Ok(abstract_surface_data)
 }

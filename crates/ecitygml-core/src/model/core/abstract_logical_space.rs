@@ -1,9 +1,11 @@
-use crate::model::core::refs::FeatureKindRef;
-use crate::model::core::refs::FeatureKindRefMut;
+use crate::model::common::{ForEachFeatureMut, IterFeatures};
+use crate::model::core::refs::AbstractFeatureKindRef;
+use crate::model::core::refs::AbstractFeatureKindRefMut;
 use crate::model::core::{AbstractSpace, AsAbstractSpace, AsAbstractSpaceMut};
 use egml::model::base::Id;
+use egml::model::common::{ApplyTransform, ComputeEnvelope};
 use egml::model::geometry::Envelope;
-use nalgebra::Isometry3;
+use nalgebra::{Isometry3, Rotation3, Scale3, Transform3, Vector3};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbstractLogicalSpace {
@@ -17,24 +19,6 @@ impl AbstractLogicalSpace {
 
     pub fn from_abstract_space(abstract_space: AbstractSpace) -> Self {
         Self { abstract_space }
-    }
-}
-
-impl AbstractLogicalSpace {
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
-        self.abstract_space.iter_features()
-    }
-
-    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
-        self.abstract_space.for_each_feature_mut(f);
-    }
-
-    pub fn compute_envelope(&self) -> Option<Envelope> {
-        self.abstract_space.compute_envelope()
-    }
-
-    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
-        self.abstract_space.apply_transform(m);
     }
 }
 
@@ -65,8 +49,10 @@ macro_rules! impl_abstract_logical_space_traits {
 
         impl $crate::model::core::AsAbstractSpace for $type {
             fn abstract_space(&self) -> &$crate::model::core::AbstractSpace {
-                use $crate::model::core::AsAbstractLogicalSpace;
-                &self.abstract_logical_space().abstract_space
+                &<$type as $crate::model::core::AsAbstractLogicalSpace>::abstract_logical_space(
+                    self,
+                )
+                .abstract_space
             }
         }
     };
@@ -79,8 +65,7 @@ macro_rules! impl_abstract_logical_space_mut_traits {
 
         impl $crate::model::core::AsAbstractSpaceMut for $type {
             fn abstract_space_mut(&mut self) -> &mut $crate::model::core::AbstractSpace {
-                use $crate::model::core::AsAbstractLogicalSpaceMut;
-                &mut self.abstract_logical_space_mut().abstract_space
+                &mut <$type as $crate::model::core::AsAbstractLogicalSpaceMut>::abstract_logical_space_mut(self).abstract_space
             }
         }
     };
@@ -88,3 +73,43 @@ macro_rules! impl_abstract_logical_space_mut_traits {
 
 impl_abstract_logical_space_traits!(AbstractLogicalSpace);
 impl_abstract_logical_space_mut_traits!(AbstractLogicalSpace);
+
+impl IterFeatures for AbstractLogicalSpace {
+    fn iter_features(&self) -> Box<dyn Iterator<Item = AbstractFeatureKindRef<'_>> + '_> {
+        self.abstract_space.iter_features()
+    }
+}
+
+impl ForEachFeatureMut for AbstractLogicalSpace {
+    fn for_each_feature_mut<F: FnMut(AbstractFeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
+        self.abstract_space.for_each_feature_mut(f);
+    }
+}
+
+impl ComputeEnvelope for AbstractLogicalSpace {
+    fn compute_envelope(&self) -> Option<Envelope> {
+        self.abstract_space.compute_envelope()
+    }
+}
+
+impl ApplyTransform for AbstractLogicalSpace {
+    fn apply_transform(&mut self, m: Transform3<f64>) {
+        self.abstract_space.apply_transform(m);
+    }
+
+    fn apply_isometry(&mut self, isometry: Isometry3<f64>) {
+        self.abstract_space.apply_isometry(isometry);
+    }
+
+    fn apply_translation(&mut self, vector: Vector3<f64>) {
+        self.abstract_space.apply_translation(vector);
+    }
+
+    fn apply_rotation(&mut self, rotation: Rotation3<f64>) {
+        self.abstract_space.apply_rotation(rotation);
+    }
+
+    fn apply_scale(&mut self, scale: Scale3<f64>) {
+        self.abstract_space.apply_scale(scale);
+    }
+}

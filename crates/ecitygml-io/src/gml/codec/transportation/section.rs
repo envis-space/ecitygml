@@ -3,11 +3,14 @@ use crate::gml::codec::transportation::GmlIntersection;
 use crate::gml::codec::transportation::abstract_transportation_space::{
     deserialize_abstract_transportation_space, serialize_abstract_transportation_space,
 };
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner};
-use crate::gml::write::Formatting;
+use crate::gml::util::CityGmlElement;
+use ecitygml_core::model::transportation::values::SectionClassValue;
 use ecitygml_core::model::transportation::{AsAbstractTransportationSpace, Section};
-use egml::io::GmlCode;
+use egml::io::codec::basic::GmlCode;
+use egml::io::util::{
+    Formatting, XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner,
+};
+use egml::model::basic_types::Code;
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
@@ -21,7 +24,7 @@ pub fn deserialize_section(xml_document: &[u8]) -> Result<Section, Error> {
     let parsed = parsed_result?;
 
     let mut section = Section::from_abstract_transportation_space(abstract_transportation_space);
-    section.set_class(parsed.class.map(Into::into));
+    section.set_class_opt(parsed.class.map(Code::from).map(SectionClassValue::from));
 
     Ok(section)
 }
@@ -36,7 +39,7 @@ pub fn serialize_section(section: &Section, formatting: Formatting) -> Result<Xm
         xml_node_parts.content.push(XmlNodeContent::Raw(raw));
     }
 
-    Ok(XmlNode::new(XmlElement::Section, xml_node_parts))
+    Ok(XmlNode::new(CityGmlElement::Section.into(), xml_node_parts))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -51,7 +54,7 @@ pub struct GmlSection {
 impl From<&Section> for GmlSection {
     fn from(item: &Section) -> Self {
         Self {
-            class: item.class().map(Into::into),
+            class: item.class().map(SectionClassValue::code).map(Into::into),
         }
     }
 }
@@ -60,8 +63,8 @@ impl From<&Section> for GmlSection {
 mod tests {
     use super::*;
     use ecitygml_core::model::core::{
-        AsAbstractCityObject, AsAbstractFeature, AsAbstractSpace, SpaceBoundaryKind,
-        ThematicSurfaceKind,
+        AbstractSpaceBoundaryKind, AbstractThematicSurfaceKind, AsAbstractCityObject,
+        AsAbstractFeature, AsAbstractSpace,
     };
     use ecitygml_core::model::transportation::{
         AsAbstractTransportationSpace, GranularityValue, TrafficArea, TrafficDirectionValue,
@@ -109,7 +112,7 @@ mod tests {
         let section = deserialize_section(xml_document).expect("should work");
 
         assert_eq!(
-            section.id(),
+            section.feature_id(),
             &Id::try_from("UUID_ef20f165-2564-373a-a5f8-98fd15f1ae69").expect("should work")
         );
 
@@ -117,16 +120,10 @@ mod tests {
         assert_eq!(section.generic_attributes().len(), 1);
         assert!(section.auxiliary_traffic_spaces().is_empty());
         assert_eq!(section.traffic_spaces().len(), 1);
-        let traffic_space = section
-            .traffic_spaces()
-            .first()
-            .unwrap()
-            .object
-            .as_ref()
-            .unwrap();
+        let traffic_space = section.traffic_spaces().first().unwrap().object().unwrap();
 
         assert_eq!(
-            traffic_space.id(),
+            traffic_space.feature_id(),
             &Id::try_from("UUID_9582b02f-5cc7-38f8-b79c-a3a18b31856c").expect("should work")
         );
         assert_eq!(traffic_space.granularity(), &GranularityValue::Lane);
@@ -134,11 +131,11 @@ mod tests {
         let traffic_areas: Vec<&TrafficArea> = traffic_space
             .boundaries()
             .iter()
-            .flat_map(|x| &x.object)
+            .flat_map(|x| x.object())
             .filter_map(|x| match x {
-                SpaceBoundaryKind::ThematicSurfaceKind(ThematicSurfaceKind::TrafficArea(x)) => {
-                    Some(x)
-                }
+                AbstractSpaceBoundaryKind::AbstractThematicSurfaceKind(
+                    AbstractThematicSurfaceKind::TrafficArea(x),
+                ) => Some(x),
                 _ => None,
             })
             .collect();
@@ -173,7 +170,7 @@ mod tests {
         let section = deserialize_section(xml_document).expect("should work");
 
         assert_eq!(
-            section.id(),
+            section.feature_id(),
             &Id::try_from("UUID_ef20f165-2564-373a-a5f8-98fd15f1ae69").expect("should work")
         );
 

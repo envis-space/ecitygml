@@ -1,62 +1,65 @@
 use crate::Error;
 use crate::gml::codec::building::{deserialize_building_part, serialize_building_part};
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{XmlElementSpans, XmlNode, XmlNodeContent, XmlNodeParts};
-use crate::gml::write::Formatting;
+use crate::gml::util::{CityGmlElement, CombinedCityGmlElement};
 use ecitygml_core::model::building::BuildingPartProperty;
+use egml::io::codec::base::{
+    GmlAssociationAttributes, GmlOwnershipAttributes, serialize_association_attributes,
+    serialize_ownership_attributes,
+};
+use egml::io::util::{Formatting, XmlElementSpans, XmlNode, XmlNodeContent, XmlNodeParts};
+use egml::model::base::{HasAssociationAttributes, HasOwnershipAttributes};
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
 pub fn deserialize_building_part_property(
     xml_document: &[u8],
-    spans: &XmlElementSpans,
+    spans: &XmlElementSpans<CombinedCityGmlElement>,
 ) -> Result<BuildingPartProperty, Error> {
-    let gml_building_part_property: GmlBuildingPartProperty = de::from_reader(xml_document)?;
-    let mut building_part_property: BuildingPartProperty = gml_building_part_property.into();
+    let parsed: GmlBuildingPartProperty = de::from_reader(xml_document)?;
 
-    if let Some(span) = spans.first(XmlElement::BuildingPart) {
-        building_part_property.object = Some(deserialize_building_part(
+    let mut object = None;
+
+    if let Some(span) = spans.first(CityGmlElement::BuildingPart.into()) {
+        object = Some(deserialize_building_part(
             &xml_document[span.start..span.end],
         )?);
     }
 
-    Ok(building_part_property)
+    Ok(BuildingPartProperty::new(
+        object,
+        parsed.association.try_into()?,
+        parsed.ownership.into(),
+    ))
 }
 
 pub fn serialize_building_part_property(
-    building_room_property: &BuildingPartProperty,
+    building_part_property: &BuildingPartProperty,
     formatting: Formatting,
 ) -> Result<XmlNode, Error> {
     let mut parts = XmlNodeParts::empty();
-    if let Some(href) = &building_room_property.href {
-        parts
-            .attributes
-            .push(("xlink:href".to_string(), href.clone()));
-    }
-    if let Some(object) = &building_room_property.object {
+    parts.attributes.extend(serialize_association_attributes(
+        building_part_property.association(),
+    ));
+    parts.attributes.extend(serialize_ownership_attributes(
+        building_part_property.ownership(),
+    ));
+    if let Some(object) = building_part_property.object() {
         parts
             .content
             .push(XmlNodeContent::Child(serialize_building_part(
                 object, formatting,
             )?));
     }
-    Ok(XmlNode::new(XmlElement::BuildingRoomProperty, parts))
+    Ok(XmlNode::new(
+        CityGmlElement::BuildingPartProperty.into(),
+        parts,
+    ))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 pub struct GmlBuildingPartProperty {
-    #[serde(
-        rename(serialize = "@xlink:href", deserialize = "@href"),
-        skip_serializing_if = "Option::is_none"
-    )]
-    pub href: Option<String>,
-}
-
-impl From<GmlBuildingPartProperty> for BuildingPartProperty {
-    fn from(item: GmlBuildingPartProperty) -> Self {
-        Self {
-            object: None,
-            href: item.href,
-        }
-    }
+    #[serde(flatten)]
+    pub association: GmlAssociationAttributes,
+    #[serde(flatten)]
+    pub ownership: GmlOwnershipAttributes,
 }

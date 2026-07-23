@@ -2,6 +2,7 @@ use crate::Error::InvalidFileExtension;
 use crate::gml::write_impl::serialize;
 use crate::{CitygmlFormat, Error};
 use ecitygml_core::model::core::CityModel;
+use egml::io::util::Formatting;
 use std::fs::{File, OpenOptions};
 use std::io::{BufWriter, Write};
 use std::path::Path;
@@ -89,16 +90,4 @@ impl GmlWriter<File> {
             .open(path)?;
         Ok(Self::new(file, format))
     }
-}
-
-/// Controls whitespace formatting of serialized XML output.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum Formatting {
-    /// All elements on a single line with no whitespace between them.
-    Compact,
-    /// Each element on its own line with no indentation.
-    #[default]
-    NewLine,
-    /// Each element on its own line, indented by `size` repetitions of `char`.
-    Indent { char: char, size: usize },
 }

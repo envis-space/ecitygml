@@ -1,0 +1,12 @@
+pub mod appearance;
+pub mod building;
+pub mod city_furniture;
+pub mod construction;
+pub mod core;
+pub mod generics;
+pub mod land_use;
+pub mod point_cloud;
+pub mod relief;
+pub mod transportation;
+pub mod vegetation;
+pub mod water_body;

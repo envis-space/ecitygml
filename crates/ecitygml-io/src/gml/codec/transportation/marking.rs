@@ -2,12 +2,15 @@ use crate::Error;
 use crate::gml::codec::core::{
     deserialize_abstract_thematic_surface, serialize_abstract_thematic_surface,
 };
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner};
-use crate::gml::write::Formatting;
+use crate::gml::util::CityGmlElement;
 use ecitygml_core::model::core::AsAbstractThematicSurface;
 use ecitygml_core::model::transportation::Marking;
-use egml::io::GmlCode;
+use ecitygml_core::model::transportation::values::MarkingClassValue;
+use egml::io::codec::basic::GmlCode;
+use egml::io::util::{
+    Formatting, XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner,
+};
+use egml::model::basic_types::Code;
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
@@ -21,7 +24,7 @@ pub fn deserialize_marking(xml_document: &[u8]) -> Result<Marking, Error> {
     let parsed = parsed_result?;
 
     let mut marking = Marking::from_abstract_thematic_surface(abstract_thematic_surface);
-    marking.set_class(parsed.class.map(Into::into));
+    marking.set_class_opt(parsed.class.map(Code::from).map(MarkingClassValue::from));
 
     Ok(marking)
 }
@@ -34,7 +37,7 @@ pub fn serialize_marking(marking: &Marking, formatting: Formatting) -> Result<Xm
         parts.content.push(XmlNodeContent::Raw(raw));
     }
 
-    Ok(XmlNode::new(XmlElement::Marking, parts))
+    Ok(XmlNode::new(CityGmlElement::Marking.into(), parts))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -49,7 +52,7 @@ pub struct GmlMarking {
 impl From<&Marking> for GmlMarking {
     fn from(item: &Marking) -> Self {
         Self {
-            class: item.class().map(Into::into),
+            class: item.class().map(MarkingClassValue::code).map(Into::into),
         }
     }
 }
@@ -76,7 +79,7 @@ mod tests {
         let marking = deserialize_marking(xml_document).expect("should work");
 
         assert_eq!(
-            marking.id(),
+            marking.feature_id(),
             &Id::try_from("UUID_312e01da-5c89-3f89-b8c0-3e0a8bafecbb").expect("should work")
         );
         assert!(marking.lod2_multi_surface().is_none());

@@ -12,8 +12,8 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match &cli.command {
-        Commands::Statistics { file_path } => {
-            commands::statistics::run(file_path.canonicalize()?)?;
+        Commands::Statistics { input } => {
+            commands::statistics::run(input.canonicalize()?)?;
         }
         Commands::ListObjects { file_path } => {
             commands::list_objects::run(file_path.canonicalize()?)?;

@@ -2,12 +2,15 @@ use crate::Error;
 use crate::gml::codec::core::{
     deserialize_abstract_unoccupied_space, serialize_abstract_unoccupied_space,
 };
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner};
-use crate::gml::write::Formatting;
+use crate::gml::util::CityGmlElement;
 use ecitygml_core::model::core::AsAbstractUnoccupiedSpace;
 use ecitygml_core::model::transportation::ClearanceSpace;
-use egml::io::GmlCode;
+use ecitygml_core::model::transportation::values::ClearanceSpaceClassValue;
+use egml::io::codec::basic::GmlCode;
+use egml::io::util::{
+    Formatting, XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner,
+};
+use egml::model::basic_types::Code;
 use quick_xml::de;
 use serde::{Deserialize, Serialize};
 
@@ -23,7 +26,12 @@ pub fn deserialize_clearance_space(xml_document: &[u8]) -> Result<ClearanceSpace
     let mut clearance_space =
         ClearanceSpace::from_abstract_unoccupied_space(abstract_unoccupied_space);
 
-    clearance_space.set_class(parsed.class.map(Into::into));
+    clearance_space.set_class_opt(
+        parsed
+            .class
+            .map(Code::from)
+            .map(ClearanceSpaceClassValue::from),
+    );
 
     Ok(clearance_space)
 }
@@ -41,7 +49,10 @@ pub fn serialize_clearance_space(
         xml_node_parts.content.push(XmlNodeContent::Raw(raw));
     }
 
-    Ok(XmlNode::new(XmlElement::ClearanceSpace, xml_node_parts))
+    Ok(XmlNode::new(
+        CityGmlElement::ClearanceSpace.into(),
+        xml_node_parts,
+    ))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -56,7 +67,10 @@ pub struct GmlClearanceSpace {
 impl From<&ClearanceSpace> for GmlClearanceSpace {
     fn from(item: &ClearanceSpace) -> Self {
         Self {
-            class: item.class().map(Into::into),
+            class: item
+                .class()
+                .map(ClearanceSpaceClassValue::code)
+                .map(Into::into),
         }
     }
 }

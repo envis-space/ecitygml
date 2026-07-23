@@ -1,18 +1,22 @@
 use crate::model::building::BuildingConstructiveElementProperty;
-use crate::model::core::refs::FeatureKindRef;
-use crate::model::core::refs::FeatureKindRefMut;
+use crate::model::building::values::{
+    BuildingSubdivisionClassValue, BuildingSubdivisionFunctionValue, BuildingSubdivisionUsageValue,
+};
+use crate::model::common::{ForEachFeatureMut, IterFeatures};
+use crate::model::core::refs::AbstractFeatureKindRef;
+use crate::model::core::refs::AbstractFeatureKindRefMut;
 use crate::model::core::{AbstractLogicalSpace, AsAbstractLogicalSpace, AsAbstractLogicalSpaceMut};
 use egml::model::base::Id;
-use egml::model::basic::Code;
+use egml::model::common::{ApplyTransform, ComputeEnvelope};
 use egml::model::geometry::Envelope;
-use nalgebra::Isometry3;
+use nalgebra::{Isometry3, Rotation3, Scale3, Transform3, Vector3};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbstractBuildingSubdivision {
     pub(crate) abstract_logical_space: AbstractLogicalSpace,
-    class: Option<Code>,
-    functions: Vec<Code>,
-    usages: Vec<Code>,
+    class: Option<BuildingSubdivisionClassValue>,
+    functions: Vec<BuildingSubdivisionFunctionValue>,
+    usages: Vec<BuildingSubdivisionUsageValue>,
     building_constructive_elements: Vec<BuildingConstructiveElementProperty>,
 }
 
@@ -31,43 +35,19 @@ impl AbstractBuildingSubdivision {
         }
     }
 }
-impl AbstractBuildingSubdivision {
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
-        self.abstract_logical_space.iter_features().chain(
-            self.building_constructive_elements
-                .iter()
-                .filter_map(|x| x.object.as_ref())
-                .flat_map(|x| x.iter_features()),
-        )
-    }
-    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
-        self.abstract_logical_space.for_each_feature_mut(f);
-        for prop in &mut self.building_constructive_elements {
-            if let Some(x) = prop.object.as_mut() {
-                x.for_each_feature_mut(f);
-            }
-        }
-    }
-    pub fn compute_envelope(&self) -> Option<Envelope> {
-        self.abstract_logical_space.compute_envelope()
-    }
-    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
-        self.abstract_logical_space.apply_transform(m);
-    }
-}
 
 pub trait AsAbstractBuildingSubdivision: AsAbstractLogicalSpace {
     fn abstract_building_subdivision(&self) -> &AbstractBuildingSubdivision;
 
-    fn class(&self) -> Option<&Code> {
+    fn class(&self) -> Option<&BuildingSubdivisionClassValue> {
         self.abstract_building_subdivision().class.as_ref()
     }
 
-    fn functions(&self) -> &[Code] {
+    fn functions(&self) -> &[BuildingSubdivisionFunctionValue] {
         &self.abstract_building_subdivision().functions
     }
 
-    fn usages(&self) -> &[Code] {
+    fn usages(&self) -> &[BuildingSubdivisionUsageValue] {
         &self.abstract_building_subdivision().usages
     }
 
@@ -83,38 +63,63 @@ pub trait AsAbstractBuildingSubdivisionMut:
 {
     fn abstract_building_subdivision_mut(&mut self) -> &mut AbstractBuildingSubdivision;
 
-    fn set_class(&mut self, class: Option<Code>) {
+    fn set_class(&mut self, class: BuildingSubdivisionClassValue) {
+        self.abstract_building_subdivision_mut().class = Some(class);
+    }
+
+    fn set_class_opt(&mut self, class: Option<BuildingSubdivisionClassValue>) {
         self.abstract_building_subdivision_mut().class = class;
     }
 
-    fn set_functions(&mut self, functions: Vec<Code>) {
+    fn clear_class(&mut self) {
+        self.abstract_building_subdivision_mut().class = None;
+    }
+
+    fn functions_mut(&mut self) -> &mut [BuildingSubdivisionFunctionValue] {
+        &mut self.abstract_building_subdivision_mut().functions
+    }
+
+    fn set_functions(&mut self, functions: Vec<BuildingSubdivisionFunctionValue>) {
         self.abstract_building_subdivision_mut().functions = functions;
     }
 
-    fn push_function(&mut self, function: Code) {
+    fn push_function(&mut self, function: BuildingSubdivisionFunctionValue) {
         self.abstract_building_subdivision_mut()
             .functions
             .push(function);
     }
 
-    fn extend_functions(&mut self, functions: impl IntoIterator<Item = Code>) {
+    fn extend_functions(
+        &mut self,
+        functions: impl IntoIterator<Item = BuildingSubdivisionFunctionValue>,
+    ) {
         self.abstract_building_subdivision_mut()
             .functions
             .extend(functions);
     }
 
-    fn set_usages(&mut self, usages: Vec<Code>) {
+    fn usages_mut(&mut self) -> &mut [BuildingSubdivisionUsageValue] {
+        &mut self.abstract_building_subdivision_mut().usages
+    }
+
+    fn set_usages(&mut self, usages: Vec<BuildingSubdivisionUsageValue>) {
         self.abstract_building_subdivision_mut().usages = usages;
     }
 
-    fn push_usage(&mut self, usage: Code) {
+    fn push_usage(&mut self, usage: BuildingSubdivisionUsageValue) {
         self.abstract_building_subdivision_mut().usages.push(usage);
     }
 
-    fn extend_usages(&mut self, usages: impl IntoIterator<Item = Code>) {
+    fn extend_usages(&mut self, usages: impl IntoIterator<Item = BuildingSubdivisionUsageValue>) {
         self.abstract_building_subdivision_mut()
             .usages
             .extend(usages);
+    }
+
+    fn building_constructive_elements_mut(&mut self) -> &mut [BuildingConstructiveElementProperty] {
+        &mut self
+            .abstract_building_subdivision_mut()
+            .building_constructive_elements
     }
 
     fn set_building_constructive_elements(
@@ -160,8 +165,7 @@ macro_rules! impl_abstract_building_subdivision_traits {
 
         impl $crate::model::core::AsAbstractLogicalSpace for $type {
             fn abstract_logical_space(&self) -> &$crate::model::core::AbstractLogicalSpace {
-                use $crate::model::building::AsAbstractBuildingSubdivision;
-                &self.abstract_building_subdivision().abstract_logical_space
+                &<$type as $crate::model::building::AsAbstractBuildingSubdivision>::abstract_building_subdivision(self).abstract_logical_space
             }
         }
     };
@@ -176,10 +180,7 @@ macro_rules! impl_abstract_building_subdivision_mut_traits {
             fn abstract_logical_space_mut(
                 &mut self,
             ) -> &mut $crate::model::core::AbstractLogicalSpace {
-                use $crate::model::building::AsAbstractBuildingSubdivisionMut;
-                &mut self
-                    .abstract_building_subdivision_mut()
-                    .abstract_logical_space
+                &mut <$type as $crate::model::building::AsAbstractBuildingSubdivisionMut>::abstract_building_subdivision_mut(self).abstract_logical_space
             }
         }
     };
@@ -187,3 +188,55 @@ macro_rules! impl_abstract_building_subdivision_mut_traits {
 
 impl_abstract_building_subdivision_traits!(AbstractBuildingSubdivision);
 impl_abstract_building_subdivision_mut_traits!(AbstractBuildingSubdivision);
+
+impl IterFeatures for AbstractBuildingSubdivision {
+    fn iter_features(&self) -> Box<dyn Iterator<Item = AbstractFeatureKindRef<'_>> + '_> {
+        Box::new(
+            self.abstract_logical_space.iter_features().chain(
+                self.building_constructive_elements
+                    .iter()
+                    .filter_map(|x| x.object())
+                    .flat_map(|x| x.iter_features()),
+            ),
+        )
+    }
+}
+
+impl ForEachFeatureMut for AbstractBuildingSubdivision {
+    fn for_each_feature_mut<F: FnMut(AbstractFeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
+        self.abstract_logical_space.for_each_feature_mut(f);
+        for prop in &mut self.building_constructive_elements {
+            if let Some(x) = prop.object_mut() {
+                x.for_each_feature_mut(f);
+            }
+        }
+    }
+}
+
+impl ComputeEnvelope for AbstractBuildingSubdivision {
+    fn compute_envelope(&self) -> Option<Envelope> {
+        self.abstract_logical_space.compute_envelope()
+    }
+}
+
+impl ApplyTransform for AbstractBuildingSubdivision {
+    fn apply_transform(&mut self, m: Transform3<f64>) {
+        self.abstract_logical_space.apply_transform(m);
+    }
+
+    fn apply_isometry(&mut self, isometry: Isometry3<f64>) {
+        self.abstract_logical_space.apply_isometry(isometry);
+    }
+
+    fn apply_translation(&mut self, vector: Vector3<f64>) {
+        self.abstract_logical_space.apply_translation(vector);
+    }
+
+    fn apply_rotation(&mut self, rotation: Rotation3<f64>) {
+        self.abstract_logical_space.apply_rotation(rotation);
+    }
+
+    fn apply_scale(&mut self, scale: Scale3<f64>) {
+        self.abstract_logical_space.apply_scale(scale);
+    }
+}

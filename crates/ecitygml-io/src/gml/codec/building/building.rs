@@ -4,10 +4,11 @@ use crate::gml::codec::building::building_part_property::{
 };
 use crate::gml::codec::building::{deserialize_abstract_building, serialize_abstract_building};
 use crate::gml::codec::transportation::GmlRoad;
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{XmlNode, XmlNodeContent, collect_children, extract_xml_element_spans};
-use crate::gml::write::Formatting;
+use crate::gml::util::CityGmlElement;
 use ecitygml_core::model::building::{AsAbstractBuilding, Building};
+use egml::io::util::{
+    Formatting, XmlNode, XmlNodeContent, collect_children, extract_xml_element_spans,
+};
 use serde::{Deserialize, Serialize};
 
 pub fn deserialize_building(xml_document: &[u8]) -> Result<Building, Error> {
@@ -29,7 +30,7 @@ pub fn deserialize_building(xml_document: &[u8]) -> Result<Building, Error> {
             building_parts_result = Some(collect_children(
                 xml_document,
                 &spans,
-                XmlElement::BuildingPartProperty,
+                CityGmlElement::BuildingPartProperty.into(),
                 deserialize_building_part_property,
             ));
         });
@@ -55,7 +56,10 @@ pub fn serialize_building(building: &Building, formatting: Formatting) -> Result
         xml_node_parts.content.push(XmlNodeContent::Child(node));
     }
 
-    Ok(XmlNode::new(XmlElement::Building, xml_node_parts))
+    Ok(XmlNode::new(
+        CityGmlElement::Building.into(),
+        xml_node_parts,
+    ))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -71,13 +75,13 @@ impl From<&Building> for GmlBuilding {
 mod tests {
     use super::*;
     use ecitygml_core::model::building::AsAbstractBuildingMut;
-    use ecitygml_core::model::construction::{ConstructionSurfaceKind, WallSurface};
+    use ecitygml_core::model::construction::{AbstractConstructionSurfaceKind, WallSurface};
     use ecitygml_core::model::core::{
-        AsAbstractCityObject, AsAbstractFeature, AsAbstractFeatureMut, AsAbstractSpace,
-        SpaceBoundaryKind, ThematicSurfaceKind,
+        AbstractSpaceBoundaryKind, AbstractThematicSurfaceKind, AsAbstractCityObject,
+        AsAbstractFeature, AsAbstractFeatureMut, AsAbstractSpace,
     };
-    use egml::model::base::Id;
-    use egml::model::basic::Code;
+    use egml::model::base::{AsAbstractGml, AsAbstractGmlMut, Id};
+    use egml::model::basic_types::Code;
 
     #[test]
     fn test_deserialize_basic_building() {
@@ -154,21 +158,21 @@ mod tests {
         let building = deserialize_building(xml_document).expect("should work");
 
         assert_eq!(
-            building.id(),
+            building.feature_id(),
             &Id::try_from("UUID_d281adfc-4901-0f52-540b-4cc1a9325f82").expect("should work")
         );
         assert_eq!(
-            building.name().first().expect("should work"),
-            "AC14-FZK-Haus"
+            building.names().first().expect("should work"),
+            &Code::new("AC14-FZK-Haus")
         );
         let wall_surfaces: Vec<&WallSurface> = building
             .boundaries()
             .iter()
-            .flat_map(|x| &x.object)
+            .flat_map(|x| x.object())
             .filter_map(|x| match x {
-                SpaceBoundaryKind::ThematicSurfaceKind(
-                    ThematicSurfaceKind::ConstructionSurfaceKind(
-                        ConstructionSurfaceKind::WallSurface(w),
+                AbstractSpaceBoundaryKind::AbstractThematicSurfaceKind(
+                    AbstractThematicSurfaceKind::AbstractConstructionSurfaceKind(
+                        AbstractConstructionSurfaceKind::WallSurface(w),
                     ),
                 ) => Some(w),
                 _ => None,
@@ -179,7 +183,7 @@ mod tests {
 
         let first_wall_surface = wall_surfaces.first().unwrap();
         assert_eq!(
-            first_wall_surface.id(),
+            first_wall_surface.feature_id(),
             &Id::try_from("GML_5856d7ad-5e34-498a-817b-9544bfbb1475").expect("should work")
         );
     }
@@ -239,9 +243,9 @@ mod tests {
         let id = Id::try_from("abc").expect("should work");
         let mut building = Building::new(id);
 
-        building.set_name(vec!["good".to_string(), "morning".to_string()]);
-        building.set_roof_type(Some(Code::new("1000")));
-        building.set_storeys_above_ground(Some(4));
+        building.set_names(vec!["good".into(), "morning".into()]);
+        building.set_roof_type(Code::new("1000").into());
+        building.set_storeys_above_ground(4);
 
         let gml = serialize_building(&building, Formatting::Indent { char: ' ', size: 2 })
             .expect("should work");

@@ -12,7 +12,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 egml = { workspace = true }
-ecitygml = { version = "0.0.2-alpha.4", path = "../ecitygml" }
+ecitygml = { version = "0.0.2-alpha.5", path = "../ecitygml" }
 
 anyhow = { workspace = true }
 libc = { workspace = true }

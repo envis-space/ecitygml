@@ -1,13 +1,13 @@
 use crate::Error;
 use crate::gml::codec::core::{deserialize_abstract_city_object, serialize_abstract_city_object};
-use crate::gml::util::{XmlElementSpans, XmlNodeParts};
-use crate::gml::write::Formatting;
+use crate::gml::util::CombinedCityGmlElement;
 use ecitygml_core::model::core::{AbstractSpaceBoundary, AsAbstractCityObject};
+use egml::io::util::{Formatting, XmlElementSpans, XmlNodeParts};
 use serde::{Deserialize, Serialize};
 
 pub fn deserialize_abstract_space_boundary(
     xml_document: &[u8],
-    spans: &XmlElementSpans,
+    spans: &XmlElementSpans<CombinedCityGmlElement>,
 ) -> Result<AbstractSpaceBoundary, Error> {
     let abstract_city_object = deserialize_abstract_city_object(xml_document, spans)?;
     let abstract_space_boundary =

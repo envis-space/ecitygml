@@ -8,7 +8,7 @@ repository.workspace = true
 description = "CLI tool for processing CityGML data."
 
 [dependencies]
-ecitygml = { version = "0.0.2-alpha.4", path = "../ecitygml" }
+ecitygml = { version = "0.0.2-alpha.5", path = "../ecitygml" }
 egml = { workspace = true }
 
 thiserror = { workspace = true }

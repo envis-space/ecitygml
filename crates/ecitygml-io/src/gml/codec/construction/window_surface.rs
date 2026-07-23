@@ -2,10 +2,9 @@ use crate::Error;
 use crate::gml::codec::core::{
     deserialize_abstract_filling_surface, serialize_abstract_filling_surface,
 };
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{XmlNode, extract_xml_element_spans};
-use crate::gml::write::Formatting;
+use crate::gml::util::CityGmlElement;
 use ecitygml_core::model::construction::{AsAbstractFillingSurface, WindowSurface};
+use egml::io::util::{Formatting, XmlNode, extract_xml_element_spans};
 use serde::{Deserialize, Serialize};
 
 pub fn deserialize_window_surface(xml_document: &[u8]) -> Result<WindowSurface, Error> {
@@ -23,7 +22,10 @@ pub fn serialize_window_surface(
     let xml_node_parts =
         serialize_abstract_filling_surface(window_surface.abstract_filling_surface(), formatting)?;
 
-    Ok(XmlNode::new(XmlElement::WindowSurface, xml_node_parts))
+    Ok(XmlNode::new(
+        CityGmlElement::WindowSurface.into(),
+        xml_node_parts,
+    ))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -39,7 +41,8 @@ impl From<&WindowSurface> for GmlWindowSurface {
 mod tests {
     use super::*;
     use ecitygml_core::model::core::{AsAbstractFeature, AsAbstractThematicSurface};
-    use egml::model::base::Id;
+    use egml::model::base::{AsAbstractGml, Id};
+    use egml::model::basic_types::Code;
     use itertools::Itertools;
     use quick_xml::{DeError, de};
 
@@ -149,12 +152,12 @@ mod tests {
         let window_surface = deserialize_window_surface(xml_document).unwrap();
 
         assert_eq!(
-            window_surface.id(),
+            window_surface.feature_id(),
             &Id::try_from("GML_d0f329f3-5b05-428d-87c3-945b3868337f").expect("should work")
         );
         assert_eq!(
-            *window_surface.name().first().unwrap(),
-            "Window West".to_string()
+            window_surface.names().first().unwrap(),
+            &Code::new("Window West")
         );
         assert!(window_surface.lod3_multi_surface().is_some());
     }

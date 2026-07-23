@@ -1,9 +1,11 @@
-use crate::model::core::refs::FeatureKindRef;
-use crate::model::core::refs::FeatureKindRefMut;
+use crate::model::common::{ForEachFeatureMut, IterFeatures};
+use crate::model::core::refs::AbstractFeatureKindRef;
+use crate::model::core::refs::AbstractFeatureKindRefMut;
 use crate::model::core::{AbstractCityObject, AsAbstractCityObject, AsAbstractCityObjectMut};
 use egml::model::base::Id;
+use egml::model::common::{ApplyTransform, ComputeEnvelope};
 use egml::model::geometry::Envelope;
-use nalgebra::Isometry3;
+use nalgebra::{Isometry3, Rotation3, Scale3, Transform3, Vector3};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbstractSpaceBoundary {
@@ -19,20 +21,6 @@ impl AbstractSpaceBoundary {
         Self {
             abstract_city_object,
         }
-    }
-}
-impl AbstractSpaceBoundary {
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
-        self.abstract_city_object.iter_features()
-    }
-    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
-        self.abstract_city_object.for_each_feature_mut(f);
-    }
-    pub fn compute_envelope(&self) -> Option<Envelope> {
-        self.abstract_city_object.compute_envelope()
-    }
-    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
-        self.abstract_city_object.apply_transform(m);
     }
 }
 
@@ -63,8 +51,10 @@ macro_rules! impl_abstract_space_boundary_traits {
 
         impl $crate::model::core::AsAbstractCityObject for $type {
             fn abstract_city_object(&self) -> &$crate::model::core::AbstractCityObject {
-                use $crate::model::core::AsAbstractSpaceBoundary;
-                &self.abstract_space_boundary().abstract_city_object
+                &<$type as $crate::model::core::AsAbstractSpaceBoundary>::abstract_space_boundary(
+                    self,
+                )
+                .abstract_city_object
             }
         }
     };
@@ -77,8 +67,7 @@ macro_rules! impl_abstract_space_boundary_mut_traits {
 
         impl $crate::model::core::AsAbstractCityObjectMut for $type {
             fn abstract_city_object_mut(&mut self) -> &mut $crate::model::core::AbstractCityObject {
-                use $crate::model::core::AsAbstractSpaceBoundaryMut;
-                &mut self.abstract_space_boundary_mut().abstract_city_object
+                &mut <$type as $crate::model::core::AsAbstractSpaceBoundaryMut>::abstract_space_boundary_mut(self).abstract_city_object
             }
         }
     };
@@ -86,3 +75,43 @@ macro_rules! impl_abstract_space_boundary_mut_traits {
 
 impl_abstract_space_boundary_traits!(AbstractSpaceBoundary);
 impl_abstract_space_boundary_mut_traits!(AbstractSpaceBoundary);
+
+impl IterFeatures for AbstractSpaceBoundary {
+    fn iter_features(&self) -> Box<dyn Iterator<Item = AbstractFeatureKindRef<'_>> + '_> {
+        self.abstract_city_object.iter_features()
+    }
+}
+
+impl ForEachFeatureMut for AbstractSpaceBoundary {
+    fn for_each_feature_mut<F: FnMut(AbstractFeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
+        self.abstract_city_object.for_each_feature_mut(f);
+    }
+}
+
+impl ComputeEnvelope for AbstractSpaceBoundary {
+    fn compute_envelope(&self) -> Option<Envelope> {
+        self.abstract_city_object.compute_envelope()
+    }
+}
+
+impl ApplyTransform for AbstractSpaceBoundary {
+    fn apply_transform(&mut self, m: Transform3<f64>) {
+        self.abstract_city_object.apply_transform(m);
+    }
+
+    fn apply_isometry(&mut self, isometry: Isometry3<f64>) {
+        self.abstract_city_object.apply_isometry(isometry);
+    }
+
+    fn apply_translation(&mut self, vector: Vector3<f64>) {
+        self.abstract_city_object.apply_translation(vector);
+    }
+
+    fn apply_rotation(&mut self, rotation: Rotation3<f64>) {
+        self.abstract_city_object.apply_rotation(rotation);
+    }
+
+    fn apply_scale(&mut self, scale: Scale3<f64>) {
+        self.abstract_city_object.apply_scale(scale);
+    }
+}

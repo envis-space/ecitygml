@@ -1,13 +1,13 @@
 use crate::Error;
 use crate::gml::codec::core::{deserialize_abstract_space, serialize_abstract_space};
-use crate::gml::util::{XmlElementSpans, XmlNodeParts};
-use crate::gml::write::Formatting;
+use crate::gml::util::CombinedCityGmlElement;
 use ecitygml_core::model::core::{AbstractLogicalSpace, AsAbstractSpace};
+use egml::io::util::{Formatting, XmlElementSpans, XmlNodeParts};
 use serde::{Deserialize, Serialize};
 
 pub fn deserialize_abstract_logical_space(
     xml_document: &[u8],
-    spans: &XmlElementSpans,
+    spans: &XmlElementSpans<CombinedCityGmlElement>,
 ) -> Result<AbstractLogicalSpace, Error> {
     let abstract_space = deserialize_abstract_space(xml_document, spans)?;
     let abstract_logical_space = AbstractLogicalSpace::from_abstract_space(abstract_space);

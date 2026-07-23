@@ -1,10 +1,11 @@
 use ecitygml::io;
 use ecitygml::model::core;
-use ecitygml::operations::{CityModelGeometryStore, CityObjectGeometryEntry};
+use ecitygml::model::core::AsAbstractFeature;
 use egml::model::base::Id;
 use egml::model::geometry::Envelope;
 use std::fs::File;
 
+use ecitygml::arena::CityModelArena;
 use std::path::PathBuf;
 
 pub struct CCityModel {
@@ -22,14 +23,14 @@ pub unsafe extern "C" fn city_model_destroy(handle: *mut CCityModel) -> CErrorCo
     CErrorCode::OK
 }
 
-pub struct CCityModelGeometryStore {
-    inner: Option<CityModelGeometryStore>,
+pub struct CCityModelArena {
+    inner: Option<CityModelArena>,
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn city_model_geometry_store_create(
+pub unsafe extern "C" fn city_model_arena_create(
     city_model: *mut CCityModel,
-    out: *mut *mut CCityModelGeometryStore,
+    out: *mut *mut CCityModelArena,
 ) -> CErrorCode {
     unsafe {
         if city_model.is_null() || out.is_null() {
@@ -39,21 +40,20 @@ pub unsafe extern "C" fn city_model_geometry_store_create(
         let city_model = unsafe { &mut *city_model };
 
         match city_model.inner.take() {
-            Some(city_model) => {
-                *out = Box::into_raw(Box::new(CCityModelGeometryStore {
-                    inner: Some(CityModelGeometryStore::from_city_model(city_model)),
-                }));
-                CErrorCode::OK
-            }
+            Some(city_model) => match CityModelArena::from_city_model(city_model) {
+                Ok(arena) => {
+                    *out = Box::into_raw(Box::new(CCityModelArena { inner: Some(arena) }));
+                    CErrorCode::OK
+                }
+                Err(_) => CErrorCode::INTERNAL_ERROR,
+            },
             None => CErrorCode::INTERNAL_ERROR,
         }
     }
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn city_model_geometry_store_destroy(
-    handle: *mut CCityModelGeometryStore,
-) -> CErrorCode {
+pub unsafe extern "C" fn city_model_arena_destroy(handle: *mut CCityModelArena) -> CErrorCode {
     if handle.is_null() {
         return CErrorCode::NULL_POINTER;
     }
@@ -64,20 +64,20 @@ pub unsafe extern "C" fn city_model_geometry_store_destroy(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn city_model_geometry_store_objects_len(
-    handle: *mut CCityModelGeometryStore,
+pub unsafe extern "C" fn city_model_arena_objects_len(
+    handle: *mut CCityModelArena,
     out: *mut usize,
 ) -> CErrorCode {
     if handle.is_null() || out.is_null() {
         return CErrorCode::NULL_POINTER;
     }
 
-    let city_model_geometry_store = unsafe { &*handle };
+    let city_model_arena = unsafe { &*handle };
 
-    match &city_model_geometry_store.inner {
-        Some(city_model_geometry_store) => {
+    match &city_model_arena.inner {
+        Some(city_model_arena) => {
             unsafe {
-                *out = city_model_geometry_store.objects_len();
+                *out = city_model_arena.iter_city_objects().count();
             }
             CErrorCode::OK
         }
@@ -86,8 +86,8 @@ pub unsafe extern "C" fn city_model_geometry_store_objects_len(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn city_model_geometry_store_get_object_ids(
-    handle: *mut CCityModelGeometryStore,
+pub unsafe extern "C" fn city_model_arena_get_object_ids(
+    handle: *mut CCityModelArena,
     out_ptr: *mut *mut *mut libc::c_char,
     out_len: *mut usize,
 ) -> CErrorCode {
@@ -95,11 +95,14 @@ pub unsafe extern "C" fn city_model_geometry_store_get_object_ids(
         return CErrorCode::NULL_POINTER;
     }
 
-    let city_model_geometry_store = unsafe { &*handle };
+    let city_model_arena = unsafe { &*handle };
 
-    match &city_model_geometry_store.inner {
-        Some(index) => {
-            let ids = index.object_ids();
+    match &city_model_arena.inner {
+        Some(arena) => {
+            let ids: Vec<String> = arena
+                .iter_city_objects()
+                .map(|x| x.feature_id().to_string())
+                .collect();
             let len = ids.len();
 
             // Allocate array of C string pointers
@@ -124,7 +127,7 @@ pub unsafe extern "C" fn city_model_geometry_store_get_object_ids(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn city_model_geometry_store_free_object_ids(
+pub unsafe extern "C" fn city_model_arena_free_object_ids(
     ptr: *mut *mut libc::c_char,
     len: usize,
 ) -> CErrorCode {
@@ -145,17 +148,17 @@ pub unsafe extern "C" fn city_model_geometry_store_free_object_ids(
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn city_model_geometry_store_get(
-    handle: *mut CCityModelGeometryStore,
+pub unsafe extern "C" fn city_model_arena_get_envelope(
+    handle: *mut CCityModelArena,
     id: *const libc::c_char,
-    out: *mut *mut CCityObjectGeometry,
+    out: *mut *mut CEnvelope,
 ) -> CErrorCode {
     unsafe {
         if handle.is_null() || out.is_null() {
             return CErrorCode::NULL_POINTER;
         }
 
-        let city_model_geometry_store = unsafe { &*handle };
+        let city_model_arena = unsafe { &*handle };
         let id_str = match unsafe { std::ffi::CStr::from_ptr(id).to_str() } {
             Ok(s) => s,
             Err(_) => return CErrorCode::INTERNAL_ERROR,
@@ -165,50 +168,17 @@ pub unsafe extern "C" fn city_model_geometry_store_get(
             Err(_) => return CErrorCode::INTERNAL_ERROR,
         };
 
-        match &city_model_geometry_store.inner {
-            Some(city_model_geometry_store) => {
-                match city_model_geometry_store.get_by_id(&id) {
-                    None => {
-                        *out = std::ptr::null_mut();
-                    }
-                    Some(g) => {
-                        *out = Box::into_raw(Box::new(CCityObjectGeometry {
-                            inner: Some(g.clone()),
-                        }));
-                    }
-                }
-                CErrorCode::OK
-            }
-            None => {
-                println!("Error: GeometryStore is null");
-                CErrorCode::INTERNAL_ERROR
-            }
-        }
-    }
-}
-
-pub struct CCityObjectGeometry {
-    inner: Option<CityObjectGeometryEntry>,
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn city_object_geometry_envelope(
-    handle: *mut CCityObjectGeometry,
-    out: *mut *mut CEnvelope,
-) -> CErrorCode {
-    unsafe {
-        if handle.is_null() {
-            return CErrorCode::NULL_POINTER;
-        }
-
-        let handle = unsafe { &*handle };
-
-        match &handle.inner {
-            Some(city_object_geometry) => {
-                let envelope: Option<CEnvelope> = city_object_geometry
-                    .envelope()
-                    .cloned()
+        match &city_model_arena.inner {
+            Some(arena) => {
+                let envelope: Option<CEnvelope> = arena
+                    .get_city_object_by_id(&id)
+                    .and_then(|city_object| {
+                        egml::model::feature::AsAbstractFeature::bounded_by(&city_object)
+                            .and_then(|x| x.envelope())
+                            .cloned()
+                    })
                     .map(CEnvelope::from);
+
                 match envelope {
                     None => {
                         *out = std::ptr::null_mut();
@@ -217,25 +187,14 @@ pub unsafe extern "C" fn city_object_geometry_envelope(
                         *out = Box::into_raw(Box::new(x));
                     }
                 }
-
                 CErrorCode::OK
             }
-            None => CErrorCode::INTERNAL_ERROR,
+            None => {
+                println!("Error: CityModelArena is null");
+                CErrorCode::INTERNAL_ERROR
+            }
         }
     }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn city_object_geometry_destroy(
-    handle: *mut CCityObjectGeometry,
-) -> CErrorCode {
-    if handle.is_null() {
-        return CErrorCode::NULL_POINTER;
-    }
-    unsafe {
-        drop(Box::from_raw(handle));
-    }
-    CErrorCode::OK
 }
 
 pub struct CGmlReader {

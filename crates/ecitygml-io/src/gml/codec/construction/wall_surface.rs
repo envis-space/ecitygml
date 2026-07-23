@@ -2,10 +2,9 @@ use crate::Error;
 use crate::gml::codec::construction::abstract_construction_surface::{
     deserialize_abstract_construction_surface, serialize_abstract_construction_surface,
 };
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{XmlNode, extract_xml_element_spans};
-use crate::gml::write::Formatting;
+use crate::gml::util::CityGmlElement;
 use ecitygml_core::model::construction::{AsAbstractConstructionSurface, WallSurface};
+use egml::io::util::{Formatting, XmlNode, extract_xml_element_spans};
 use serde::{Deserialize, Serialize};
 
 pub fn deserialize_wall_surface(xml_document: &[u8]) -> Result<WallSurface, Error> {
@@ -27,7 +26,10 @@ pub fn serialize_wall_surface(
         formatting,
     )?;
 
-    Ok(XmlNode::new(XmlElement::WallSurface, xml_node_parts))
+    Ok(XmlNode::new(
+        CityGmlElement::WallSurface.into(),
+        xml_node_parts,
+    ))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -44,12 +46,12 @@ mod tests {
     use super::*;
     use crate::gml::codec::core::deserialize_abstract_thematic_surface;
     use ecitygml_core::model::construction::{
-        AsAbstractConstructionSurface, ConstructionSurfaceKind, Door, DoorSurface,
-        FillingSurfaceKind, WindowSurface,
+        AbstractConstructionSurfaceKind, AbstractFillingSurfaceKind, AsAbstractConstructionSurface,
+        Door, DoorSurface, WindowSurface,
     };
     use ecitygml_core::model::core::{
-        AsAbstractCityObject, AsAbstractFeature, AsAbstractThematicSurface, SpaceBoundaryKind,
-        ThematicSurfaceKind,
+        AbstractSpaceBoundaryKind, AbstractThematicSurfaceKind, AsAbstractCityObject,
+        AsAbstractFeature, AsAbstractThematicSurface,
     };
     use egml::model::base::Id;
     use quick_xml::{DeError, de};
@@ -334,7 +336,7 @@ mod tests {
         let wall_surface = deserialize_wall_surface(xml_document).expect("should work");
 
         assert_eq!(
-            wall_surface.id(),
+            wall_surface.feature_id(),
             &Id::try_from("GML_d38cf762-c29d-4491-88c9-bdc89e141978").expect("should work")
         );
         assert!(wall_surface.lod3_multi_surface().is_some());
@@ -342,9 +344,9 @@ mod tests {
         let window_surfaces: Vec<&WindowSurface> = wall_surface
             .filling_surfaces()
             .iter()
-            .flat_map(|x| &x.object)
+            .flat_map(|x| x.object())
             .filter_map(|x| match x {
-                FillingSurfaceKind::WindowSurface(x) => Some(x),
+                AbstractFillingSurfaceKind::WindowSurface(x) => Some(x),
                 _ => None,
             })
             .collect();
@@ -353,9 +355,9 @@ mod tests {
         let door_surfaces: Vec<&DoorSurface> = wall_surface
             .filling_surfaces()
             .iter()
-            .flat_map(|x| &x.object)
+            .flat_map(|x| x.object())
             .filter_map(|x| match x {
-                FillingSurfaceKind::DoorSurface(x) => Some(x),
+                AbstractFillingSurfaceKind::DoorSurface(x) => Some(x),
                 _ => None,
             })
             .collect();

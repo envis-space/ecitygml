@@ -1,7 +1,9 @@
-use egml::model::base::Id;
-use egml::model::feature::BoundingShape;
-use egml::model::geometry::Envelope;
-use nalgebra::Isometry3;
+use egml::model::base::{AsAbstractGml, AsAbstractGmlMut, Id};
+use egml::model::common::ApplyTransform;
+use egml::model::feature::{
+    AsAbstractFeature as GmlAsAbstractFeature, AsAbstractFeatureMut as GmlAsAbstractFeatureMut,
+};
+use nalgebra::{Isometry3, Rotation3, Scale3, Transform3, Vector3};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct AbstractFeature {
@@ -10,108 +12,31 @@ pub struct AbstractFeature {
 
 impl AbstractFeature {
     pub fn new(id: Id) -> Self {
-        let abstract_gml = egml::model::base::AbstractGml::with_id(id);
-        let abstract_feature = egml::model::feature::AbstractFeature::new(abstract_gml);
+        let mut abstract_feature = egml::model::feature::AbstractFeature::new();
+        abstract_feature.set_id(id);
 
         Self { abstract_feature }
     }
 
-    pub fn gml_abstract_feature(&self) -> &egml::model::feature::AbstractFeature {
-        &self.abstract_feature
-    }
-
-    pub fn id(&self) -> &Id {
-        self.abstract_feature
-            .abstract_gml
-            .id
-            .as_ref()
-            .expect("id must be set for AbstractFeature")
-    }
-
-    pub fn name(&self) -> &[String] {
-        &self.abstract_feature.abstract_gml.name
-    }
-
-    pub fn set_name(&mut self, name: Vec<String>) {
-        self.abstract_feature.abstract_gml.name = name;
-    }
-
-    pub fn push_name(&mut self, name: String) {
-        self.abstract_feature.abstract_gml.name.push(name);
-    }
-
-    pub fn extend_names(&mut self, names: impl IntoIterator<Item = String>) {
-        self.abstract_feature.abstract_gml.name.extend(names);
-    }
-
-    pub fn bounded_by(&self) -> Option<&Envelope> {
-        self.abstract_feature.bounded_by.as_ref()?.envelope.as_ref()
-    }
-
-    pub fn set_bounding_shape(&mut self, bounding_shape: Option<BoundingShape>) {
-        self.abstract_feature.bounded_by = bounding_shape;
-    }
-}
-
-impl AbstractFeature {
-    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
-        if let Some(bounding_shape) = self.abstract_feature.bounded_by.as_mut()
-            && let Some(envelope) = &mut bounding_shape.envelope
-        {
-            envelope.apply_transform(m);
-        }
+    pub fn from_abstract_feature(abstract_feature: egml::model::feature::AbstractFeature) -> Self {
+        Self { abstract_feature }
     }
 }
 
 pub trait AsAbstractFeature {
     fn abstract_feature(&self) -> &AbstractFeature;
 
-    fn id(&self) -> &Id {
-        self.abstract_feature().id()
-    }
-
-    fn name(&self) -> &[String] {
-        self.abstract_feature().name()
-    }
-
-    fn bounded_by(&self) -> Option<&Envelope> {
-        self.abstract_feature().bounded_by()
+    fn feature_id(&self) -> &Id {
+        <Self as AsAbstractFeature>::abstract_feature(self)
+            .abstract_gml()
+            .id()
+            .as_ref()
+            .expect("id must be set for AbstractFeature")
     }
 }
 
 pub trait AsAbstractFeatureMut: AsAbstractFeature {
     fn abstract_feature_mut(&mut self) -> &mut AbstractFeature;
-
-    fn set_name(&mut self, name: Vec<String>) {
-        self.abstract_feature_mut().set_name(name);
-    }
-
-    fn push_name(&mut self, name: String) {
-        self.abstract_feature_mut().push_name(name);
-    }
-
-    fn extend_names(&mut self, names: impl IntoIterator<Item = String>) {
-        self.abstract_feature_mut().extend_names(names);
-    }
-
-    fn set_bounding_shape_from_envelope(&mut self, envelope: Option<Envelope>) {
-        let bounding_shape = envelope.map(BoundingShape::new);
-        self.abstract_feature_mut()
-            .set_bounding_shape(bounding_shape);
-    }
-
-    fn set_bounding_shape(&mut self, bounding_shape: Option<BoundingShape>) {
-        self.abstract_feature_mut()
-            .set_bounding_shape(bounding_shape);
-    }
-}
-
-impl AbstractFeature {
-    pub fn from_gml_abstract_feature(
-        abstract_feature: egml::model::feature::AbstractFeature,
-    ) -> Self {
-        Self { abstract_feature }
-    }
 }
 
 impl AsAbstractFeature for AbstractFeature {
@@ -123,5 +48,70 @@ impl AsAbstractFeature for AbstractFeature {
 impl AsAbstractFeatureMut for AbstractFeature {
     fn abstract_feature_mut(&mut self) -> &mut AbstractFeature {
         self
+    }
+}
+
+#[macro_export]
+macro_rules! impl_abstract_feature_traits {
+    ($type:ty) => {
+        egml::impl_abstract_feature_traits!($type);
+
+        impl egml::model::feature::AsAbstractFeature for $type {
+            fn abstract_feature(&self) -> &egml::model::feature::AbstractFeature {
+                &<$type as $crate::model::core::AsAbstractFeature>::abstract_feature(self)
+                    .abstract_feature
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_abstract_feature_mut_traits {
+    ($type:ty) => {
+        egml::impl_abstract_feature_mut_traits!($type);
+
+        impl egml::model::feature::AsAbstractFeatureMut for $type {
+            fn abstract_feature_mut(&mut self) -> &mut egml::model::feature::AbstractFeature {
+                &mut <$type as $crate::model::core::AsAbstractFeatureMut>::abstract_feature_mut(
+                    self,
+                )
+                .abstract_feature
+            }
+        }
+    };
+}
+
+crate::impl_abstract_feature_traits!(AbstractFeature);
+crate::impl_abstract_feature_mut_traits!(AbstractFeature);
+
+impl ApplyTransform for AbstractFeature {
+    fn apply_transform(&mut self, m: Transform3<f64>) {
+        if let Some(bounding_shape) = self.abstract_feature.bounded_by_mut() {
+            bounding_shape.apply_transform(m);
+        }
+    }
+
+    fn apply_isometry(&mut self, isometry: Isometry3<f64>) {
+        if let Some(bounding_shape) = self.abstract_feature.bounded_by_mut() {
+            bounding_shape.apply_isometry(isometry);
+        }
+    }
+
+    fn apply_translation(&mut self, vector: Vector3<f64>) {
+        if let Some(bounding_shape) = self.abstract_feature.bounded_by_mut() {
+            bounding_shape.apply_translation(vector);
+        }
+    }
+
+    fn apply_rotation(&mut self, rotation: Rotation3<f64>) {
+        if let Some(bounding_shape) = self.abstract_feature.bounded_by_mut() {
+            bounding_shape.apply_rotation(rotation);
+        }
+    }
+
+    fn apply_scale(&mut self, scale: Scale3<f64>) {
+        if let Some(bounding_shape) = self.abstract_feature.bounded_by_mut() {
+            bounding_shape.apply_scale(scale);
+        }
     }
 }

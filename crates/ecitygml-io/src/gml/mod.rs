@@ -1,7 +1,7 @@
 mod codec;
 pub mod read;
 mod read_impl;
-mod util;
+pub(crate) mod util;
 pub mod write;
 mod write_impl;
 

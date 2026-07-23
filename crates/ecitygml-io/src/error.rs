@@ -33,4 +33,10 @@ pub enum Error {
     AttributeWithoutName(String),
     #[error("file extension is invalid")]
     NoFileName(),
+    #[error("unsupported CityGML version `{0}` (only 3.0 is supported)")]
+    UnsupportedCityGmlVersion(crate::CitygmlVersion),
+    #[error(
+        "could not determine the CityGML version: no recognized CityGML namespace found on the root element"
+    )]
+    UnknownCityGmlVersion,
 }

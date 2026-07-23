@@ -8,13 +8,17 @@ use crate::gml::codec::transportation::intersection_property::{
 use crate::gml::codec::transportation::section_property::{
     deserialize_section_property, serialize_section_property,
 };
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{
-    XmlNode, XmlNodeContent, collect_children, extract_xml_element_spans, serialize_inner,
+use crate::gml::util::CityGmlElement;
+use ecitygml_core::model::transportation::values::{
+    RoadClassValue, RoadFunctionValue, RoadUsageValue,
 };
-use crate::gml::write::Formatting;
 use ecitygml_core::model::transportation::{AsAbstractTransportationSpace, Road};
-use egml::io::GmlCode;
+use egml::io::codec::basic::GmlCode;
+use egml::io::util::collect_children;
+use egml::io::util::{
+    Formatting, XmlNode, XmlNodeContent, extract_xml_element_spans, serialize_inner,
+};
+use egml::model::basic_types::Code;
 use serde::{Deserialize, Serialize};
 
 pub fn deserialize_road(xml_document: &[u8]) -> Result<Road, Error> {
@@ -40,7 +44,7 @@ pub fn deserialize_road(xml_document: &[u8]) -> Result<Road, Error> {
             sections_result = Some(collect_children(
                 xml_document,
                 &spans,
-                XmlElement::SectionProperty,
+                CityGmlElement::SectionProperty.into(),
                 deserialize_section_property,
             ));
         });
@@ -48,7 +52,7 @@ pub fn deserialize_road(xml_document: &[u8]) -> Result<Road, Error> {
             intersections_result = Some(collect_children(
                 xml_document,
                 &spans,
-                XmlElement::IntersectionProperty,
+                CityGmlElement::IntersectionProperty.into(),
                 deserialize_intersection_property,
             ));
         });
@@ -62,9 +66,23 @@ pub fn deserialize_road(xml_document: &[u8]) -> Result<Road, Error> {
         intersections_result.expect("rayon::scope guarantees all spawns complete")?;
 
     let mut road = Road::from_abstract_transportation_space(abstract_transportation_space);
-    road.set_class(parsed.class.map(Into::into));
-    road.set_functions(parsed.functions.into_iter().map(Into::into).collect());
-    road.set_usages(parsed.usages.into_iter().map(Into::into).collect());
+    road.set_class_opt(parsed.class.map(Code::from).map(RoadClassValue::from));
+    road.set_functions(
+        parsed
+            .functions
+            .into_iter()
+            .map(Code::from)
+            .map(RoadFunctionValue::from)
+            .collect(),
+    );
+    road.set_usages(
+        parsed
+            .usages
+            .into_iter()
+            .map(Code::from)
+            .map(RoadUsageValue::from)
+            .collect(),
+    );
     road.set_sections(sections);
     road.set_intersections(intersections);
 
@@ -89,7 +107,7 @@ pub fn serialize_road(road: &Road, formatting: Formatting) -> Result<XmlNode, Er
         xml_node_parts.content.push(XmlNodeContent::Child(node));
     }
 
-    Ok(XmlNode::new(XmlElement::Road, xml_node_parts))
+    Ok(XmlNode::new(CityGmlElement::Road.into(), xml_node_parts))
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
@@ -110,9 +128,19 @@ pub struct GmlRoad {
 impl From<&Road> for GmlRoad {
     fn from(item: &Road) -> Self {
         Self {
-            class: item.class().map(Into::into),
-            functions: item.functions().iter().map(Into::into).collect(),
-            usages: item.usages().iter().map(Into::into).collect(),
+            class: item.class().map(RoadClassValue::code).map(Into::into),
+            functions: item
+                .functions()
+                .iter()
+                .map(RoadFunctionValue::code)
+                .map(Into::into)
+                .collect(),
+            usages: item
+                .usages()
+                .iter()
+                .map(RoadUsageValue::code)
+                .map(Into::into)
+                .collect(),
         }
     }
 }
@@ -142,7 +170,7 @@ mod tests {
         let road = deserialize_road(xml_document).expect("should work");
 
         assert_eq!(
-            road.id(),
+            road.feature_id(),
             &Id::try_from("UUID_8a13804c-cbd7-3a2f-9d46-e4d528a4bb4f").expect("should work")
         );
 
@@ -150,9 +178,9 @@ mod tests {
         assert_eq!(road.generic_attributes().len(), 1);
         assert!(road.intersections().is_empty());
         assert_eq!(road.sections().len(), 1);
-        let traffic_space = road.sections().first().unwrap().object.as_ref().unwrap();
+        let traffic_space = road.sections().first().unwrap().object().unwrap();
         assert_eq!(
-            traffic_space.id(),
+            traffic_space.feature_id(),
             &Id::try_from("UUID_0950bfa5-204e-33e6-bdb7-c5c318d73a29").expect("should work")
         );
     }

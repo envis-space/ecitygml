@@ -1,20 +1,21 @@
+use crate::model::common::{ForEachFeatureMut, IterFeatures};
+use crate::model::construction::values::{DoorClassValue, DoorFunctionValue, DoorUsageValue};
 use crate::model::construction::{
     AbstractFillingElement, AsAbstractFillingElement, AsAbstractFillingElementMut,
 };
-use crate::model::core::AsAbstractFeatureMut;
-use crate::model::core::refs::FeatureKindRef;
-use crate::model::core::refs::FeatureKindRefMut;
+use crate::model::core::refs::AbstractFeatureKindRef;
+use crate::model::core::refs::AbstractFeatureKindRefMut;
 use egml::model::base::Id;
-use egml::model::basic::Code;
+use egml::model::common::{ApplyTransform, ComputeEnvelope};
 use egml::model::geometry::Envelope;
-use nalgebra::Isometry3;
+use nalgebra::{Isometry3, Rotation3, Scale3, Transform3, Vector3};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Door {
     pub(crate) abstract_filling_element: AbstractFillingElement,
-    class: Option<Code>,
-    functions: Vec<Code>,
-    usages: Vec<Code>,
+    class: Option<DoorClassValue>,
+    functions: Vec<DoorFunctionValue>,
+    usages: Vec<DoorUsageValue>,
 }
 
 impl Door {
@@ -29,24 +30,6 @@ impl Door {
             functions: Vec::new(),
             usages: Vec::new(),
         }
-    }
-}
-impl Door {
-    pub fn iter_features<'a>(&'a self) -> impl Iterator<Item = FeatureKindRef<'a>> + 'a {
-        std::iter::once(self.into()).chain(self.abstract_filling_element.iter_features())
-    }
-    pub fn for_each_feature_mut<F: FnMut(FeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
-        f((&mut *self).into());
-        self.abstract_filling_element.for_each_feature_mut(f);
-    }
-    pub fn compute_envelope(&self) -> Option<Envelope> {
-        self.abstract_filling_element.compute_envelope()
-    }
-    pub fn recompute_bounding_shape(&mut self) {
-        self.set_bounding_shape_from_envelope(self.compute_envelope());
-    }
-    pub fn apply_transform(&mut self, m: &Isometry3<f64>) {
-        self.abstract_filling_element.apply_transform(m);
     }
 }
 
@@ -65,3 +48,44 @@ impl AsAbstractFillingElementMut for Door {
 crate::impl_abstract_filling_element_traits!(Door);
 crate::impl_abstract_filling_element_mut_traits!(Door);
 crate::impl_has_feature_type!(Door, Door);
+
+impl IterFeatures for Door {
+    fn iter_features(&self) -> Box<dyn Iterator<Item = AbstractFeatureKindRef<'_>> + '_> {
+        Box::new(std::iter::once(self.into()).chain(self.abstract_filling_element.iter_features()))
+    }
+}
+
+impl ForEachFeatureMut for Door {
+    fn for_each_feature_mut<F: FnMut(AbstractFeatureKindRefMut<'_>)>(&mut self, f: &mut F) {
+        f((&mut *self).into());
+        self.abstract_filling_element.for_each_feature_mut(f);
+    }
+}
+
+impl ComputeEnvelope for Door {
+    fn compute_envelope(&self) -> Option<Envelope> {
+        self.abstract_filling_element.compute_envelope()
+    }
+}
+
+impl ApplyTransform for Door {
+    fn apply_transform(&mut self, m: Transform3<f64>) {
+        self.abstract_filling_element.apply_transform(m);
+    }
+
+    fn apply_isometry(&mut self, isometry: Isometry3<f64>) {
+        self.abstract_filling_element.apply_isometry(isometry);
+    }
+
+    fn apply_translation(&mut self, vector: Vector3<f64>) {
+        self.abstract_filling_element.apply_translation(vector);
+    }
+
+    fn apply_rotation(&mut self, rotation: Rotation3<f64>) {
+        self.abstract_filling_element.apply_rotation(rotation);
+    }
+
+    fn apply_scale(&mut self, scale: Scale3<f64>) {
+        self.abstract_filling_element.apply_scale(scale);
+    }
+}

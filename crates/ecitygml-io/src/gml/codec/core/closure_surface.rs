@@ -2,10 +2,9 @@ use crate::Error;
 use crate::gml::codec::core::{
     deserialize_abstract_thematic_surface, serialize_abstract_thematic_surface,
 };
-use crate::gml::util::xml_element::XmlElement;
-use crate::gml::util::{XmlNode, extract_xml_element_spans};
-use crate::gml::write::Formatting;
+use crate::gml::util::CityGmlElement;
 use ecitygml_core::model::core::{AsAbstractThematicSurface, ClosureSurface};
+use egml::io::util::{Formatting, XmlNode, extract_xml_element_spans};
 
 pub fn deserialize_closure_surface(xml_document: &[u8]) -> Result<ClosureSurface, Error> {
     let spans = extract_xml_element_spans(xml_document)?;
@@ -19,11 +18,14 @@ pub fn serialize_closure_surface(
     closure_surface: &ClosureSurface,
     formatting: Formatting,
 ) -> Result<XmlNode, Error> {
-    let parts = serialize_abstract_thematic_surface(
+    let xml_node_parts = serialize_abstract_thematic_surface(
         closure_surface.abstract_thematic_surface(),
         formatting,
     )?;
-    Ok(XmlNode::new(XmlElement::ClosureSurface, parts))
+    Ok(XmlNode::new(
+        CityGmlElement::ClosureSurface.into(),
+        xml_node_parts,
+    ))
 }
 
 #[cfg(test)]
@@ -31,15 +33,16 @@ mod tests {
     use super::*;
     use ecitygml_core::model::building::{AbstractBuilding, AsAbstractBuildingMut};
     use ecitygml_core::model::construction::{
-        AbstractConstruction, ConstructionSurfaceKind, WallSurface,
+        AbstractConstruction, AbstractConstructionSurfaceKind, WallSurface,
     };
     use ecitygml_core::model::core::{
         AbstractCityObject, AbstractFeature, AbstractFeatureWithLifespan, AbstractOccupiedSpace,
-        AbstractPhysicalSpace, AbstractSpace, AsAbstractCityObject, AsAbstractFeature,
-        AsAbstractFeatureMut, AsAbstractSpace, SpaceBoundaryKind, ThematicSurfaceKind,
+        AbstractPhysicalSpace, AbstractSpace, AbstractSpaceBoundaryKind,
+        AbstractThematicSurfaceKind, AsAbstractCityObject, AsAbstractFeature, AsAbstractFeatureMut,
+        AsAbstractSpace,
     };
     use egml::model::base::Id;
-    use egml::model::basic::Code;
+    use egml::model::basic_types::Code;
 
     #[test]
     fn test_deserialize_empty_closure_surface() {
@@ -49,7 +52,7 @@ mod tests {
         let closure_surface = deserialize_closure_surface(xml_document).expect("should work");
 
         assert_eq!(
-            closure_surface.id(),
+            closure_surface.feature_id(),
             &Id::try_from("fme-gen-f460209b-63b5-4ff8-92d5-cec932987265").expect("should work")
         );
     }

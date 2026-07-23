@@ -14,4 +14,6 @@ pub enum Error {
     ElementNotFound(String),
     #[error("the data for key `{0}` is not available")]
     InvalidLodName(String),
+    #[error("transformation matrix expected 16 values, got {found}")]
+    InvalidMatrixSize { found: usize },
 }
