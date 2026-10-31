@@ -5,7 +5,7 @@ on:
     tags:
     - '[0-9]+.[0-9]+.[0-9]+*'
 
-# Only the release job, which publishes the release, gets write access
+# Only the jobs that publish (the release and the web viewer deployment) get write access
 permissions:
   contents: read
 
@@ -99,6 +99,45 @@ jobs:
           ${{ env.ARCHIVE }}
           ${{ env.ARCHIVE }}.sha256
         if-no-files-found: error
+
+  # The web viewer of the released version, deployed to GitHub Pages (Settings > Pages > Source: GitHub Actions)
+  build-gui-web:
+    needs: ci
+    name: Build web viewer
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+
+    # The toolchain declared in mise.toml (including the wasm32 target); the task installs Trunk
+    - uses: jdx/mise-action@v5
+      with:
+        version: ${{ env.MISE_VERSION }}
+
+    - name: Build
+      run: mise run build:gui-web
+
+    - uses: actions/upload-pages-artifact@v4
+      with:
+        path: target/gui-web
+
+  # Separate from the build, so that only the deployment gets write access to Pages
+  deploy-gui-web:
+    needs: build-gui-web
+    name: Deploy web viewer
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    # One deployment at a time; a running one is finished rather than cancelled
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+    - id: deployment
+      uses: actions/deploy-pages@v4
 
   release:
     name: Create release

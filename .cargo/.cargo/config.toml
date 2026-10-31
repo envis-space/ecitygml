@@ -1,5 +1,0 @@
-# 32 MiB stack: the deserializer runs on the main thread in WebAssembly (as big as the native workers' stacks).
-# Set per target (not via RUSTFLAGS) so native builds are unaffected and wasm checks and builds share one cache.
-# Note: a RUSTFLAGS environment variable overrides this.
-[target.wasm32-unknown-unknown]
-rustflags = ["-C", "link-arg=-zstack-size=33554432"]

@@ -9,7 +9,7 @@ description = "Supplementary operations for CityGML data."
 
 
 [dependencies]
-ecitygml-core = { version = "0.0.2-alpha.8", path = "../ecitygml-core" }
+ecitygml-core = { version = "0.0.2-alpha.9", path = "../ecitygml-core" }
 
 egml = { workspace = true }
 
