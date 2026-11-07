@@ -95,6 +95,15 @@ jobs:
     uses: ./.github/workflows/ci.yml
 
   # The called workflows check out the tag, as they run with the ref of this workflow
+  build-cli:
+    name: Build CLI
+    needs: ci
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-cli.yml
+    with:
+      version: ${{ github.ref_name }}
+
   build-gui:
     name: Build GUI
     needs: ci
@@ -155,9 +164,11 @@ jobs:
 
   github-release:
     name: Create GitHub release
-    needs: [verify, build-gui, publish-crates]
+    needs: [verify, build-cli, build-gui, publish-crates]
     # Also runs when publish-crates was skipped (CRATES_IO_PUBLISH not enabled), but not when it failed
-    if: ${{ !cancelled() && needs.build-gui.result == 'success' && needs.publish-crates.result != 'failure' }}
+    if: >-
+      ${{ !cancelled() && needs.build-cli.result == 'success' && needs.build-gui.result == 'success'
+      && needs.publish-crates.result != 'failure' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -165,9 +176,14 @@ jobs:
     - uses: actions/download-artifact@v8
       with:
         path: artifacts
+        pattern: ecitygml-cli-*
+        merge-multiple: true
+    - uses: actions/download-artifact@v8
+      with:
+        path: artifacts
         pattern: ecitygml-gui-*
         merge-multiple: true
-    # On a re-run, the GUI archives are (re-)uploaded to the existing release instead
+    # On a re-run, the archives are (re-)uploaded to the existing release instead
     - name: Create the release unless it exists
       env:
         GH_TOKEN: ${{ github.token }}
@@ -175,7 +191,7 @@ jobs:
         PRERELEASE: ${{ needs.verify.outputs.prerelease }}
       run: |
         if gh release view "${TAG}" > /dev/null 2>&1; then
-          echo "Release ${TAG} already exists, uploading the GUI archives"
+          echo "Release ${TAG} already exists, uploading the CLI and GUI archives"
           gh release upload "${TAG}" artifacts/* --clobber
           exit 0
         fi

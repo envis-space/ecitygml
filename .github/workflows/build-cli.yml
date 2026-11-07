@@ -1,0 +1,94 @@
+name: Build CLI
+
+# Builds the CLI binaries of every platform and uploads them, packaged with their checksums, as artifacts
+# ecitygml-cli-<target>. Publishes nothing: the release workflow (release.yml) attaches them to the GitHub release.
+# The manual trigger (Actions → Build CLI → Run workflow) builds them without a release.
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Version in the archive names, e.g. v0.1.0
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version in the archive names, e.g. v0.1.0
+        required: true
+        default: dev
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  MISE_VERSION: 2026.10.4
+  # The version is passed to the scripts as a variable, never interpolated into them
+  VERSION: ${{ inputs.version }}
+
+jobs:
+
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - target: x86_64-unknown-linux-gnu
+          os: ubuntu-latest
+        - target: aarch64-unknown-linux-gnu
+          os: ubuntu-24.04-arm
+        - target: x86_64-apple-darwin
+          os: macos-latest
+        - target: aarch64-apple-darwin
+          os: macos-latest
+        - target: x86_64-pc-windows-msvc
+          os: windows-latest
+
+    steps:
+    - uses: actions/checkout@v7
+
+    # The toolchain declared in mise.toml, as in CI; plus the release target
+    - uses: jdx/mise-action@v5
+      with:
+        version: ${{ env.MISE_VERSION }}
+    - run: rustup target add ${{ matrix.target }}
+
+    - name: Build
+      env:
+        CMAKE_TOOLCHAIN_FILE: ${{ runner.os == 'Windows' && 'C:\vcpkg\scripts\buildsystems\vcpkg.cmake' || '' }}
+        RUSTFLAGS: ${{ runner.os == 'Windows' && '-L C:\vcpkg\installed\x64-windows-static-md\lib' || '' }}
+      run: cargo build --profile release-lto --bin ecitygml-cli --target ${{ matrix.target }}
+
+    - name: Package binary (Unix)
+      if: runner.os != 'Windows'
+      env:
+        TARGET: ${{ matrix.target }}
+      run: |
+        BINARY="target/$TARGET/release-lto/ecitygml-cli"
+        ARCHIVE="ecitygml-cli-$VERSION-$TARGET.tar.gz"
+        tar -czf "$ARCHIVE" -C "$(dirname "$BINARY")" "$(basename "$BINARY")"
+        shasum -a 256 "$ARCHIVE" > "$ARCHIVE.sha256"
+        echo "ARCHIVE=$ARCHIVE" >> "$GITHUB_ENV"
+
+    - name: Package binary (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      env:
+        TARGET: ${{ matrix.target }}
+      run: |
+        $binary = "target\$env:TARGET\release-lto\ecitygml-cli.exe"
+        $archive = "ecitygml-cli-$env:VERSION-$env:TARGET.zip"
+        Compress-Archive -Path $binary -DestinationPath $archive
+        certutil -hashfile $archive SHA256 > "$archive.sha256"
+        echo "ARCHIVE=$archive" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+    - uses: actions/upload-artifact@v7
+      with:
+        name: ecitygml-cli-${{ matrix.target }}
+        path: |
+          ${{ env.ARCHIVE }}
+          ${{ env.ARCHIVE }}.sha256
+        if-no-files-found: error
