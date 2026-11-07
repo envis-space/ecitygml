@@ -1,12 +1,10 @@
 name: Build web viewer
 
 # Builds the web version of the viewer and uploads it as the GitHub Pages artifact. Publishes nothing: the release
-# workflow (release.yml) deploys it. The manual trigger (Actions → Build web viewer → Run workflow) builds it without a
-# deployment.
+# workflow (release.yml) deploys it.
 
 on:
   workflow_call:
-  workflow_dispatch:
 
 permissions:
   contents: read

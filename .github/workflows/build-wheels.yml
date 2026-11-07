@@ -12,6 +12,9 @@ on:
 permissions:
   contents: read
 
+env:
+  MISE_VERSION: 2026.10.4
+
 jobs:
 
   build:
@@ -26,13 +29,17 @@ jobs:
       CIBW_BUILD: cp312-manylinux_* cp312-macosx_* cp312-win_amd64
       # The release build of the library on the runner (relative to the workspace root, see CMakeLists.txt)
       CIBW_CONFIG_SETTINGS: cmake.define.ECITYGML_FFI_LIBRARY_DIR=target/release
-      # Linux wheels build in a manylinux container (with the workspace copied to /project), which has no Rust
+      # Linux wheels build in a manylinux container (with the workspace copied to /project), which has no Rust: mise
+      # installs the toolchain declared in mise.toml there too, like everywhere else (the container is new to mise, so
+      # the workspace's mise.toml is trusted explicitly)
+      CIBW_ENVIRONMENT_PASS_LINUX: MISE_VERSION
       CIBW_BEFORE_ALL_LINUX: >-
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal &&
-        cargo build -p ecitygml-ffi --release
+        curl --proto '=https' --tlsv1.2 -sSf https://mise.run | MISE_VERSION="v${MISE_VERSION}" sh &&
+        export MISE_TRUSTED_CONFIG_PATHS=/project MISE_YES=1 &&
+        ~/.local/bin/mise install rust &&
+        ~/.local/bin/mise exec -- cargo build -p ecitygml-ffi --release
       CIBW_BEFORE_ALL_MACOS: cargo build -p ecitygml-ffi --release
       CIBW_BEFORE_ALL_WINDOWS: cargo build -p ecitygml-ffi --release
-      CIBW_ENVIRONMENT_LINUX: PATH="$HOME/.cargo/bin:$PATH"
       # For both the library and the extension, so that the wheel installs on macOS 11+ (default: the runner's version)
       CIBW_ENVIRONMENT_MACOS: MACOSX_DEPLOYMENT_TARGET=11.0
       CIBW_TEST_COMMAND: python -c "import ecitygml"
@@ -40,6 +47,13 @@ jobs:
     - uses: actions/checkout@v7
       with:
         persist-credentials: false
+
+    # The toolchain declared in mise.toml, as in CI, for the library builds on macOS and Windows (before_all runs on the
+    # runner there, whose preinstalled Rust can be older). Linux builds install it in the container (see above).
+    - uses: jdx/mise-action@v5
+      if: runner.os != 'Linux'
+      with:
+        version: ${{ env.MISE_VERSION }}
 
     - uses: pypa/cibuildwheel@v4.3.5
       with:

@@ -2,7 +2,6 @@ name: Build GUI
 
 # Builds the GUI binaries of every platform and uploads them, packaged with their checksums, as artifacts
 # ecitygml-gui-<target>. Publishes nothing: the release workflow (release.yml) attaches them to the GitHub release.
-# The manual trigger (Actions → Build GUI → Run workflow) builds them without a release.
 
 on:
   workflow_call:
@@ -10,13 +9,6 @@ on:
       version:
         description: Version in the archive names, e.g. v0.1.0
         required: true
-        type: string
-  workflow_dispatch:
-    inputs:
-      version:
-        description: Version in the archive names, e.g. v0.1.0
-        required: true
-        default: dev
         type: string
 
 permissions:
