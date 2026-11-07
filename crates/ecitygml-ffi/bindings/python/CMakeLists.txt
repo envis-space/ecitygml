@@ -8,8 +8,12 @@ find_package(nanobind CONFIG REQUIRED)
 
 # Static Rust library: the debug build (`cargo build -p ecitygml-ffi`), unless overridden with
 # -DECITYGML_FFI_LIBRARY_DIR=... (`mise run build:bindings:python --release` passes target/release).
-set(ECITYGML_FFI_LIBRARY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../../target/debug"
-    CACHE PATH "Directory with the static library built from crates/ecitygml-ffi")
+# A relative directory is relative to the workspace root, so that the wheel builds (build-wheels.yml) pass the same
+# value on every platform. STRING, not PATH: CMake would resolve a relative PATH against the build directory.
+get_filename_component(WORKSPACE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../.." ABSOLUTE)
+set(ECITYGML_FFI_LIBRARY_DIR "target/debug"
+    CACHE STRING "Directory with the static library built from crates/ecitygml-ffi")
+get_filename_component(ECITYGML_FFI_LIBRARY_DIR "${ECITYGML_FFI_LIBRARY_DIR}" ABSOLUTE BASE_DIR "${WORKSPACE_DIR}")
 set(ECITYGML_FFI_LIBRARY
     "${ECITYGML_FFI_LIBRARY_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}ecitygml_ffi${CMAKE_STATIC_LIBRARY_SUFFIX}")
 if(NOT EXISTS "${ECITYGML_FFI_LIBRARY}")

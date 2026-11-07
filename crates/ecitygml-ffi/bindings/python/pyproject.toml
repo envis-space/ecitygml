@@ -8,10 +8,17 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "ecitygml"
-version = "0.0.1a206"
+# The version of the Rust workspace (see [tool.scikit-build.metadata.version])
+dynamic = ["version"]
 description = "Python bindings for ecitygml, generated with Diplomat (nanobind)."
+readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT OR Apache-2.0"
+authors = [{ name = "Benedikt Schwab", email = "benedikt.schwab@gmail.com" }]
+keywords = ["citygml", "gml", "3d-city-model", "gis"]
+
+[project.urls]
+Repository = "https://github.com/tum-gis/ecitygml"
 
 [dependency-groups]
 test = ["pytest"]
@@ -21,3 +28,10 @@ minimum-version = "build-system.requires"
 build-dir = "build/{wheel_tag}"
 # Stable ABI: one wheel for CPython 3.12+.
 wheel.py-api = "cp312"
+
+# The version of the workspace (the first `version = ` line of the root Cargo.toml, in [workspace.package]).
+# PEP 440 normalizes the Cargo pre-release form (-alpha.N → aN).
+[tool.scikit-build.metadata.version]
+provider = "scikit_build_core.metadata.regex"
+input = "../../../../Cargo.toml"
+regex = '(?m)^version = "(?P<value>[^"]+)"'

@@ -1,0 +1,53 @@
+name: Build Python wheels
+
+# Builds the Python wheels of the bindings for every platform and uploads them as artifacts python-wheel-<os>. One wheel
+# per platform, as the extension uses the stable ABI (CPython 3.12+). No sdist: it would need the whole Rust workspace
+# to build. Publishes nothing: the release workflow (release.yml) uploads them to PyPI.
+# The version of the wheels is the one of the Rust workspace (see pyproject.toml), which the release workflow checks
+# against the tag.
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+
+  build:
+    name: Build wheel ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Native runners only, so that nanobind can import the module to generate its stubs
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-15-intel, windows-latest]
+    env:
+      CIBW_BUILD: cp312-manylinux_* cp312-macosx_* cp312-win_amd64
+      # The release build of the library on the runner (relative to the workspace root, see CMakeLists.txt)
+      CIBW_CONFIG_SETTINGS: cmake.define.ECITYGML_FFI_LIBRARY_DIR=target/release
+      # Linux wheels build in a manylinux container (with the workspace copied to /project), which has no Rust
+      CIBW_BEFORE_ALL_LINUX: >-
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal &&
+        cargo build -p ecitygml-ffi --release
+      CIBW_BEFORE_ALL_MACOS: cargo build -p ecitygml-ffi --release
+      CIBW_BEFORE_ALL_WINDOWS: cargo build -p ecitygml-ffi --release
+      CIBW_ENVIRONMENT_LINUX: PATH="$HOME/.cargo/bin:$PATH"
+      # For both the library and the extension, so that the wheel installs on macOS 11+ (default: the runner's version)
+      CIBW_ENVIRONMENT_MACOS: MACOSX_DEPLOYMENT_TARGET=11.0
+      CIBW_TEST_COMMAND: python -c "import ecitygml"
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        persist-credentials: false
+
+    - uses: pypa/cibuildwheel@v4.3.5
+      with:
+        package-dir: crates/ecitygml-ffi/bindings/python
+        output-dir: wheelhouse
+
+    - uses: actions/upload-artifact@v7
+      with:
+        name: python-wheel-${{ matrix.os }}
+        path: wheelhouse/*.whl
+        if-no-files-found: error

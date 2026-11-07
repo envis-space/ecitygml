@@ -5,13 +5,13 @@ name: Release
 #
 # Every job is idempotent: re-running the workflow (Re-run jobs) skips whatever is already published.
 #
-# Publishing to crates.io is opt-in: it only runs when the repository variable CRATES_IO_PUBLISH is
+# Publishing to crates.io (and PyPI) is opt-in: it only runs when the repository variable CRATES_IO_PUBLISH (PYPI_PUBLISH) is
 # 'true' (Settings → Secrets and variables → Actions → Variables), otherwise the job is skipped and
 # the GitHub release is still created. Once enabled, a failed publish fails the workflow.
 # The web viewer is deployed to GitHub Pages only in repositories with Pages enabled (Settings → Pages →
 # Source: GitHub Actions; the github-pages environment must allow v* tags).
 #
-# Publish jobs stay in this file, as crates.io trusted publishing is bound to it (release.yml)
+# Publish jobs stay in this file, as crates.io and PyPI trusted publishing are bound to it (release.yml)
 # and the `release` environment. The builds live in reusable workflows (build-*.yml).
 
 on:
@@ -120,6 +120,13 @@ jobs:
       contents: read
     uses: ./.github/workflows/build-gui-web.yml
 
+  build-wheels:
+    name: Build Python wheels
+    needs: ci
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-wheels.yml
+
   publish-crates:
     name: Publish to crates.io
     needs: ci
@@ -161,6 +168,27 @@ jobs:
         fi
       env:
         CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+
+  # Trusted publishing, like crates.io: PyPI → ecitygml → Publishing (a pending publisher before the first upload), with
+  # this repository, release.yml and the `release` environment
+  publish-pypi:
+    name: Publish to PyPI
+    needs: build-wheels
+    if: vars.PYPI_PUBLISH == 'true'
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      id-token: write
+    steps:
+    - uses: actions/download-artifact@v8
+      with:
+        path: dist
+        pattern: python-wheel-*
+        merge-multiple: true
+    # Wheels whose version is already on PyPI are skipped, so re-runs are safe
+    - uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        skip-existing: true
 
   github-release:
     name: Create GitHub release
