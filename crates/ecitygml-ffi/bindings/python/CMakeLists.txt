@@ -24,6 +24,8 @@ target_compile_features(ecitygml PRIVATE cxx_std_20)  # generated code uses std:
 # Native libraries the Rust standard library needs (`--print native-static-libs`).
 if(APPLE)
     set(RUST_NATIVE_LIBRARIES "-framework CoreFoundation" iconv)
+elseif(WIN32)
+    set(RUST_NATIVE_LIBRARIES kernel32 advapi32 ntdll userenv ws2_32 bcrypt dbghelp)
 elseif(UNIX)
     set(RUST_NATIVE_LIBRARIES gcc_s util rt pthread m dl c)
 endif()

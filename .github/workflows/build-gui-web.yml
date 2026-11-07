@@ -1,0 +1,35 @@
+name: Build web viewer
+
+# Builds the web version of the viewer and uploads it as the GitHub Pages artifact. Publishes nothing: the release
+# workflow (release.yml) deploys it. The manual trigger (Actions → Build web viewer → Run workflow) builds it without a
+# deployment.
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  MISE_VERSION: 2026.10.4
+
+jobs:
+
+  build:
+    name: Build web viewer
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+
+    # The toolchain declared in mise.toml (including the wasm32 target); the task installs Trunk
+    - uses: jdx/mise-action@v5
+      with:
+        version: ${{ env.MISE_VERSION }}
+
+    - name: Build
+      run: mise run build:gui-web
+
+    - uses: actions/upload-pages-artifact@v4
+      with:
+        path: target/gui-web

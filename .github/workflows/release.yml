@@ -1,129 +1,195 @@
 name: Release
 
+# Publishes a release for an existing version tag (vX.Y.Z[-pre]).
+# The version bump, commit and tag are created when the repository contents are copied to the public repository.
+#
+# Every job is idempotent: re-running the workflow (Re-run jobs) skips whatever is already published.
+#
+# Publishing to crates.io is opt-in: it only runs when the repository variable CRATES_IO_PUBLISH is
+# 'true' (Settings → Secrets and variables → Actions → Variables), otherwise the job is skipped and
+# the GitHub release is still created. Once enabled, a failed publish fails the workflow.
+# The web viewer is deployed to GitHub Pages only in repositories with Pages enabled (Settings → Pages →
+# Source: GitHub Actions; the github-pages environment must allow v* tags).
+#
+# Publish jobs stay in this file, as crates.io trusted publishing is bound to it (release.yml)
+# and the `release` environment. The builds live in reusable workflows (build-*.yml).
+
 on:
   push:
     tags:
-    - '[0-9]+.[0-9]+.[0-9]+*'
+    - "v*"
 
-# Only the jobs that publish (the release and the web viewer deployment) get write access
-permissions:
-  contents: read
+permissions: {}
+
+# An explicit bash shell runs with pipefail, so failures before a pipe (e.g. into tee) fail the step
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
 
 env:
-  MISE_VERSION: 2026.10.4
   # The tag is passed to the scripts as a variable, never interpolated into them
   TAG: ${{ github.ref_name }}
+  MISE_VERSION: 2026.10.4
+  CARGO_RELEASE_VERSION: 1.1.7
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUSTUP_MAX_RETRIES: 10
+  RUST_BACKTRACE: short
 
 jobs:
 
-  check-version:
-    name: Check version
+  verify:
+    name: Verify
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
     steps:
     - uses: actions/checkout@v7
-    - name: Verify tag matches Cargo.toml
-      shell: bash
+      with:
+        ref: refs/tags/${{ env.TAG }}
+        fetch-depth: 0
+        persist-credentials: false
+    - uses: jdx/mise-action@v5
+      with:
+        version: ${{ env.MISE_VERSION }}
+    - name: Check that the tag matches the workspace version
+      id: version
       run: |
-        if ! grep -q "^version = \"$TAG\"" Cargo.toml; then
-          echo "Tag $TAG does not match version in Cargo.toml" >&2
+        if ! [[ "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+          echo "::error::Tag '${TAG}' is not of the form vX.Y.Z[-pre]"
           exit 1
         fi
+        versions=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[].version' | sort -u)
+        if [ "${versions}" != "${TAG#v}" ]; then
+          echo "::error::Tag '${TAG}' does not match the crate versions: ${versions//$'\n'/, }"
+          exit 1
+        fi
+        echo "version=${TAG#v}" >> "${GITHUB_OUTPUT}"
+        if [[ "${TAG}" == *-* ]]; then
+          echo "prerelease=true" >> "${GITHUB_OUTPUT}"
+        else
+          echo "prerelease=false" >> "${GITHUB_OUTPUT}"
+        fi
+    - name: Check that the tagged commit is on main
+      run: |
+        if ! git merge-base --is-ancestor HEAD origin/main; then
+          echo "::error::Tag '${TAG}' points to a commit that is not on main"
+          exit 1
+        fi
+    - name: Package the crates
+      run: cargo package --workspace
 
-  # Only tagged commits that pass the checks and tests are released
+  # The checks and tests, the same as for every push and pull request (including the bindings)
   ci:
     name: CI
-    needs: check-version
+    needs: verify
+    permissions:
+      contents: read
     uses: ./.github/workflows/ci.yml
 
-  build:
+  # The called workflows check out the tag, as they run with the ref of this workflow
+  build-gui:
+    name: Build GUI
     needs: ci
-    name: Build ${{ matrix.target }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-        - target: x86_64-unknown-linux-gnu
-          os: ubuntu-latest
-        - target: aarch64-unknown-linux-gnu
-          os: ubuntu-24.04-arm
-        - target: x86_64-apple-darwin
-          os: macos-latest
-        - target: aarch64-apple-darwin
-          os: macos-latest
-        - target: x86_64-pc-windows-msvc
-          os: windows-latest
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-gui.yml
+    with:
+      version: ${{ github.ref_name }}
 
-    steps:
-    - uses: actions/checkout@v7
-
-    # The toolchain declared in mise.toml, as in CI; plus the release target
-    - uses: jdx/mise-action@v5
-      with:
-        version: ${{ env.MISE_VERSION }}
-    - run: rustup target add ${{ matrix.target }}
-
-    - name: Build
-      env:
-        CMAKE_TOOLCHAIN_FILE: ${{ runner.os == 'Windows' && 'C:\vcpkg\scripts\buildsystems\vcpkg.cmake' || '' }}
-        RUSTFLAGS: ${{ runner.os == 'Windows' && '-L C:\vcpkg\installed\x64-windows-static-md\lib' || '' }}
-      run: cargo build --profile release-lto --bin ecitygml-gui --target ${{ matrix.target }}
-
-    - name: Package binary (Unix)
-      if: runner.os != 'Windows'
-      env:
-        TARGET: ${{ matrix.target }}
-      run: |
-        BINARY="target/$TARGET/release-lto/ecitygml-gui"
-        ARCHIVE="ecitygml-gui-$TAG-$TARGET.tar.gz"
-        tar -czf "$ARCHIVE" -C "$(dirname "$BINARY")" "$(basename "$BINARY")"
-        shasum -a 256 "$ARCHIVE" > "$ARCHIVE.sha256"
-        echo "ARCHIVE=$ARCHIVE" >> "$GITHUB_ENV"
-
-    - name: Package binary (Windows)
-      if: runner.os == 'Windows'
-      shell: pwsh
-      env:
-        TARGET: ${{ matrix.target }}
-      run: |
-        $binary = "target\$env:TARGET\release-lto\ecitygml-gui.exe"
-        $archive = "ecitygml-gui-$env:TAG-$env:TARGET.zip"
-        Compress-Archive -Path $binary -DestinationPath $archive
-        certutil -hashfile $archive SHA256 > "$archive.sha256"
-        echo "ARCHIVE=$archive" | Out-File -FilePath $env:GITHUB_ENV -Append
-
-    - uses: actions/upload-artifact@v7
-      with:
-        name: ecitygml-${{ matrix.target }}
-        path: |
-          ${{ env.ARCHIVE }}
-          ${{ env.ARCHIVE }}.sha256
-        if-no-files-found: error
-
-  # The web viewer of the released version, deployed to GitHub Pages (Settings > Pages > Source: GitHub Actions)
   build-gui-web:
-    needs: ci
     name: Build web viewer
+    needs: ci
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-gui-web.yml
+
+  publish-crates:
+    name: Publish to crates.io
+    needs: ci
+    if: vars.CRATES_IO_PUBLISH == 'true'
     runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
     steps:
     - uses: actions/checkout@v7
-
-    # The toolchain declared in mise.toml (including the wasm32 target); the task installs Trunk
+      with:
+        ref: refs/tags/${{ env.TAG }}
+        persist-credentials: false
     - uses: jdx/mise-action@v5
       with:
         version: ${{ env.MISE_VERSION }}
-
-    - name: Build
-      run: mise run build:gui-web
-
-    - uses: actions/upload-pages-artifact@v4
+    - uses: taiki-e/install-action@v2
       with:
-        path: target/gui-web
+        tool: cargo-release@${{ env.CARGO_RELEASE_VERSION }}
+    - uses: rust-lang/crates-io-auth-action@v1
+      id: auth
+    # cargo-release refuses to run on a detached HEAD, which is what checking out a tag yields
+    - run: git checkout -B release
+    # Crates whose version is already on crates.io are skipped, so re-runs are safe.
+    # If all of them are, cargo-release fails with "no packages selected", which counts as done.
+    # The log lives outside the checkout, as cargo-release refuses to run with untracked files.
+    - name: Publish
+      run: |
+        log="${RUNNER_TEMP}/publish.log"
+        status=0
+        cargo release publish --workspace --execute --no-confirm 2>&1 | tee "${log}" || status=$?
+        if [ "${status}" -ne 0 ]; then
+          if grep -q "no packages selected" "${log}"; then
+            echo "All crates are already published"
+          else
+            exit "${status}"
+          fi
+        fi
+      env:
+        CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
 
-  # Separate from the build, so that only the deployment gets write access to Pages
+  github-release:
+    name: Create GitHub release
+    needs: [verify, build-gui, publish-crates]
+    # Also runs when publish-crates was skipped (CRATES_IO_PUBLISH not enabled), but not when it failed
+    if: ${{ !cancelled() && needs.build-gui.result == 'success' && needs.publish-crates.result != 'failure' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/download-artifact@v8
+      with:
+        path: artifacts
+        pattern: ecitygml-gui-*
+        merge-multiple: true
+    # On a re-run, the GUI archives are (re-)uploaded to the existing release instead
+    - name: Create the release unless it exists
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GH_REPO: ${{ github.repository }}
+        PRERELEASE: ${{ needs.verify.outputs.prerelease }}
+      run: |
+        if gh release view "${TAG}" > /dev/null 2>&1; then
+          echo "Release ${TAG} already exists, uploading the GUI archives"
+          gh release upload "${TAG}" artifacts/* --clobber
+          exit 0
+        fi
+        flags=()
+        if [ "${PRERELEASE}" = "true" ]; then
+          flags+=(--prerelease)
+        fi
+        gh release create "${TAG}" --verify-tag --generate-notes --title "${TAG}" "${flags[@]}" artifacts/*
+
+  # The web viewer of the released version, once the release exists
   deploy-gui-web:
-    needs: build-gui-web
     name: Deploy web viewer
+    needs: [build-gui-web, github-release]
+    if: ${{ !cancelled() && needs.github-release.result == 'success' && github.event.repository.has_pages }}
     runs-on: ubuntu-latest
     permissions:
       pages: write
@@ -138,23 +204,3 @@ jobs:
     steps:
     - id: deployment
       uses: actions/deploy-pages@v4
-
-  release:
-    name: Create release
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-    - uses: actions/download-artifact@v8
-      with:
-        path: artifacts
-        pattern: ecitygml-*
-        merge-multiple: true
-
-    # SemVer: every pre-release version (alpha, beta, rc, ...) contains a hyphen
-    - uses: softprops/action-gh-release@v3
-      with:
-        files: artifacts/*
-        generate_release_notes: true
-        prerelease: ${{ contains(github.ref_name, '-') }}

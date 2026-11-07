@@ -1,13 +1,15 @@
 name: CI
 
-# Runs the same mise tasks as the GitLab CI (.gitlab-ci.yml), which also install the toolchain declared in mise.toml.
+# Runs the same mise tasks as the GitLab CI (.gitlab-ci.yml), which also install the toolchain declared in mise.toml and
+# the per-task tools (diplomat-tool, CMake, JDK, Gradle, Node, .NET, Dart).
+# The public repository takes all dependencies from crates.io, so no secrets are needed.
 
 on:
   push:
     branches:
     - main
   pull_request:
-  # Called by the release workflow, which only releases tags that pass
+  # Called by the release workflow, which only releases tags that pass (including the bindings checks)
   workflow_call:
 
 permissions:
@@ -51,3 +53,44 @@ jobs:
     - uses: Swatinem/rust-cache@v2
     - run: mise run build
     - run: mise run test
+
+  # The bindings are committed; this is the only job that needs diplomat-tool.
+  check-bindings:
+    name: Check bindings
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v7
+    - uses: cargo-bins/cargo-binstall@v1.25.3
+    - uses: jdx/mise-action@v5
+      with:
+        version: ${{ env.MISE_VERSION }}
+    - run: mise run check:bindings   # mise installs diplomat-tool (task `tools`)
+
+  test-bindings:
+    name: Test ${{ matrix.language }} bindings
+    needs: check-bindings   # build only from up-to-date bindings
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [c, cpp, python, kotlin, typescript, dotnet, dart]
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+    steps:
+    - uses: actions/checkout@v7
+    - uses: cargo-bins/cargo-binstall@v1.25.3
+    - uses: jdx/mise-action@v5
+      with:
+        version: ${{ env.MISE_VERSION }}
+    # After mise: the cache key includes the version of the installed toolchain.
+    # Only main saves its cache, so pull requests don't evict the cache they fall back to.
+    - uses: Swatinem/rust-cache@v2
+      with:
+        key: bindings-${{ matrix.language }}
+        save-if: ${{ github.ref == 'refs/heads/main' }}
+    - name: Set up the Python environment
+      # Python needs uv and a venv with pytest.
+      if: matrix.language == 'python'
+      run: mise run setup:bindings:python
+    - run: mise run test:bindings:${{ matrix.language }}

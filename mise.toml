@@ -29,7 +29,13 @@ mise run --jobs 1 'test:bindings:*'
 
 [tasks.check]
 description = "Run all read-only checks (formatting, clippy for native and WebAssembly, documentation, conformance suites)"
-depends = ["check:fmt", "check:clippy", "check:wasm", "check:doc", "check:cases"]
+depends = [
+	"check:fmt",
+	"check:clippy",
+	"check:wasm",
+	"check:doc",
+	"check:cases",
+]
 
 [tasks."check:cases"]
 description = "Check that every suite's conformance and API tests match the case lists in crates/ecitygml/tests/{conformance,api}"
@@ -370,14 +376,24 @@ description = "Remove generated artifacts"
 run = "cargo clean"
 
 [tasks.release]
-description = "Create a new software release and publish it"
+description = "Bump the version, commit, tag and push"
 usage = '''
 arg "<level>" help="Either bump by LEVEL or set the VERSION for all selected packages" {
   choices "major" "minor" "patch" "release" "rc" "beta" "alpha"
 }
-arg "<registry>" help="Name of the Cargo registry to publish to, e.g. crates-io"
+'''
+tools = { "cargo:cargo-release" = "1" }
+# The raw block passes cargo-release's {{version}} placeholder through mise's template rendering
+run = '''
+cargo release ${usage_level?} --workspace --no-publish --tag-name '{% raw %}v{{version}}{% endraw %}' --execute
+'''
+
+[tasks.publish]
+description = "Publish the current version to a Cargo registry"
+usage = '''
+arg "<registry>" help="Name of the Cargo registry to publish to, as configured in .cargo/config.toml"
 '''
 tools = { "cargo:cargo-release" = "1" }
 run = '''
-cargo release ${usage_level?} --registry "${usage_registry?}" --workspace --no-tag --execute
+cargo release publish --registry "${usage_registry?}" --workspace --no-confirm --execute
 '''
